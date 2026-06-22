@@ -1,0 +1,22 @@
+title: "Paper walkthrough: "
+labels: [paper-walkthrough]
+body:
+  - type: textarea
+    id: paper
+    attributes:
+      label: Paper or excerpt
+      description: Link to an openly accessible paper or paste a short shareable excerpt.
+    validations:
+      required: true
+  - type: textarea
+    id: blocker
+    attributes:
+      label: Where understanding breaks
+      description: Equation, derivation, theorem, method, experiment, or concept.
+    validations:
+      required: true
+  - type: textarea
+    id: desired-output
+    attributes:
+      label: Desired PaperMentor output
+      description: Equation card, dependency trace, derivation trace, confusion repair, visualization, or final insight.

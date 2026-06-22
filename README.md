@@ -2,13 +2,11 @@
 
 # PaperMentor
 
-### Understand uploaded papers in one focused 30-minute reading loop.
+### Upload a paper. Understand it in 30 minutes.
 
-Built for the era of overflowing papers: upload or paste a paper, trace the math, repair confusion, and leave with a final insight you can actually reconstruct.
+Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, and conceptual confusion until you can reconstruct the paper yourself.
 
-An **AI Agent Skill** for **Codex** and **Claude Code**.
-
-<img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute final insight" width="920" />
+<img src="assets/papermentor-demo.svg" alt="PaperMentor converts a paper excerpt into a paper map, equation card, derivation trace, and final insight" width="920" />
 
 [![Install](https://img.shields.io/badge/Install-one%20line-0ea5e9)](#install)
 [![Codex](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
@@ -22,21 +20,23 @@ An **AI Agent Skill** for **Codex** and **Claude Code**.
 
 ---
 
-## The problem PaperMentor solves
+## Why PaperMentor exists
 
-Most paper tools compress the paper. PaperMentor does the opposite: it slows down at the exact point where understanding breaks.
+Most paper tools compress the paper. PaperMentor does the opposite: it slows down at the exact line where understanding breaks.
 
-A useful reading session should answer:
+A useful reading session should leave you able to reconstruct:
 
-- What is the paper trying to prove or build?
-- Which definitions and assumptions does this line depend on?
-- What does every symbol in this equation mean?
-- How did the derivation move from one line to the next?
-- What should I remember as the final insight?
+- the problem and core intuition,
+- every major equation,
+- every derivation transition,
+- the dependency chain between definitions, assumptions, lemmas, methods, and claims,
+- and the final insight in one sentence.
 
 ---
 
-## Use it in four moves
+## See it work
+
+PaperMentor follows one repeatable loop:
 
 <table>
 <tr>
@@ -51,7 +51,7 @@ Paste the paper, PDF text, or a target section.
 <td width="25%" valign="top">
 
 ### 2. Map
-Locate the problem, notation, assumptions, claims, and equations.
+Find the problem, notation, assumptions, claims, and equations.
 
 `Build the paper map.`
 
@@ -59,7 +59,7 @@ Locate the problem, notation, assumptions, claims, and equations.
 <td width="25%" valign="top">
 
 ### 3. Debug
-Pick the exact blocker: equation, derivation, proof, method, or dependency.
+Pick the blocker: equation, derivation, proof, method, or dependency.
 
 `Explain Equation (7) atomically.`
 
@@ -75,7 +75,7 @@ Resume from the paused line and extract the final insight.
 </tr>
 </table>
 
-Interrupt anytime with a natural question: `Pause. Why did the sign flip here?` PaperMentor answers the missing concept, reconnects it to the original line, and continues from the same location.
+Interrupt anytime: `Pause. Why did the sign flip here?` PaperMentor answers the missing concept, reconnects it to the original line, and continues from the exact location.
 
 ---
 
@@ -105,16 +105,24 @@ Windows PowerShell:
 iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
 ```
 
-```powershell
-$env:PAPERMENTOR_TARGET='claude'; iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
-```
-
 Install locations:
 
 ```text
 Codex:       ~/.codex/skills/papermentor
 Claude Code: ~/.claude/skills/papermentor
 ```
+
+---
+
+## Try the sample paper
+
+Use the included sample to see the full interaction shape before trying a real paper:
+
+```text
+Use $papermentor on demo/sample-paper.md. Start with a paper map, then explain the population risk equation atomically, trace why empirical risk is introduced, and finish with the final insight.
+```
+
+Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation card, derivation trace, and final insight.
 
 ---
 
@@ -128,53 +136,6 @@ Claude Code: ~/.claude/skills/papermentor
 - `final-insight` — compress the full reconstruction into the takeaway.
 
 Full command contract: [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
-
----
-
-## Reading modes
-
-<table>
-<tr>
-<td width="33%" valign="top">
-
-### Paper map
-Problem, notation, assumptions, claims, equations, proof structure, and likely confusion points.
-
-</td>
-<td width="33%" valign="top">
-
-### Equation card
-Rendered equation first, then symbols, operators, domains, constants, and assumptions.
-
-</td>
-<td width="33%" valign="top">
-
-### Derivation trace
-Every transition names the operation, substitution, cancellation, property, and validity reason.
-
-</td>
-</tr>
-<tr>
-<td width="33%" valign="top">
-
-### Dependency trace
-Backward dependencies, forward dependencies, missing dependency checks, and explanation order.
-
-</td>
-<td width="33%" valign="top">
-
-### Confusion repair
-Pause, answer, identify the missing dependency, give a minimal example, reconnect, resume.
-
-</td>
-<td width="33%" valign="top">
-
-### Final insight
-A compact reconstruction of the problem, intuition, equations, assumptions, and what breaks.
-
-</td>
-</tr>
-</table>
 
 ---
 
@@ -241,10 +202,11 @@ Every visualization plan includes a **question**, **concept**, **visual encoding
 ```text
 prompts/              specialized tutor modes
 skills/papermentor/   installable Skill entrypoint
-commands.md           command-like interaction contract
 templates/            output structures
 examples/             concrete behavior examples
+demo/                 sample paper and reference outputs
 tests/                human review checklists
+assets/               README and social preview images
 ```
 
 Validation:
@@ -253,7 +215,7 @@ Validation:
 npm test
 ```
 
-The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, and install-smoke coverage for both Codex and Claude Code.
+The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, sample-demo artifacts, and install-smoke coverage for both Codex and Claude Code.
 
 ---
 
@@ -264,6 +226,18 @@ PaperMentor focuses on understanding work: equations, derivations, dependencies,
 Deliberately out of scope: blog export, reviewer simulation, and quiz generation.
 
 Planned extensions: local PDF section locator helpers, citation graph helpers, notebook visualization snippets, and persistent reading sessions.
+
+---
+
+## Contributing
+
+High-value contributions make papers easier to reconstruct, not just easier to summarize. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then add or improve one of:
+
+- equation cards for difficult notation,
+- derivation traces with no skipped transitions,
+- dependency traces across definitions and claims,
+- confusion-repair examples,
+- visualization plans for geometry, distributions, optimization, or experiments.
 
 ---
 

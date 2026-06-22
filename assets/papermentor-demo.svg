@@ -1,0 +1,71 @@
+<svg width="1200" height="760" viewBox="0 0 1200 760" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">PaperMentor demo flow</title>
+  <desc id="desc">A compact demo showing a paper excerpt becoming a paper map, equation card, derivation trace, confusion repair, and final insight.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="760" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#08111f"/><stop offset="0.55" stop-color="#0f1b35"/><stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="card" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#f8fafc"/><stop offset="1" stop-color="#e0f2fe"/></linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#38bdf8"/><stop offset="1" stop-color="#2563eb"/></linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#a78bfa"/><stop offset="1" stop-color="#6d28d9"/></linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fbbf24"/><stop offset="1" stop-color="#f97316"/></linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB"><feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.35"/></filter>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L10 5L0 10Z" fill="#38bdf8"/></marker>
+  </defs>
+  <rect width="1200" height="760" rx="36" fill="url(#bg)"/>
+  <circle cx="1010" cy="88" r="210" fill="#2563eb" opacity="0.14"/>
+  <circle cx="90" cy="700" r="260" fill="#0ea5e9" opacity="0.13"/>
+
+  <text x="86" y="84" fill="#e0f2fe" font-family="Inter, ui-sans-serif, system-ui" font-size="28" font-weight="900">From dense paper to reconstructable insight</text>
+  <text x="86" y="120" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui" font-size="18">A real reading loop: map the paper, debug the blocker, resume exactly where confusion started.</text>
+
+  <g filter="url(#shadow)">
+    <rect x="86" y="166" width="286" height="440" rx="28" fill="url(#card)"/>
+    <text x="122" y="218" fill="#0f172a" font-family="Inter, ui-sans-serif, system-ui" font-size="20" font-weight="900">Paper excerpt</text>
+    <rect x="122" y="248" width="198" height="10" rx="5" fill="#64748b" opacity="0.35"/>
+    <rect x="122" y="274" width="216" height="10" rx="5" fill="#64748b" opacity="0.25"/>
+    <rect x="122" y="322" width="214" height="86" rx="16" fill="#dbeafe" stroke="#93c5fd"/>
+    <text x="142" y="360" fill="#1e3a8a" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="20" font-weight="900">R(f)=E[ℓ(f(x),y)]</text>
+    <text x="142" y="388" fill="#475569" font-family="Inter, ui-sans-serif, system-ui" font-size="13">Equation (7)</text>
+    <rect x="122" y="446" width="214" height="10" rx="5" fill="#64748b" opacity="0.22"/>
+    <rect x="122" y="474" width="178" height="10" rx="5" fill="#64748b" opacity="0.22"/>
+    <rect x="122" y="524" width="118" height="34" rx="17" fill="#0ea5e9"/>
+    <text x="150" y="546" fill="white" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="850">Input</text>
+  </g>
+
+  <path d="M390 386C424 386 444 386 478 386" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" marker-end="url(#arrow)"/>
+
+  <g filter="url(#shadow)">
+    <rect x="494" y="158" width="284" height="110" rx="24" fill="#0e2a47" stroke="#38bdf8" stroke-opacity="0.58"/>
+    <circle cx="534" cy="212" r="20" fill="url(#blue)"/>
+    <text x="568" y="198" fill="#e0f2fe" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="900">Paper map</text>
+    <text x="568" y="226" fill="#bae6fd" font-family="Inter, ui-sans-serif, system-ui" font-size="13">problem · notation · assumptions</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="494" y="304" width="284" height="110" rx="24" fill="#251a43" stroke="#a78bfa" stroke-opacity="0.62"/>
+    <circle cx="534" cy="358" r="20" fill="url(#violet)"/>
+    <text x="568" y="344" fill="#f3e8ff" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="900">Equation card</text>
+    <text x="568" y="372" fill="#ddd6fe" font-family="Inter, ui-sans-serif, system-ui" font-size="13">symbols · domains · operators</text>
+  </g>
+  <g filter="url(#shadow)">
+    <rect x="494" y="450" width="284" height="110" rx="24" fill="#3a2410" stroke="#f59e0b" stroke-opacity="0.62"/>
+    <circle cx="534" cy="504" r="20" fill="url(#amber)"/>
+    <text x="568" y="490" fill="#fef3c7" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="900">Derivation trace</text>
+    <text x="568" y="518" fill="#fde68a" font-family="Inter, ui-sans-serif, system-ui" font-size="13">operation · theorem · substitution</text>
+  </g>
+
+  <path d="M800 212C842 240 858 300 890 330" stroke="#38bdf8" stroke-width="3.6" stroke-linecap="round" marker-end="url(#arrow)" opacity="0.78"/>
+  <path d="M800 358C838 358 852 358 888 358" stroke="#a78bfa" stroke-width="3.6" stroke-linecap="round" marker-end="url(#arrow)" opacity="0.78"/>
+  <path d="M800 504C842 476 858 414 890 386" stroke="#f59e0b" stroke-width="3.6" stroke-linecap="round" marker-end="url(#arrow)" opacity="0.78"/>
+
+  <g filter="url(#shadow)">
+    <rect x="906" y="246" width="218" height="226" rx="30" fill="url(#card)" stroke="#7dd3fc" stroke-width="3"/>
+    <text x="945" y="306" fill="#0f172a" font-family="Inter, ui-sans-serif, system-ui" font-size="22" font-weight="950">Final insight</text>
+    <text x="945" y="348" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="15">The paper minimizes</text>
+    <text x="945" y="374" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="15">expected loss by</text>
+    <text x="945" y="400" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="15">turning assumptions</text>
+    <text x="945" y="426" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="15">into a tractable bound.</text>
+  </g>
+
+  <text x="86" y="692" fill="#94a3b8" font-family="Inter, ui-sans-serif, system-ui" font-size="15">PaperMentor pauses at the exact blocker, repairs the missing dependency, and resumes from the original line.</text>
+</svg>

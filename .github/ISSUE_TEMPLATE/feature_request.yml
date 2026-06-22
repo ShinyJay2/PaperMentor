@@ -1,0 +1,36 @@
+name: Feature request
+description: Suggest a paper-understanding improvement.
+title: "feat: "
+labels: [enhancement]
+body:
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use case
+      description: What paper-reading problem should this solve?
+    validations:
+      required: true
+  - type: dropdown
+    id: mode
+    attributes:
+      label: Reading mode
+      options:
+        - Equation card
+        - Derivation trace
+        - Dependency trace
+        - Proof walkthrough
+        - Method dissection
+        - Confusion repair
+        - Visualization plan
+        - Final insight
+        - Other
+  - type: textarea
+    id: example
+    attributes:
+      label: Example
+      description: Give a small equation, claim, or reading scenario.
+  - type: textarea
+    id: success
+    attributes:
+      label: Success criteria
+      description: How would we know the improvement works?

@@ -1,0 +1,27 @@
+name: Bug report
+description: Report a broken install, invalid output contract, or confusing behavior.
+title: "bug: "
+labels: [bug]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Describe the install issue, output issue, or confusing behavior.
+    validations:
+      required: true
+  - type: textarea
+    id: prompt
+    attributes:
+      label: Prompt or paper excerpt
+      description: Include a minimal prompt or excerpt if possible. Do not paste private or copyrighted material you cannot share.
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: What should PaperMentor have done instead?
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Codex, Claude Code, OS, shell, and install method.
