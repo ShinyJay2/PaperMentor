@@ -14,7 +14,7 @@ Turn any research paper into an interruptible tutoring session for equations, de
 
 **Do not summarize papers. Debug understanding.**
 
-[Install](#-quick-start) · [Use](#-use-it) · [Features](#-features) · [Examples](#-examples) · [Roadmap](#-roadmap)
+[Install](#-quick-start) · [Use](#-use-it) · [Features](#-features) · [Examples](#-examples) · [Scope](#-scope--roadmap)
 
 </div>
 
@@ -105,25 +105,35 @@ Installed skill path:
 
 ## ⚡ Use it
 
-```text
-Use $papermentor to scan this paper.
+Start with one simple request, then follow the paper wherever your understanding breaks.
+
+```mermaid
+flowchart TD
+  A["Attach or paste paper text"] --> B["Use $papermentor to scan this paper"]
+  B --> C["Paper map: problem, notation, assumptions, claims"]
+  C --> D{"Where are you stuck?"}
+  D --> E["Equation<br/>Explain every symbol"]
+  D --> F["Derivation<br/>Trace every transition"]
+  D --> G["Dependency<br/>Find definitions, lemmas, assumptions"]
+  D --> H["Proof or method<br/>Walk line by line"]
+  E --> I["Ask interruptions anytime"]
+  F --> I
+  G --> I
+  H --> I
+  I --> J["Repair missing concept + resume exact location"]
+  J --> K["Final mental model"]
 ```
 
-```text
-Use $papermentor to explain Equation (7) atomically.
-```
+### Common starting prompts
 
-```text
-Use $papermentor to trace Eq. (3) → Eq. (5) without skipping derivation steps.
-```
-
-```text
-Pause. Why did the sign flip here?
-```
-
-```text
-Use $papermentor in Korean. 이 정리가 왜 필요한지 dependency trace 해줘.
-```
+| Goal | Say this |
+| --- | --- |
+| Start reading | `Use $papermentor to scan this paper.` |
+| Understand notation | `Use $papermentor to explain Equation (7) atomically.` |
+| Fill skipped math | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
+| Interrupt reading | `Pause. Why did the sign flip here?` |
+| Read in Korean | `이 정리가 왜 필요한지 dependency trace 해줘.` |
+| Finish the paper | `Extract the final mental model and dependency chain.` |
 
 ---
 
@@ -238,19 +248,19 @@ The validator checks required files, skill frontmatter, command coverage, visual
 
 ## 🤝 Contributing
 
-Improve understanding, not product sprawl. Keep v1 focused on equations, derivations, dependencies, interruptions, recursive why, visual support, Korean/English explanations, and mental model extraction.
+Improve understanding, not product sprawl. Keep the core product focused on equations, derivations, dependencies, interruptions, recursive why, visual support, Korean/English explanations, and mental model extraction.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ---
 
-## 🗺️ Roadmap
+## 🗺️ Scope & Roadmap
 
-**v1:** paper maps, prerequisite ladders, atomic equations, derivation traces, dependency traces, proof walkthroughs, method dissection, interruptions, recursive why, Korean support, visualization support, mental models.
+**Current focus:** paper maps, prerequisite ladders, atomic equations, derivation traces, dependency traces, proof walkthroughs, method dissection, interruptions, recursive why, Korean support, visualization support, and mental models.
 
-**Not in v1:** blog export, reviewer simulation, quiz generation.
+**Deliberately out of scope:** blog export, reviewer simulation, and quiz generation.
 
-**Future:** local PDF section locator helpers, citation graph helpers, notebook visualization snippets, persistent reading sessions.
+**Planned extensions:** local PDF section locator helpers, citation graph helpers, notebook visualization snippets, and persistent reading sessions.
 
 ---
 

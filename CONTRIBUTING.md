@@ -4,7 +4,7 @@ PaperMentor is a focused Codex Skill for research-paper understanding. Contribut
 
 ## Product boundaries
 
-In scope for v1:
+Current product scope:
 
 - paper maps;
 - prerequisite ladders;
@@ -19,7 +19,7 @@ In scope for v1:
 - mental model extraction;
 - conceptual visualization planning.
 
-Out of scope for v1:
+Deliberately out of scope:
 
 - blog export;
 - reviewer simulation;
