@@ -183,67 +183,230 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <style>
-:root { color-scheme: dark; --bg:#07111f; --panel:#0f1b31; --panel2:#111f38; --line:#243550; --text:#e5edf8; --muted:#94a3b8; --blue:#38bdf8; --violet:#a78bfa; --green:#34d399; --amber:#f59e0b; --red:#fb7185; }
+:root {
+  color-scheme: light dark;
+  --desk:#07101d;
+  --desk2:#0d1728;
+  --ink:#152033;
+  --muted:#64748b;
+  --paper:#f8f3e8;
+  --paper2:#fffaf0;
+  --paperLine:#e5dcc8;
+  --console:#0b1322;
+  --console2:#111c31;
+  --consoleLine:#23344f;
+  --blue:#0ea5e9;
+  --blue2:#075985;
+  --green:#059669;
+  --amber:#b45309;
+  --violet:#7c3aed;
+  --red:#e11d48;
+}
 * { box-sizing: border-box; }
-body { margin:0; font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif; background: radial-gradient(circle at 82% 0%, rgba(37,99,235,.22), transparent 34%), radial-gradient(circle at 0% 100%, rgba(14,165,233,.18), transparent 32%), var(--bg); color:var(--text); }
-.shell { max-width: 1180px; margin: 0 auto; padding: 42px 24px 72px; }
-.hero { display:grid; grid-template-columns: 1.2fr .8fr; gap: 28px; align-items: stretch; }
-.card, .rail { background: linear-gradient(145deg, rgba(15,27,49,.92), rgba(17,31,56,.82)); border:1px solid rgba(125,211,252,.18); border-radius:28px; box-shadow: 0 24px 80px rgba(0,0,0,.28); }
-.card { padding: 30px; }
-.rail { padding: 24px; }
-h1 { margin:0 0 12px; font-size: clamp(34px, 5vw, 62px); letter-spacing: -.04em; }
-.subtitle { color:#bae6fd; font-size:20px; line-height:1.5; margin:0; }
-.meta { display:flex; flex-wrap:wrap; gap:10px; margin-top:24px; }
-.badge { border:1px solid rgba(148,163,184,.28); border-radius:999px; padding:8px 12px; color:#cbd5e1; font-size:13px; }
-.path { list-style:none; padding:0; margin:18px 0 0; display:grid; gap:10px; }
-.path li { display:flex; align-items:center; gap:10px; padding:12px 14px; border-radius:16px; border:1px solid rgba(148,163,184,.16); background:rgba(15,23,42,.42); color:#cbd5e1; }
-.path .icon { width:24px; height:24px; display:grid; place-items:center; border-radius:8px; font-weight:900; background:#1e293b; }
-.path li.done .icon { background:rgba(52,211,153,.18); color:var(--green); }
-.path li.current { border-color:rgba(56,189,248,.55); background:rgba(56,189,248,.10); color:#e0f2fe; }
-.path li.current .icon { background:rgba(56,189,248,.2); color:var(--blue); }
-.path li.blocked .icon { background:rgba(251,113,133,.18); color:var(--red); }
-.choices { counter-reset: choice; display:grid; gap:10px; margin-top:16px; }
-.choice { border:1px solid rgba(56,189,248,.22); background:rgba(56,189,248,.08); border-radius:16px; padding:12px 14px; color:#dbeafe; }
-.choice:before { counter-increment: choice; content:'[' counter(choice) '] '; color:var(--blue); font-weight:900; }
-.cards { display:grid; gap:22px; margin-top:28px; }
-.output { padding:26px; }
-.output h2 { margin:0 0 8px; font-size:24px; }
-.location { color:var(--muted); font-size:13px; margin-bottom:16px; }
-.latex { border:1px solid rgba(167,139,250,.25); border-radius:20px; padding:18px; background:rgba(167,139,250,.08); overflow-x:auto; margin:14px 0 18px; }
-.body { color:#dbe4ef; line-height:1.68; }
-.body h1,.body h2,.body h3 { color:#f8fafc; }
-.body code { background:#0f172a; border:1px solid rgba(148,163,184,.2); padding:2px 6px; border-radius:6px; }
-.body pre { background:#0f172a; border:1px solid rgba(148,163,184,.2); padding:16px; border-radius:16px; overflow:auto; }
-.body li { margin:6px 0; }
-.footer { margin-top:28px; color:var(--muted); font-size:13px; }
-@media (max-width: 860px) { .hero { grid-template-columns: 1fr; } }
+html { scroll-behavior: smooth; }
+body {
+  margin:0;
+  font-family: Avenir Next, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+  background:
+    radial-gradient(circle at 78% 0%, rgba(14,165,233,.16), transparent 26%),
+    radial-gradient(circle at 6% 100%, rgba(124,58,237,.13), transparent 28%),
+    linear-gradient(120deg, #050914 0%, var(--desk) 48%, #111827 100%);
+  color:#e8eef8;
+}
+.shell { max-width: 1280px; margin: 0 auto; padding: 26px 26px 76px; }
+.topbar { display:flex; align-items:center; justify-content:space-between; gap:18px; padding: 8px 0 24px; }
+.brand { display:flex; align-items:center; gap:14px; }
+.logo {
+  width:46px; height:46px; border-radius:18px;
+  display:grid; place-items:center;
+  background: linear-gradient(135deg, #e9d5ff, #38bdf8 58%, #0f172a);
+  box-shadow:0 18px 48px rgba(14,165,233,.25);
+  font-weight:950; color:#07101d; letter-spacing:-.05em;
+}
+.brand h1 { margin:0; font-size:27px; letter-spacing:-.055em; }
+.brand p { margin:2px 0 0; color:#9fb2ca; font-size:13px; }
+.open-pill {
+  border:1px solid rgba(125,211,252,.32); color:#dff7ff;
+  background:rgba(8,47,73,.40); border-radius:999px; padding:10px 14px;
+  font-size:12px; white-space:nowrap; max-width:520px; overflow:hidden; text-overflow:ellipsis;
+}
+.workspace { display:grid; grid-template-columns: 330px minmax(0, 1fr); gap:28px; align-items:start; }
+.sidebar { position:sticky; top:22px; display:grid; gap:16px; }
+.panel {
+  background: linear-gradient(145deg, rgba(11,19,34,.96), rgba(17,28,49,.92));
+  border:1px solid rgba(148,163,184,.18);
+  box-shadow: 0 24px 80px rgba(0,0,0,.34);
+  border-radius:24px;
+  padding:20px;
+}
+.paper-title { padding:22px; }
+.kicker { color:#67e8f9; text-transform:uppercase; letter-spacing:.18em; font-size:10px; font-weight:950; }
+.paper-title h2 { margin:8px 0 14px; font-size:22px; line-height:1.13; letter-spacing:-.045em; }
+.meta { display:flex; flex-wrap:wrap; gap:8px; }
+.badge {
+  border:1px solid rgba(148,163,184,.20); border-radius:999px;
+  padding:7px 10px; color:#d5e2f2; font-size:12px; background:rgba(15,23,42,.52);
+}
+.panel-title { display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; }
+.panel-title strong { font-size:14px; }
+.hint { color:#8aa0ba; font-size:12px; }
+.path { list-style:none; padding:0; margin:0; display:grid; gap:9px; }
+.path li {
+  display:grid; grid-template-columns:28px 1fr; align-items:center; gap:10px;
+  padding:11px 12px; border-radius:16px;
+  border:1px solid rgba(148,163,184,.13); background:rgba(15,23,42,.48); color:#d5e2f2;
+}
+.path .icon { width:28px; height:28px; display:grid; place-items:center; border-radius:10px; font-weight:950; background:#1b2638; }
+.path li.done .icon { background:rgba(5,150,105,.18); color:#34d399; }
+.path li.current { border-color:rgba(14,165,233,.64); background:linear-gradient(135deg, rgba(14,165,233,.20), rgba(14,165,233,.06)); color:#f0fbff; }
+.path li.current .icon { background:rgba(14,165,233,.25); color:#7dd3fc; }
+.path li.blocked .icon { background:rgba(225,29,72,.18); color:#fb7185; }
+.choices { counter-reset: choice; display:grid; gap:9px; }
+.choice {
+  border:1px solid rgba(14,165,233,.24); background:rgba(14,165,233,.08);
+  border-radius:15px; padding:11px 12px; color:#e0f2fe; font-size:13px; line-height:1.35;
+}
+.choice:before { counter-increment: choice; content:'[' counter(choice) '] '; color:#38bdf8; font-weight:950; }
+.content { min-width:0; }
+.session-head {
+  border-radius:30px; padding:34px 38px;
+  background:
+    linear-gradient(135deg, rgba(255,250,240,.98), rgba(248,243,232,.96)),
+    repeating-linear-gradient(0deg, transparent, transparent 31px, rgba(21,32,51,.045) 32px);
+  color:var(--ink);
+  border:1px solid rgba(229,220,200,.95);
+  box-shadow: 0 30px 90px rgba(0,0,0,.30), inset 0 1px 0 rgba(255,255,255,.75);
+  margin-bottom:24px;
+}
+.session-head .kicker { color:#0369a1; }
+.session-head h2 {
+  margin:6px 0 12px;
+  font-family: Charter, Iowan Old Style, Georgia, serif;
+  font-size: clamp(38px, 5vw, 68px);
+  line-height:.92;
+  letter-spacing:-.065em;
+}
+.session-head p { margin:0; color:#42526a; max-width:820px; line-height:1.65; font-family: Charter, Iowan Old Style, Georgia, serif; font-size:17px; }
+.session-head code { background:#efe5d0; color:#0f172a; padding:2px 6px; border-radius:7px; border:1px solid #dfd2bb; }
+.timeline { position:relative; display:grid; gap:22px; padding-bottom:20px; }
+.timeline:before { content:''; position:absolute; left:26px; top:14px; bottom:16px; width:2px; background:linear-gradient(#38bdf8, rgba(56,189,248,.04)); }
+.block {
+  position:relative; margin-left:62px; padding:0;
+  background:var(--paper2);
+  color:var(--ink);
+  border:1px solid var(--paperLine);
+  border-radius:8px 28px 28px 8px;
+  box-shadow: 0 30px 90px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.78);
+  overflow:visible;
+}
+.block:before {
+  content:attr(data-index); position:absolute; left:-62px; top:22px;
+  width:48px; height:48px; display:grid; place-items:center;
+  border-radius:50%; background:#0f172a; border:2px solid #38bdf8;
+  color:#e0f2fe; font-weight:950; box-shadow:0 14px 38px rgba(56,189,248,.22);
+  z-index:2;
+}
+.block:after {
+  content:''; position:absolute; left:0; top:0; bottom:0; width:7px;
+  background:linear-gradient(180deg, #38bdf8, #7c3aed);
+  border-radius:8px 0 0 8px;
+}
+.block-inner { padding:30px 36px 34px; }
+.block-head { display:flex; gap:14px; justify-content:space-between; align-items:flex-start; padding-bottom:16px; border-bottom:1px solid #eadfcb; margin-bottom:18px; }
+.block h2 {
+  margin:0;
+  color:#111827;
+  font-family: Charter, Iowan Old Style, Georgia, serif;
+  font-size:32px;
+  letter-spacing:-.04em;
+}
+.type-chip {
+  border:1px solid #d7c8ad; background:#f2e8d5; color:#6b4e16;
+  border-radius:999px; padding:7px 10px; font-size:12px; white-space:nowrap; font-weight:850;
+}
+.location { color:#64748b; font-size:13px; margin-top:7px; }
+.latex {
+  border:1px solid #d8c9ae; border-radius:20px;
+  padding:20px; background:#f3ead8;
+  overflow-x:auto; margin:18px 0 22px;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.8);
+}
+.body { color:#243244; line-height:1.76; font-size:16px; font-family: Charter, Iowan Old Style, Georgia, serif; }
+.body h1,.body h2,.body h3 { color:#111827; letter-spacing:-.03em; line-height:1.08; }
+.body h2 { margin-top:22px; font-size:24px; }
+.body h3 { font-size:20px; }
+.body code { background:#efe5d0; border:1px solid #dfd2bb; padding:2px 6px; border-radius:7px; color:#0f172a; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
+.body p { margin:12px 0; }
+.body ul { padding-left:24px; }
+.body li { margin:8px 0; }
+.empty { margin-left:62px; padding:30px; color:#64748b; }
+.footer { margin-top:30px; color:#8fa2b8; font-size:13px; text-align:center; }
+@media (max-width: 960px) {
+  .workspace { grid-template-columns: 1fr; }
+  .sidebar { position:static; }
+  .topbar { align-items:flex-start; flex-direction:column; }
+}
+@media (max-width: 640px) {
+  .shell { padding:20px 14px 54px; }
+  .block { margin-left:46px; }
+  .block-inner { padding:24px 22px; }
+  .timeline:before { left:20px; }
+  .block:before { left:-46px; width:38px; height:38px; }
+  .session-head { padding:26px 24px; }
+}
 </style>
 </head>
 <body>
 <div class="shell">
-  <section class="hero">
-    <div class="card">
-      <h1>PaperMentor</h1>
-      <p class="subtitle">${escapeHtml(state.title || 'Paper reading session')}</p>
-      <div class="meta">
-        <span class="badge">Location: ${escapeHtml(state.currentLocation || 'not set')}</span>
-        <span class="badge">Focus: ${escapeHtml(state.currentFocus || 'not set')}</span>
-        <span class="badge">Updated: ${escapeHtml(state.updatedAt || '')}</span>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">PM</div>
+      <div>
+        <h1>PaperMentor</h1>
+        <p>Debug understanding, one paper block at a time.</p>
       </div>
     </div>
-    <aside class="rail">
-      <strong>Reading Path</strong>
-      <ul class="path">
-        ${(state.readingPath || []).map((item) => `<li class="${statusClass(item.status)}"><span class="icon">${statusIcon(item.status)}</span><span>${escapeHtml(item.label)}</span></li>`).join('\n')}
-      </ul>
-      <strong style="display:block;margin-top:22px">Choose next</strong>
-      <div class="choices">${(state.nextChoices || []).map((choice) => `<div class="choice">${escapeHtml(choice)}</div>`).join('\n')}</div>
+    <div class="open-pill">Rendered view · ${escapeHtml(state.renderedView || 'index.html')}</div>
+  </header>
+
+  <main class="workspace">
+    <aside class="sidebar">
+      <section class="panel paper-title">
+        <div class="kicker">Current paper</div>
+        <h2>${escapeHtml(state.title || 'Paper reading session')}</h2>
+        <div class="meta">
+          <span class="badge">${escapeHtml(state.currentLocation || 'Location not set')}</span>
+          <span class="badge">${escapeHtml(state.currentFocus || 'Focus not set')}</span>
+        </div>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><strong>Reading Path</strong><span class="hint">guided, interruptible</span></div>
+        <ul class="path">
+          ${(state.readingPath || []).map((item) => `<li class="${statusClass(item.status)}"><span class="icon">${statusIcon(item.status)}</span><span>${escapeHtml(item.label)}</span></li>`).join('\n')}
+        </ul>
+      </section>
+
+      <section class="panel">
+        <div class="panel-title"><strong>Choose next</strong><span class="hint">type a number</span></div>
+        <div class="choices">${(state.nextChoices || []).map((choice) => `<div class="choice">${escapeHtml(choice)}</div>`).join('\n')}</div>
+      </section>
     </aside>
-  </section>
-  <section class="cards">
-    ${(cards.cards || []).slice().reverse().map((card) => `<article class="card output"><h2>${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)}</div>${card.latex ? `<div class="latex">$$\n${escapeHtml(card.latex)}\n$$</div>` : ''}<div class="body">${markdownToHtml(card.body || '')}</div></article>`).join('\n') || '<article class="card output"><h2>No cards yet</h2><div class="body">Start by adding a paper map or equation card.</div></article>'}
-  </section>
-  <div class="footer">Single-file dashboard. Data source: state.json and cards.json regenerated into this page by PaperMentor.</div>
+
+    <section class="content">
+      <div class="session-head">
+        <div class="kicker">Reading session</div>
+        <h2>${escapeHtml(state.currentFocus || 'Paper map')}</h2>
+        <p>Each Reading Path action appends a new block below. The dashboard stays as one reusable <code>index.html</code>; PaperMentor updates <code>state.json</code> and <code>cards.json</code>, then rerenders this page.</p>
+      </div>
+
+      <section class="timeline">
+        ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><div class="block-inner"><div class="block-head"><div><h2>${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="type-chip">${escapeHtml(card.type)}</span></div>${card.latex ? `<div class="latex">$$\n${escapeHtml(card.latex)}\n$$</div>` : ''}<div class="body">${markdownToHtml(card.body || '')}</div></div></article>`).join('\n') || '<article class="block empty" data-index="1"><h2>No blocks yet</h2><div class="body">Start by adding a paper map, equation card, derivation trace, dependency trace, or confusion repair block.</div></article>'}
+      </section>
+    </section>
+  </main>
+
+  <div class="footer">One session, one dashboard. Blocks are appended from cards.json and rendered with MathJax.</div>
 </div>
 <script id="papermentor-data" type="application/json">${data}</script>
 </body>
