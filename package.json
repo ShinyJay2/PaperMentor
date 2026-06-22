@@ -1,6 +1,6 @@
 {
   "name": "papermentor-skill",
-  "version": "0.2.0",
+  "version": "0.1.0",
   "description": "PaperMentor: an interactive research-paper understanding tutor AI Agent Skill.",
   "private": false,
   "license": "MIT",
