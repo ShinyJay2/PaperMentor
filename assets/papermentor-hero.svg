@@ -1,0 +1,85 @@
+<svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">PaperMentor research paper understanding map</title>
+  <desc id="desc">A polished hero illustration showing a research paper transformed into equation cards, dependency nodes, and a mental model.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#06111F"/>
+      <stop offset="0.55" stop-color="#0B1830"/>
+      <stop offset="1" stop-color="#111827"/>
+    </linearGradient>
+    <linearGradient id="paper" x1="260" y1="90" x2="260" y2="540" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF"/>
+      <stop offset="1" stop-color="#E9F2FF"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="640" y1="130" x2="1020" y2="490" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#38BDF8"/>
+      <stop offset="1" stop-color="#6366F1"/>
+    </linearGradient>
+    <linearGradient id="orange" x1="430" y1="370" x2="720" y2="560" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FBBF24"/>
+      <stop offset="1" stop-color="#F97316"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="24" stdDeviation="28" flood-color="#000000" flood-opacity="0.35"/>
+    </filter>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%" color-interpolation-filters="sRGB">
+      <feGaussianBlur stdDeviation="18" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.22 0 0 0 0 0.75 0 0 0 0 0.97 0 0 0 0.45 0"/>
+      <feBlend in2="SourceGraphic" mode="screen"/>
+    </filter>
+  </defs>
+
+  <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
+  <circle cx="1010" cy="90" r="180" fill="#1D4ED8" opacity="0.20"/>
+  <circle cx="130" cy="560" r="210" fill="#0EA5E9" opacity="0.14"/>
+  <path d="M92 116C220 52 329 71 449 120C574 171 688 168 816 111C927 62 1030 52 1114 89" stroke="#60A5FA" stroke-opacity="0.18" stroke-width="2"/>
+
+  <g filter="url(#shadow)">
+    <rect x="120" y="86" width="390" height="470" rx="26" fill="url(#paper)"/>
+    <rect x="160" y="130" width="230" height="18" rx="9" fill="#0F172A" opacity="0.88"/>
+    <rect x="160" y="166" width="292" height="9" rx="4.5" fill="#64748B" opacity="0.38"/>
+    <rect x="160" y="188" width="250" height="9" rx="4.5" fill="#64748B" opacity="0.30"/>
+
+    <rect x="160" y="235" width="300" height="86" rx="16" fill="#DBEAFE" stroke="#93C5FD"/>
+    <text x="184" y="270" fill="#1E3A8A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="24" font-weight="700">E[ℓ(f(x), y)]</text>
+    <text x="184" y="299" fill="#475569" font-family="Inter, ui-sans-serif, system-ui" font-size="15">equation shown before explanation</text>
+
+    <rect x="160" y="354" width="300" height="12" rx="6" fill="#CBD5E1"/>
+    <rect x="160" y="382" width="245" height="12" rx="6" fill="#CBD5E1"/>
+    <rect x="160" y="410" width="280" height="12" rx="6" fill="#CBD5E1"/>
+    <rect x="160" y="456" width="130" height="36" rx="18" fill="#0EA5E9" opacity="0.92"/>
+    <text x="184" y="479" fill="white" font-family="Inter, ui-sans-serif, system-ui" font-size="15" font-weight="700">Paper</text>
+  </g>
+
+  <path d="M510 300C585 300 595 210 668 210" stroke="#38BDF8" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+  <path d="M510 330C592 330 606 422 680 422" stroke="#F59E0B" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+  <path d="M511 315C620 315 682 315 758 315" stroke="#A78BFA" stroke-width="4" stroke-linecap="round" opacity="0.9"/>
+
+  <g filter="url(#shadow)">
+    <rect x="675" y="112" width="375" height="116" rx="24" fill="#0F2745" stroke="#38BDF8" stroke-opacity="0.45"/>
+    <circle cx="724" cy="170" r="28" fill="url(#blue)" filter="url(#glow)"/>
+    <text x="770" y="158" fill="#E0F2FE" font-family="Inter, ui-sans-serif, system-ui" font-size="20" font-weight="800">Atomic equation card</text>
+    <text x="770" y="188" fill="#BAE6FD" font-family="Inter, ui-sans-serif, system-ui" font-size="15">symbols · domains · assumptions</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="760" y="258" width="320" height="118" rx="24" fill="#211A3A" stroke="#A78BFA" stroke-opacity="0.50"/>
+    <circle cx="810" cy="317" r="27" fill="#8B5CF6" filter="url(#glow)"/>
+    <text x="855" y="305" fill="#F3E8FF" font-family="Inter, ui-sans-serif, system-ui" font-size="20" font-weight="800">Dependency trace</text>
+    <text x="855" y="335" fill="#DDD6FE" font-family="Inter, ui-sans-serif, system-ui" font-size="15">definitions → lemmas → claims</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="682" y="405" width="370" height="118" rx="24" fill="#3A2410" stroke="#F59E0B" stroke-opacity="0.55"/>
+    <circle cx="733" cy="464" r="27" fill="url(#orange)" filter="url(#glow)"/>
+    <text x="778" y="452" fill="#FEF3C7" font-family="Inter, ui-sans-serif, system-ui" font-size="20" font-weight="800">Interrupt + repair</text>
+    <text x="778" y="482" fill="#FDE68A" font-family="Inter, ui-sans-serif, system-ui" font-size="15">minimal example · resume exact line</text>
+  </g>
+
+  <g>
+    <rect x="406" y="506" width="390" height="64" rx="32" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.16"/>
+    <text x="454" y="546" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="22" font-weight="800">30-minute mental model</text>
+  </g>
+
+  <text x="86" y="602" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="15">PaperMentor · trace math, dependencies, and confusion into understanding</text>
+</svg>

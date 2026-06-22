@@ -4,13 +4,17 @@
 
 ### Understand uploaded papers in one focused 30-minute reading loop.
 
-Built for the era of overflowing AI papers: upload or paste a paper, trace the math, repair confusion, and leave with a working mental model you can actually reconstruct.
+Built for the era of overflowing papers: upload or paste a paper, trace the math, repair confusion, and leave with a working mental model you can actually reconstruct.
+
+Works with **Codex** and **Claude Code**.
+
+<img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute mental model" width="920" />
 
 [![Quick Start](https://img.shields.io/badge/Quick%20Start-One--line%20Install-0ea5e9)](#-quick-start)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Codex Skill](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
+[![Codex](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
+[![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-6b4fbb)](https://code.claude.com/docs/en/skills)
 [![LaTeX First](https://img.shields.io/badge/Math-LaTeX%20First-8b5cf6)](#-latex-first)
-[![Korean Support](https://img.shields.io/badge/Language-English%20%7C%20Korean-f97316)](#-korean-support)
 
 **Do not summarize papers. Debug understanding.**
 
@@ -20,7 +24,7 @@ Built for the era of overflowing AI papers: upload or paste a paper, trace the m
 
 ---
 
-AI papers are arriving faster than anyone can read them. PaperMentor is for the moment when you need to understand one now — not skim the abstract, not collect a summary, but build a usable mental model quickly.
+Papers are arriving faster than anyone can read them. PaperMentor is for the moment when you need to understand one now — not skim the abstract, not collect a summary, but build a usable mental model quickly.
 
 Upload or paste the paper, run the guided loop, and spend the next 30 minutes resolving the exact equations, dependencies, and assumptions that block understanding.
 
@@ -60,8 +64,8 @@ Pause mid-paper, answer the confusion, identify the missing dependency, give a m
 <tr>
 <td width="50%" valign="top">
 
-### 🇰🇷 Korean support
-Ask in Korean; get Korean explanations while preserving equations and notation in LaTeX.
+### 🧠 Mental model extraction
+End with the one-sentence model, the dependency chain behind it, and what breaks if assumptions fail.
 
 </td>
 <td width="50%" valign="top">
@@ -77,10 +81,22 @@ Use visualization only when it helps: geometry, distributions, random projection
 
 ## 🚀 Quick Start
 
-macOS / Linux:
+Codex:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash
+```
+
+Claude Code:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s claude
+```
+
+Install both:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s all
 ```
 
 Windows PowerShell:
@@ -89,16 +105,15 @@ Windows PowerShell:
 iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
 ```
 
-Local clone still works:
-
-```bash
-git clone https://github.com/ShinyJay2/PaperMentor.git && cd PaperMentor && ./install.sh
+```powershell
+$env:PAPERMENTOR_TARGET='claude'; iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
 ```
 
-Installed skill path:
+Install paths:
 
 ```text
-~/.codex/skills/papermentor
+Codex:       ~/.codex/skills/papermentor
+Claude Code: ~/.claude/skills/papermentor
 ```
 
 ---
@@ -132,7 +147,6 @@ flowchart TD
 | Understand notation | `Use $papermentor to explain Equation (7) atomically.` |
 | Fill skipped math | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
 | Interrupt reading | `Pause. Why did the sign flip here?` |
-| Read in Korean | `이 정리가 왜 필요한지 dependency trace 해줘.` |
 | Finish the paper | `Extract the final mental model and dependency chain.` |
 
 ---
@@ -200,16 +214,6 @@ Missing dependency check: convexity of \(\ell\) is used but not stated.
 Recommended explanation order: Definition 1, Assumption A2, Lemma 1, Theorem 3.
 ```
 
-### Korean support
-
-```markdown
-\[
-\mathcal{L}(\theta)=\mathbb{E}_{x\sim p_{\text{data}}}\left[-\log p_\theta(x)\right]
-\]
-
-- \(\mathbb{E}_{x\sim p_{\text{data}}}\): 데이터 분포에서 뽑은 샘플에 대한 평균입니다.
-```
-
 ### Visualization example
 
 Every visualization plan includes: question, concept, visual encoding, what to observe, conclusion, and limitation.
@@ -231,8 +235,8 @@ PaperMentor is modular:
 
 - [`prompts/`](prompts/) — scanner, prerequisite analyzer, equation analyzer, derivation tracer, dependency tracer, proof analyzer, method analyzer, confusion resolver, mental-model extractor, visualization planner.
 - [`templates/`](templates/) — paper maps, equation cards, derivation traces, dependency traces, proof walkthroughs, recursive why, mental models, visualization cards.
-- [`examples/`](examples/) — concrete examples for Korean, derivations, dependencies, sign/magnitude confusion, mental models.
-- [`tests/`](tests/) — checklists for LaTeX quality, no-handwave behavior, Korean support, visualization quality, and trace completeness.
+- [`examples/`](examples/) — concrete examples for derivations, dependencies, sign/magnitude confusion, and mental models.
+- [`tests/`](tests/) — checklists for LaTeX quality, no-handwave behavior, visualization quality, and trace completeness.
 
 ---
 
@@ -248,7 +252,7 @@ The validator checks required files, skill frontmatter, command coverage, visual
 
 ## 🤝 Contributing
 
-Improve understanding, not product sprawl. Keep the core product focused on equations, derivations, dependencies, interruptions, recursive why, visual support, Korean/English explanations, and mental model extraction.
+Improve understanding, not product sprawl. Keep the core product focused on equations, derivations, dependencies, interruptions, recursive why, visual support, and mental model extraction.
 
 See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
@@ -256,7 +260,7 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ## 🗺️ Scope & Roadmap
 
-**Current focus:** paper maps, prerequisite ladders, atomic equations, derivation traces, dependency traces, proof walkthroughs, method dissection, interruptions, recursive why, Korean support, visualization support, and mental models.
+**Current focus:** paper maps, prerequisite ladders, atomic equations, derivation traces, dependency traces, proof walkthroughs, method dissection, interruptions, recursive why, visualization support, and mental models.
 
 **Deliberately out of scope:** blog export, reviewer simulation, and quiz generation.
 

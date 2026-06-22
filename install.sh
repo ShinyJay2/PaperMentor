@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+TARGET="${1:-${PAPERMENTOR_TARGET:-codex}}"
 REPO_URL="${PAPERMENTOR_REPO_URL:-https://github.com/ShinyJay2/PaperMentor.git}"
 CACHE_DIR="${PAPERMENTOR_HOME:-$HOME/.papermentor}/repo"
 SCRIPT_PATH="${BASH_SOURCE[0]:-}"
@@ -25,18 +26,40 @@ if [[ -z "$ROOT_DIR" || ! -d "$ROOT_DIR/skills/papermentor" ]]; then
   ROOT_DIR="$CACHE_DIR"
 fi
 
-CODEX_HOME_DIR="${CODEX_HOME:-$HOME/.codex}"
-DEST="$CODEX_HOME_DIR/skills/papermentor"
+copy_skill() {
+  local dest="$1"
+  mkdir -p "$(dirname "$dest")"
+  rm -rf "$dest"
+  mkdir -p "$dest"
+  cp -R "$ROOT_DIR/skills/papermentor/." "$dest/"
+  cp -R "$ROOT_DIR/prompts" "$dest/prompts"
+  cp -R "$ROOT_DIR/templates" "$dest/templates"
+  cp -R "$ROOT_DIR/examples" "$dest/examples"
+  cp -R "$ROOT_DIR/tests" "$dest/tests"
+}
 
-mkdir -p "$(dirname "$DEST")"
-rm -rf "$DEST"
-mkdir -p "$DEST"
+install_codex() {
+  local codex_home="${CODEX_HOME:-$HOME/.codex}"
+  local dest="$codex_home/skills/papermentor"
+  copy_skill "$dest"
+  printf 'PaperMentor installed for Codex: %s\n' "$dest"
+}
 
-cp -R "$ROOT_DIR/skills/papermentor/." "$DEST/"
-cp -R "$ROOT_DIR/prompts" "$DEST/prompts"
-cp -R "$ROOT_DIR/templates" "$DEST/templates"
-cp -R "$ROOT_DIR/examples" "$DEST/examples"
-cp -R "$ROOT_DIR/tests" "$DEST/tests"
+install_claude() {
+  local claude_home="${CLAUDE_HOME:-$HOME/.claude}"
+  local dest="$claude_home/skills/papermentor"
+  copy_skill "$dest"
+  printf 'PaperMentor installed for Claude Code: %s\n' "$dest"
+}
 
-printf 'PaperMentor installed to %s\n' "$DEST"
+case "$TARGET" in
+  codex) install_codex ;;
+  claude|claude-code) install_claude ;;
+  all|both) install_codex; install_claude ;;
+  *)
+    echo "Usage: install.sh [codex|claude|all]" >&2
+    exit 2
+    ;;
+esac
+
 printf 'Try: Use $papermentor to scan this paper.\n'

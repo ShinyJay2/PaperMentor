@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','install.sh','install.ps1','package.json',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg',
   'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/mental-model-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/mental_model.md','templates/visualization_card.md',
@@ -48,7 +48,7 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Korean support', 'Derivation trace example', 'Dependency trace example', 'Visualization example', 'Roadmap']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-hero.svg', 'Derivation trace example', 'Dependency trace example', 'Visualization example', 'Scope & Roadmap']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
@@ -84,28 +84,39 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
+function expectedInstalledResources() {
+  return [
+    'SKILL.md',
+    'commands.md',
+    'examples.md',
+    ...required
+      .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/'))
+  ];
+}
+
+function assertInstalledArtifact(dest, label) {
+  const installedRequired = expectedInstalledResources();
+  for (const rel of installedRequired) {
+    if (!existsSync(join(dest, rel))) failures.push(`${label} installed artifact missing ${rel}`);
+  }
+
+  for (const dir of ['prompts', 'templates', 'examples', 'tests']) {
+    const sourceCount = required.filter((rel) => rel.startsWith(`${dir}/`)).length;
+    const installedCount = installedRequired.filter((rel) => rel.startsWith(`${dir}/`)).length;
+    if (sourceCount !== installedCount) failures.push(`${label} installed ${dir}/ expectation mismatch: ${installedCount} of ${sourceCount}`);
+  }
+}
+
 function validateInstalledArtifact() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-validate-'));
   try {
     const codexHome = join(temp, '.codex');
-    execFileSync(join(root, 'install.sh'), { cwd: root, env: { ...process.env, CODEX_HOME: codexHome }, stdio: 'pipe' });
-    const dest = join(codexHome, 'skills', 'papermentor');
-    const installedRequired = [
-      'SKILL.md',
-      'commands.md',
-      'examples.md',
-      ...required
-        .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/'))
-    ];
-    for (const rel of installedRequired) {
-      if (!existsSync(join(dest, rel))) failures.push(`installed artifact missing ${rel}`);
-    }
+    execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome }, stdio: 'pipe' });
+    assertInstalledArtifact(join(codexHome, 'skills', 'papermentor'), 'codex');
 
-    for (const dir of ['prompts', 'templates', 'examples', 'tests']) {
-      const sourceCount = required.filter((rel) => rel.startsWith(`${dir}/`)).length;
-      const installedCount = installedRequired.filter((rel) => rel.startsWith(`${dir}/`)).length;
-      if (sourceCount !== installedCount) failures.push(`installed ${dir}/ expectation mismatch: ${installedCount} of ${sourceCount}`);
-    }
+    const claudeHome = join(temp, '.claude');
+    execFileSync(join(root, 'install.sh'), ['claude'], { cwd: root, env: { ...process.env, CLAUDE_HOME: claudeHome }, stdio: 'pipe' });
+    assertInstalledArtifact(join(claudeHome, 'skills', 'papermentor'), 'claude');
   } catch (error) {
     failures.push(`install smoke failed: ${error.message}`);
   } finally {

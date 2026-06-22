@@ -1,7 +1,7 @@
 {
-  "name": "papermentor-codex-skill",
+  "name": "papermentor-skill",
   "version": "0.1.0",
-  "description": "PaperMentor: an interactive research-paper understanding tutor Codex Skill.",
+  "description": "PaperMentor: an interactive research-paper understanding tutor Skill for Codex and Claude Code.",
   "private": false,
   "license": "MIT",
   "type": "module",
