@@ -1,7 +1,7 @@
 {
   "name": "papermentor-skill",
   "version": "0.1.0",
-  "description": "PaperMentor: an interactive research-paper understanding tutor Skill for Codex and Claude Code.",
+  "description": "PaperMentor: an interactive research-paper understanding tutor AI Agent Skill.",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -9,12 +9,13 @@
     "test": "node scripts/validate.mjs"
   },
   "keywords": [
+    "ai-agent-skill",
     "codex-skill",
     "research-papers",
     "latex",
     "math",
     "tutoring",
-    "korean"
+    "multilingual"
   ],
   "repository": {
     "type": "git",

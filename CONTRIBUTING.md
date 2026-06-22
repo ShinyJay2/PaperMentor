@@ -1,6 +1,6 @@
 # Contributing to PaperMentor
 
-PaperMentor is a focused Codex Skill for research-paper understanding. Contributions should make the tutor better at debugging understanding, not broader at generating content.
+PaperMentor is a focused AI Agent Skill for research-paper understanding. Contributions should make the tutor better at debugging understanding, not broader at generating content.
 
 ## Product boundaries
 

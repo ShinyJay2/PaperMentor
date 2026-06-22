@@ -1,128 +1,109 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">PaperMentor derives final insight from paper understanding nodes</title>
-  <desc id="desc">A research paper connects to equation, derivation, dependency, proof, and confusion-repair nodes that converge into a final insight.</desc>
+  <desc id="desc">A research paper connects to equation, derivation, dependency, and confusion-repair nodes. Those nodes converge cleanly into a final insight.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
       <stop stop-color="#06111F"/>
-      <stop offset="0.54" stop-color="#0B1830"/>
+      <stop offset="0.56" stop-color="#0B1830"/>
       <stop offset="1" stop-color="#111827"/>
     </linearGradient>
-    <linearGradient id="paper" x1="125" y1="96" x2="125" y2="534" gradientUnits="userSpaceOnUse">
+    <linearGradient id="paper" x1="110" y1="95" x2="110" y2="530" gradientUnits="userSpaceOnUse">
       <stop stop-color="#FFFFFF"/>
       <stop offset="1" stop-color="#E8F1FF"/>
     </linearGradient>
-    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#38BDF8"/>
-      <stop offset="1" stop-color="#2563EB"/>
-    </linearGradient>
-    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#A78BFA"/>
-      <stop offset="1" stop-color="#6D28D9"/>
-    </linearGradient>
-    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#FBBF24"/>
-      <stop offset="1" stop-color="#F97316"/>
-    </linearGradient>
-    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1">
-      <stop stop-color="#34D399"/>
-      <stop offset="1" stop-color="#059669"/>
-    </linearGradient>
-    <linearGradient id="insight" x1="720" y1="238" x2="975" y2="390" gradientUnits="userSpaceOnUse">
+    <linearGradient id="cyan" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#38BDF8"/><stop offset="1" stop-color="#2563EB"/></linearGradient>
+    <linearGradient id="violet" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#A78BFA"/><stop offset="1" stop-color="#6D28D9"/></linearGradient>
+    <linearGradient id="amber" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FBBF24"/><stop offset="1" stop-color="#F97316"/></linearGradient>
+    <linearGradient id="green" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#34D399"/><stop offset="1" stop-color="#059669"/></linearGradient>
+    <linearGradient id="insight" x1="815" y1="224" x2="1075" y2="410" gradientUnits="userSpaceOnUse">
       <stop stop-color="#F8FAFC"/>
       <stop offset="1" stop-color="#BAE6FD"/>
     </linearGradient>
     <filter id="shadow" x="-25%" y="-25%" width="150%" height="150%" color-interpolation-filters="sRGB">
-      <feDropShadow dx="0" dy="24" stdDeviation="24" flood-color="#000000" flood-opacity="0.34"/>
+      <feDropShadow dx="0" dy="22" stdDeviation="22" flood-color="#000000" flood-opacity="0.34"/>
     </filter>
     <filter id="softGlow" x="-45%" y="-45%" width="190%" height="190%" color-interpolation-filters="sRGB">
-      <feGaussianBlur stdDeviation="14" result="blur"/>
-      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.18 0 0 0 0 0.66 0 0 0 0 0.98 0 0 0 0.40 0"/>
+      <feGaussianBlur stdDeviation="12" result="blur"/>
+      <feColorMatrix in="blur" type="matrix" values="0 0 0 0 0.18 0 0 0 0 0.66 0 0 0 0 0.98 0 0 0 0.35 0"/>
       <feBlend in2="SourceGraphic" mode="screen"/>
     </filter>
-    <marker id="arrowCyan" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0 0L10 5L0 10Z" fill="#38BDF8"/>
-    </marker>
-    <marker id="arrowViolet" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0 0L10 5L0 10Z" fill="#A78BFA"/>
-    </marker>
-    <marker id="arrowAmber" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0 0L10 5L0 10Z" fill="#F59E0B"/>
-    </marker>
-    <marker id="arrowGreen" markerWidth="10" markerHeight="10" refX="8" refY="5" orient="auto" markerUnits="strokeWidth">
-      <path d="M0 0L10 5L0 10Z" fill="#34D399"/>
-    </marker>
+    <marker id="arrowCyan" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L9 4.5L0 9Z" fill="#38BDF8"/></marker>
+    <marker id="arrowViolet" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L9 4.5L0 9Z" fill="#A78BFA"/></marker>
+    <marker id="arrowAmber" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L9 4.5L0 9Z" fill="#F59E0B"/></marker>
+    <marker id="arrowGreen" markerWidth="9" markerHeight="9" refX="7.5" refY="4.5" orient="auto" markerUnits="strokeWidth"><path d="M0 0L9 4.5L0 9Z" fill="#34D399"/></marker>
   </defs>
 
   <rect width="1200" height="630" rx="36" fill="url(#bg)"/>
-  <circle cx="1014" cy="98" r="190" fill="#1D4ED8" opacity="0.16"/>
-  <circle cx="145" cy="548" r="220" fill="#0EA5E9" opacity="0.14"/>
-  <path d="M80 104C220 36 342 64 474 122C604 179 724 172 860 106C960 58 1065 58 1130 92" stroke="#60A5FA" stroke-opacity="0.16" stroke-width="2"/>
+  <circle cx="1025" cy="92" r="190" fill="#1D4ED8" opacity="0.14"/>
+  <circle cx="145" cy="548" r="220" fill="#0EA5E9" opacity="0.13"/>
+  <path d="M80 104C220 36 342 64 474 122C604 179 724 172 860 106C960 58 1065 58 1130 92" stroke="#60A5FA" stroke-opacity="0.15" stroke-width="2"/>
 
-  <!-- Source paper -->
+  <!-- Paper column -->
   <g filter="url(#shadow)">
-    <rect x="88" y="96" width="314" height="438" rx="28" fill="url(#paper)"/>
-    <rect x="124" y="136" width="188" height="18" rx="9" fill="#0F172A" opacity="0.84"/>
-    <rect x="124" y="174" width="230" height="9" rx="4.5" fill="#64748B" opacity="0.34"/>
-    <rect x="124" y="197" width="196" height="9" rx="4.5" fill="#64748B" opacity="0.27"/>
-    <rect x="124" y="242" width="238" height="82" rx="16" fill="#DBEAFE" stroke="#93C5FD"/>
-    <text x="146" y="276" fill="#1E3A8A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="22" font-weight="800">E[ℓ(f(x), y)]</text>
-    <text x="146" y="303" fill="#475569" font-family="Inter, ui-sans-serif, system-ui" font-size="14">paper equation</text>
-    <rect x="124" y="358" width="238" height="11" rx="5.5" fill="#CBD5E1"/>
-    <rect x="124" y="386" width="198" height="11" rx="5.5" fill="#CBD5E1"/>
-    <rect x="124" y="414" width="222" height="11" rx="5.5" fill="#CBD5E1"/>
-    <rect x="124" y="464" width="108" height="34" rx="17" fill="#0EA5E9"/>
-    <text x="150" y="486" fill="white" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Paper</text>
+    <rect x="82" y="96" width="292" height="438" rx="28" fill="url(#paper)"/>
+    <rect x="118" y="136" width="176" height="17" rx="8.5" fill="#0F172A" opacity="0.84"/>
+    <rect x="118" y="174" width="218" height="9" rx="4.5" fill="#64748B" opacity="0.34"/>
+    <rect x="118" y="197" width="184" height="9" rx="4.5" fill="#64748B" opacity="0.27"/>
+    <rect x="118" y="242" width="220" height="82" rx="16" fill="#DBEAFE" stroke="#93C5FD"/>
+    <text x="137" y="276" fill="#1E3A8A" font-family="ui-monospace, SFMono-Regular, Menlo, monospace" font-size="21" font-weight="800">E[ℓ(f(x), y)]</text>
+    <text x="137" y="303" fill="#475569" font-family="Inter, ui-sans-serif, system-ui" font-size="14">paper equation</text>
+    <rect x="118" y="358" width="220" height="11" rx="5.5" fill="#CBD5E1"/>
+    <rect x="118" y="386" width="184" height="11" rx="5.5" fill="#CBD5E1"/>
+    <rect x="118" y="414" width="206" height="11" rx="5.5" fill="#CBD5E1"/>
+    <rect x="118" y="464" width="104" height="34" rx="17" fill="#0EA5E9"/>
+    <text x="143" y="486" fill="white" font-family="Inter, ui-sans-serif, system-ui" font-size="14" font-weight="800">Paper</text>
   </g>
 
-  <!-- Understanding nodes -->
+  <!-- Node column -->
   <g filter="url(#shadow)">
-    <rect x="492" y="80" width="250" height="82" rx="22" fill="#0E2A47" stroke="#38BDF8" stroke-opacity="0.54"/>
-    <circle cx="533" cy="121" r="22" fill="url(#cyan)" filter="url(#softGlow)"/>
-    <text x="570" y="115" fill="#E0F2FE" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Equation</text>
-    <text x="570" y="141" fill="#BAE6FD" font-family="Inter, ui-sans-serif, system-ui" font-size="13">symbols + operators</text>
-  </g>
-
-  <g filter="url(#shadow)">
-    <rect x="478" y="204" width="270" height="82" rx="22" fill="#251A43" stroke="#A78BFA" stroke-opacity="0.58"/>
-    <circle cx="519" cy="245" r="22" fill="url(#violet)" filter="url(#softGlow)"/>
-    <text x="556" y="239" fill="#F3E8FF" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Derivation</text>
-    <text x="556" y="265" fill="#DDD6FE" font-family="Inter, ui-sans-serif, system-ui" font-size="13">no skipped steps</text>
+    <rect x="455" y="76" width="265" height="78" rx="22" fill="#0E2A47" stroke="#38BDF8" stroke-opacity="0.54"/>
+    <circle cx="493" cy="115" r="20" fill="url(#cyan)" filter="url(#softGlow)"/>
+    <text x="532" y="110" fill="#E0F2FE" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Equation</text>
+    <text x="532" y="135" fill="#BAE6FD" font-family="Inter, ui-sans-serif, system-ui" font-size="13">symbols + operators</text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="478" y="328" width="270" height="82" rx="22" fill="#3A2410" stroke="#F59E0B" stroke-opacity="0.58"/>
-    <circle cx="519" cy="369" r="22" fill="url(#amber)" filter="url(#softGlow)"/>
-    <text x="556" y="363" fill="#FEF3C7" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Dependencies</text>
-    <text x="556" y="389" fill="#FDE68A" font-family="Inter, ui-sans-serif, system-ui" font-size="13">definitions → claims</text>
+    <rect x="455" y="199" width="265" height="78" rx="22" fill="#251A43" stroke="#A78BFA" stroke-opacity="0.58"/>
+    <circle cx="493" cy="238" r="20" fill="url(#violet)" filter="url(#softGlow)"/>
+    <text x="532" y="233" fill="#F3E8FF" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Derivation</text>
+    <text x="532" y="258" fill="#DDD6FE" font-family="Inter, ui-sans-serif, system-ui" font-size="13">no skipped steps</text>
   </g>
 
   <g filter="url(#shadow)">
-    <rect x="492" y="452" width="250" height="82" rx="22" fill="#0D3328" stroke="#34D399" stroke-opacity="0.58"/>
-    <circle cx="533" cy="493" r="22" fill="url(#green)" filter="url(#softGlow)"/>
-    <text x="570" y="487" fill="#D1FAE5" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Confusion repair</text>
-    <text x="570" y="513" fill="#A7F3D0" font-family="Inter, ui-sans-serif, system-ui" font-size="13">pause + reconnect</text>
+    <rect x="455" y="322" width="265" height="78" rx="22" fill="#3A2410" stroke="#F59E0B" stroke-opacity="0.58"/>
+    <circle cx="493" cy="361" r="20" fill="url(#amber)" filter="url(#softGlow)"/>
+    <text x="532" y="356" fill="#FEF3C7" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Dependencies</text>
+    <text x="532" y="381" fill="#FDE68A" font-family="Inter, ui-sans-serif, system-ui" font-size="13">definitions → claims</text>
   </g>
-
-  <!-- Edges from paper to nodes -->
-  <path d="M402 240C438 194 455 144 492 124" stroke="#38BDF8" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowCyan)" opacity="0.90"/>
-  <path d="M402 277C436 260 449 247 478 245" stroke="#A78BFA" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowViolet)" opacity="0.90"/>
-  <path d="M402 315C436 338 449 365 478 369" stroke="#F59E0B" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowAmber)" opacity="0.90"/>
-  <path d="M402 354C438 412 456 478 492 493" stroke="#34D399" stroke-width="4" stroke-linecap="round" marker-end="url(#arrowGreen)" opacity="0.90"/>
-
-  <!-- Convergence into final insight -->
-  <path d="M742 121C808 148 848 205 762 262" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round" marker-end="url(#arrowCyan)" opacity="0.78"/>
-  <path d="M748 245C802 252 842 274 756 299" stroke="#A78BFA" stroke-width="3.5" stroke-linecap="round" marker-end="url(#arrowViolet)" opacity="0.78"/>
-  <path d="M748 369C802 360 842 340 756 318" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round" marker-end="url(#arrowAmber)" opacity="0.78"/>
-  <path d="M742 493C806 468 850 405 764 350" stroke="#34D399" stroke-width="3.5" stroke-linecap="round" marker-end="url(#arrowGreen)" opacity="0.78"/>
 
   <g filter="url(#shadow)">
-    <path d="M830 226L914 274L914 370L830 418L746 370L746 274L830 226Z" fill="url(#insight)"/>
-    <path d="M830 226L914 274L914 370L830 418L746 370L746 274L830 226Z" stroke="#7DD3FC" stroke-width="3"/>
-    <circle cx="830" cy="322" r="47" fill="#0F172A" opacity="0.08"/>
-    <text x="830" y="306" text-anchor="middle" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="900">Final</text>
-    <text x="830" y="334" text-anchor="middle" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="19" font-weight="900">Insight</text>
-    <text x="830" y="362" text-anchor="middle" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="12" font-weight="700">reconstructable</text>
+    <rect x="455" y="445" width="265" height="78" rx="22" fill="#0D3328" stroke="#34D399" stroke-opacity="0.58"/>
+    <circle cx="493" cy="484" r="20" fill="url(#green)" filter="url(#softGlow)"/>
+    <text x="532" y="479" fill="#D1FAE5" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="850">Confusion repair</text>
+    <text x="532" y="504" fill="#A7F3D0" font-family="Inter, ui-sans-serif, system-ui" font-size="13">pause + reconnect</text>
   </g>
+
+  <!-- Paper to node arrows: terminate at left edge of node cards -->
+  <path d="M378 246C404 190 424 130 452 116" stroke="#38BDF8" stroke-width="3.5" stroke-linecap="round" fill="none" marker-end="url(#arrowCyan)" opacity="0.88"/>
+  <path d="M378 286C408 262 424 240 452 238" stroke="#A78BFA" stroke-width="3.5" stroke-linecap="round" fill="none" marker-end="url(#arrowViolet)" opacity="0.88"/>
+  <path d="M378 326C408 340 424 358 452 361" stroke="#F59E0B" stroke-width="3.5" stroke-linecap="round" fill="none" marker-end="url(#arrowAmber)" opacity="0.88"/>
+  <path d="M378 366C404 420 424 472 452 484" stroke="#34D399" stroke-width="3.5" stroke-linecap="round" fill="none" marker-end="url(#arrowGreen)" opacity="0.88"/>
+
+  <!-- Final insight column -->
+  <g filter="url(#shadow)">
+    <rect x="815" y="246" width="260" height="156" rx="28" fill="url(#insight)" stroke="#7DD3FC" stroke-width="3"/>
+    <circle cx="864" cy="324" r="38" fill="#0F172A" opacity="0.10"/>
+    <path d="M852 324L862 334L880 310" stroke="#0F172A" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" opacity="0.82"/>
+    <text x="925" y="314" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="900">Final</text>
+    <text x="925" y="346" fill="#0F172A" font-family="Inter, ui-sans-serif, system-ui" font-size="18" font-weight="900">Insight</text>
+    <text x="925" y="376" fill="#334155" font-family="Inter, ui-sans-serif, system-ui" font-size="13" font-weight="750">reconstructable</text>
+  </g>
+
+  <!-- Node to insight arrows: terminate at the final insight card edge without overlap -->
+  <path d="M720 115C775 150 800 210 812 262" stroke="#38BDF8" stroke-width="3.2" stroke-linecap="round" fill="none" marker-end="url(#arrowCyan)" opacity="0.74"/>
+  <path d="M720 238C765 252 790 288 812 306" stroke="#A78BFA" stroke-width="3.2" stroke-linecap="round" fill="none" marker-end="url(#arrowViolet)" opacity="0.74"/>
+  <path d="M720 361C765 350 790 338 812 334" stroke="#F59E0B" stroke-width="3.2" stroke-linecap="round" fill="none" marker-end="url(#arrowAmber)" opacity="0.74"/>
+  <path d="M720 484C775 450 800 404 812 386" stroke="#34D399" stroke-width="3.2" stroke-linecap="round" fill="none" marker-end="url(#arrowGreen)" opacity="0.74"/>
 
   <text x="86" y="592" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="15">PaperMentor · derive understanding from equations, dependencies, derivations, and interruptions</text>
 </svg>

@@ -1,6 +1,6 @@
 # Security Policy
 
-PaperMentor is a prompt-and-template Codex Skill. It does not require credentials, network access, or execution of paper-provided code.
+PaperMentor is a prompt-and-template AI Agent Skill. It does not require credentials, network access, or execution of paper-provided code.
 
 ## Supported versions
 

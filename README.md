@@ -6,7 +6,7 @@
 
 Built for the era of overflowing papers: upload or paste a paper, trace the math, repair confusion, and leave with a final insight you can actually reconstruct.
 
-Works with **Codex** and **Claude Code**.
+An **AI Agent Skill** for **Codex** and **Claude Code**.
 
 <img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute final insight" width="920" />
 
@@ -36,26 +36,46 @@ A useful reading session should answer:
 
 ---
 
-## The 30-minute paper loop
+## Use it in four moves
 
-```mermaid
-flowchart LR
-  A["Upload or paste paper"] --> B["Map problem, notation, assumptions"]
-  B --> C{"Choose the blocker"}
-  C --> D["Equation"]
-  C --> E["Derivation"]
-  C --> F["Dependency"]
-  C --> G["Proof / method"]
-  D --> H["Interrupt anytime"]
-  E --> H
-  F --> H
-  G --> H
-  H --> I["Repair the missing concept"]
-  I --> J["Resume exact location"]
-  J --> K["One-sentence final insight"]
-```
+<table>
+<tr>
+<td width="25%" valign="top">
 
-Start broad, then narrow quickly. PaperMentor is designed for active reading, not passive summaries.
+### 1. Upload
+Paste the paper, PDF text, or a target section.
+
+`Use $papermentor to scan this paper.`
+
+</td>
+<td width="25%" valign="top">
+
+### 2. Map
+Locate the problem, notation, assumptions, claims, and equations.
+
+`Build the paper map.`
+
+</td>
+<td width="25%" valign="top">
+
+### 3. Debug
+Pick the exact blocker: equation, derivation, proof, method, or dependency.
+
+`Explain Equation (7) atomically.`
+
+</td>
+<td width="25%" valign="top">
+
+### 4. Reconstruct
+Resume from the paused line and extract the final insight.
+
+`Extract the final insight.`
+
+</td>
+</tr>
+</table>
+
+Interrupt anytime with a natural question: `Pause. Why did the sign flip here?` PaperMentor answers the missing concept, reconnects it to the original line, and continues from the same location.
 
 ---
 
@@ -98,17 +118,16 @@ Claude Code: ~/.claude/skills/papermentor
 
 ---
 
-## How to use it
+## Command intents
 
-| Goal | Prompt |
-| --- | --- |
-| Start a reading session | `Use $papermentor to scan this paper.` |
-| Explain notation | `Use $papermentor to explain Equation (7) atomically.` |
-| Fill skipped algebra | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
-| Repair confusion | `Pause. Why did the sign flip here?` |
-| Finish the paper | `Extract the final insight and dependency chain.` |
+- `scan` — produce the paper map before details.
+- `equation` — explain every symbol and operator after showing the equation.
+- `derivation` — trace each transition without skipped algebra.
+- `dependency` — reveal what a claim depends on and what depends on it.
+- `interrupt` — pause, repair confusion, reconnect, and resume.
+- `final-insight` — compress the full reconstruction into the takeaway.
 
-Command intents are documented in [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
+Full command contract: [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
 
 ---
 
