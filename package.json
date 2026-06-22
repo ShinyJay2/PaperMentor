@@ -1,0 +1,26 @@
+{
+  "name": "papermentor-codex-skill",
+  "version": "0.1.0",
+  "description": "PaperMentor: an interactive research-paper understanding tutor Codex Skill.",
+  "private": false,
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "test": "node scripts/validate.mjs"
+  },
+  "keywords": [
+    "codex-skill",
+    "research-papers",
+    "latex",
+    "math",
+    "tutoring",
+    "korean"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ShinyJay2/PaperMentor.git"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
