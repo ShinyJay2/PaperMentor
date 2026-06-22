@@ -1,6 +1,6 @@
 <svg width="1200" height="630" viewBox="0 0 1200 630" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
   <title id="title">PaperMentor research paper understanding map</title>
-  <desc id="desc">A polished hero illustration showing a research paper transformed into equation cards, dependency nodes, and a mental model.</desc>
+  <desc id="desc">A polished hero illustration showing a research paper transformed into equation cards, dependency nodes, and a final insight.</desc>
   <defs>
     <linearGradient id="bg" x1="0" y1="0" x2="1200" y2="630" gradientUnits="userSpaceOnUse">
       <stop stop-color="#06111F"/>
@@ -77,8 +77,8 @@
   </g>
 
   <g>
-    <rect x="406" y="506" width="390" height="64" rx="32" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.16"/>
-    <text x="454" y="546" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="22" font-weight="800">30-minute mental model</text>
+    <rect x="530" y="536" width="330" height="48" rx="24" fill="#FFFFFF" fill-opacity="0.08" stroke="#FFFFFF" stroke-opacity="0.18"/>
+    <text x="632" y="567" fill="#F8FAFC" font-family="Inter, ui-sans-serif, system-ui" font-size="20" font-weight="800">Final insight</text>
   </g>
 
   <text x="86" y="602" fill="#94A3B8" font-family="Inter, ui-sans-serif, system-ui" font-size="15">PaperMentor · trace math, dependencies, and confusion into understanding</text>

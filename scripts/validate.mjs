@@ -6,10 +6,10 @@ import { execFileSync } from 'node:child_process';
 const root = new URL('..', import.meta.url).pathname;
 const required = [
   'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg',
-  'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/mental-model-extractor.md','prompts/visualization-planner.md',
+  'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/mental_model.md','templates/visualization_card.md',
-  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/mental_model_example.md',
+  'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md',
+  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md'
 ];
 
@@ -74,7 +74,7 @@ const commandCoverage = [
   ['method', 'templates/method_dissection.md', 'prompts/method-analyzer.md'],
   ['confusion', 'templates/confusion_response.md', 'prompts/confusion-resolver.md'],
   ['why', 'templates/recursive_why.md', 'prompts/confusion-resolver.md'],
-  ['mental-model', 'templates/mental_model.md', 'prompts/mental-model-extractor.md'],
+  ['final-insight', 'templates/final_insight.md', 'prompts/final-insight-extractor.md'],
   ['visualize', 'templates/visualization_card.md', 'prompts/visualization-planner.md']
 ];
 const commandsText = readFileSync(join(root, 'skills/papermentor/commands.md'), 'utf8');

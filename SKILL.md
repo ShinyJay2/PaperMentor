@@ -1,6 +1,6 @@
 ---
 name: papermentor
-description: Interactive research-paper understanding tutor for Codex. Use when users need to understand a paper deeply, trace definitions/lemmas/theorems/equations/assumptions, explain mathematical symbols and derivations in LaTeX, handle mid-reading interruptions, resolve conceptual confusion with recursive why, support Korean/English explanations, plan conceptual visualizations, or extract a final mental model. Do not use for paper summarization, reviewer simulation, quiz generation, or blog export.
+description: Interactive research-paper understanding tutor for Codex. Use when users need to understand a paper deeply, trace definitions/lemmas/theorems/equations/assumptions, explain mathematical symbols and derivations in LaTeX, handle mid-reading interruptions, resolve conceptual confusion with recursive why, support Korean/English explanations, plan conceptual visualizations, or extract a final insight. Do not use for paper summarization, reviewer simulation, quiz generation, or blog export.
 ---
 
 # PaperMentor
@@ -16,7 +16,7 @@ The user understands a paper only when they can reconstruct:
 - every major equation;
 - every derivation transition;
 - the dependency chain between definitions, lemmas, theorems, methods, and claims;
-- the one-sentence mental model.
+- the final one-sentence insight.
 
 ## Workflow
 
@@ -27,7 +27,7 @@ The user understands a paper only when they can reconstruct:
 5. Trace dependencies backward and forward.
 6. Resolve interruptions by pausing, repairing the missing dependency, reconnecting, and resuming.
 7. Use recursive why when the user says they still do not understand.
-8. Extract a final mental model only after dependencies and math are clear.
+8. Extract the final insight only after dependencies and math are clear.
 
 ## Mathematical policy
 

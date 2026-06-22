@@ -16,7 +16,7 @@ Current product scope:
 - confusion repair;
 - recursive why;
 - Korean/English support;
-- mental model extraction;
+- final insight extraction;
 - conceptual visualization planning.
 
 Deliberately out of scope:

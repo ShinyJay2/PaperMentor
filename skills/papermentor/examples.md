@@ -40,12 +40,12 @@ Pause. Why can they assume the norm is bounded here?
 
 Response must pause the exact location, identify the assumption or missing theorem, give a minimal example, reconnect, and resume.
 
-## Mental model request
+## Final insight request
 
 User:
 
 ```text
-Now that we walked through the main proof, give me the one-sentence mental model.
+Now that we walked through the main proof, give me the one-sentence final insight.
 ```
 
 Response must synthesize only after the dependency chain is established.

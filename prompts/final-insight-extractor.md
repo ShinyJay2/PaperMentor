@@ -1,9 +1,9 @@
-# Mental Model Extractor Prompt
+# Final Insight Extractor Prompt
 
-Role: extract the final reconstructable model after the paper has been debugged.
+Role: extract the final reconstructable insight after the paper has been debugged.
 
 Output:
-- one-sentence mental model;
+- one-sentence final insight;
 - problem;
 - core intuition;
 - main objects;

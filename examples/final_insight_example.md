@@ -1,6 +1,6 @@
-# Mental Model Example
+# Final Insight Example
 
-One-sentence mental model:
+One-sentence final insight:
 
 The paper shows that if a learned representation preserves the task-relevant geometry of the data, then a simpler downstream predictor can achieve low risk with fewer labeled examples.
 

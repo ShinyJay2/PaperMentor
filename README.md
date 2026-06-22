@@ -4,11 +4,11 @@
 
 ### Understand uploaded papers in one focused 30-minute reading loop.
 
-Built for the era of overflowing papers: upload or paste a paper, trace the math, repair confusion, and leave with a working mental model you can actually reconstruct.
+Built for the era of overflowing papers: upload or paste a paper, trace the math, repair confusion, and leave with a final insight you can actually reconstruct.
 
 Works with **Codex** and **Claude Code**.
 
-<img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute mental model" width="920" />
+<img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute final insight" width="920" />
 
 [![Install](https://img.shields.io/badge/Install-one%20line-0ea5e9)](#install)
 [![Codex](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
@@ -32,7 +32,7 @@ A useful reading session should answer:
 - Which definitions and assumptions does this line depend on?
 - What does every symbol in this equation mean?
 - How did the derivation move from one line to the next?
-- What should I remember as the final mental model?
+- What should I remember as the final insight?
 
 ---
 
@@ -52,7 +52,7 @@ flowchart LR
   G --> H
   H --> I["Repair the missing concept"]
   I --> J["Resume exact location"]
-  J --> K["One-sentence mental model"]
+  J --> K["One-sentence final insight"]
 ```
 
 Start broad, then narrow quickly. PaperMentor is designed for active reading, not passive summaries.
@@ -106,7 +106,7 @@ Claude Code: ~/.claude/skills/papermentor
 | Explain notation | `Use $papermentor to explain Equation (7) atomically.` |
 | Fill skipped algebra | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
 | Repair confusion | `Pause. Why did the sign flip here?` |
-| Finish the paper | `Extract the final mental model and dependency chain.` |
+| Finish the paper | `Extract the final insight and dependency chain.` |
 
 Command intents are documented in [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
 
@@ -150,7 +150,7 @@ Pause, answer, identify the missing dependency, give a minimal example, reconnec
 </td>
 <td width="33%" valign="top">
 
-### Mental model
+### Final insight
 A compact reconstruction of the problem, intuition, equations, assumptions, and what breaks.
 
 </td>
@@ -240,7 +240,7 @@ The validator checks required files, skill frontmatter, command coverage, visual
 
 ## Product boundaries
 
-PaperMentor focuses on understanding work: equations, derivations, dependencies, interruptions, recursive why, visual support, and mental model extraction.
+PaperMentor focuses on understanding work: equations, derivations, dependencies, interruptions, recursive why, visual support, and final insight extraction.
 
 Deliberately out of scope: blog export, reviewer simulation, and quiz generation.
 

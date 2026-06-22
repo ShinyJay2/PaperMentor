@@ -1,4 +1,4 @@
-# Mental Model
+# Final Insight
 
 ## One-sentence model
 

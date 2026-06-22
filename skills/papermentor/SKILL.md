@@ -1,6 +1,6 @@
 ---
 name: papermentor
-description: Interactive research-paper understanding tutor. Use for deep paper understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, interruption handling, recursive why, Korean/English tutoring, conceptual visualization planning, and final mental model extraction. Do not use for generic summaries, blog export, reviewer simulation, or quiz generation.
+description: Interactive research-paper understanding tutor. Use for deep paper understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, interruption handling, recursive why, Korean/English tutoring, conceptual visualization planning, and final insight extraction. Do not use for generic summaries, blog export, reviewer simulation, or quiz generation.
 ---
 
 # PaperMentor Skill
@@ -37,7 +37,7 @@ Debug the user's understanding of a research paper. Do not provide a high-level 
 - Method dissection: use for algorithm/model sections.
 - Confusion repair: use when the user interrupts.
 - Recursive why: use when the first answer is not enough.
-- Mental model: use after the paper is understood.
+- Final insight: use after the paper is understood.
 - Visualization card: use only to support conceptual confusion.
 
 See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, repository `examples/`, and `tests/` checklist resources copied by the installer.

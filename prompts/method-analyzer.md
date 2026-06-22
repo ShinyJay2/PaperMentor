@@ -11,6 +11,6 @@ Output:
 - equations supporting each step;
 - assumptions required;
 - failure modes;
-- mental model.
+- final insight.
 
 Connect method steps back to equations and claims.

@@ -16,4 +16,4 @@
 
 ## Failure modes
 
-## Mental model
+## Method-level final insight

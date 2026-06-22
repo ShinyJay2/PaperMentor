@@ -103,7 +103,7 @@ Required output:
 - training/inference distinction;
 - dependency on equations/theorems;
 - failure modes;
-- mental model of the method.
+- method-level final insight.
 
 ## `/papermentor confusion`
 
@@ -131,13 +131,13 @@ Required output:
 - stop condition when the primitive concept is reached;
 - reconstruction checkpoint.
 
-## `/papermentor mental-model`
+## `/papermentor final-insight`
 
-Purpose: extract final model.
+Purpose: extract the final insight.
 
 Required output:
 
-- one-sentence mental model;
+- one-sentence final insight;
 - problem;
 - core intuition;
 - object map;
