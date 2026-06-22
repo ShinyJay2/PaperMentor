@@ -64,7 +64,7 @@ cd PaperMentor
 .\install.ps1
 ```
 
-The installer copies `skills/papermentor` into your Codex skills directory, defaulting to:
+The installer copies the canonical `skills/papermentor` entrypoint plus bundled `prompts/`, `templates/`, `examples/`, and `tests/` resources into your Codex skills directory, defaulting to:
 
 ```text
 ~/.codex/skills/papermentor
@@ -264,14 +264,15 @@ Reconnection: Eq. (8) performs the same operation with \(\lambda\|w\|_2^2\). We 
 
 ## Visualization example
 
-Visualization is only a support tool for conceptual confusion. Every visualization plan must include a question, concept, what to observe, and conclusion.
+Visualization is only a support tool for conceptual confusion. Every visualization plan must include a question, concept, visual encoding, what to observe, conclusion, and limitation.
 
 ```markdown
 Question: Why does projecting high-dimensional vectors preserve pairwise distances approximately?
 Concept: Random projection / Johnson-Lindenstrauss intuition.
-Visualization: Scatter points in \(\mathbb{R}^2\), project to a random 1D line, compare before/after pairwise distances.
+Visual encoding: Scatter points in \(\mathbb{R}^2\), project to a random 1D line, and draw before/after pairwise distance bars.
 What to observe: Nearby points tend to remain nearby, but some distortion appears.
 Conclusion: Random projection trades exact geometry for controlled distortion.
+Limitation: A 2D-to-1D sketch illustrates distortion qualitatively; it does not prove the high-dimensional concentration bound.
 ```
 
 ## Testing guide

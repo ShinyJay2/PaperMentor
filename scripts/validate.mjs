@@ -1,5 +1,7 @@
-import { existsSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, mkdtempSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+import { tmpdir } from 'node:os';
+import { execFileSync } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
@@ -18,12 +20,32 @@ for (const rel of required) {
   else if (statSync(p).isFile() && readFileSync(p, 'utf8').trim().length < 40) failures.push(`too little content ${rel}`);
 }
 
-for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) {
+function parseFrontmatter(rel) {
   const text = readFileSync(join(root, rel), 'utf8');
-  if (!text.startsWith('---\n')) failures.push(`${rel} missing YAML frontmatter`);
-  if (!/name:\s*papermentor/.test(text)) failures.push(`${rel} missing name`);
-  if (!/description:\s*.+/.test(text)) failures.push(`${rel} missing description`);
+  if (!text.startsWith('---\n')) {
+    failures.push(`${rel} missing YAML frontmatter`);
+    return {};
+  }
+  const end = text.indexOf('\n---\n', 4);
+  if (end === -1) {
+    failures.push(`${rel} missing closing YAML frontmatter fence`);
+    return {};
+  }
+  const block = text.slice(4, end).trim().split('\n');
+  const parsed = {};
+  for (const line of block) {
+    const match = line.match(/^([a-zA-Z0-9_-]+):\s*(.+)$/);
+    if (!match) failures.push(`${rel} invalid frontmatter line: ${line}`);
+    else parsed[match[1]] = match[2].replace(/^"|"$/g, '');
+  }
+  const keys = Object.keys(parsed).sort().join(',');
+  if (keys !== 'description,name') failures.push(`${rel} frontmatter must contain only description,name; got ${keys}`);
+  if (parsed.name !== 'papermentor') failures.push(`${rel} name must be papermentor`);
+  if (!parsed.description || parsed.description.length < 80) failures.push(`${rel} description too short for reliable triggering`);
+  return parsed;
 }
+
+for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
 for (const phrase of ['Do not summarize papers. Debug understanding.', 'Korean support', 'Derivation trace example', 'Dependency trace example', 'Visualization example', 'Roadmap']) {
@@ -34,6 +56,64 @@ const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
 for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
 }
+
+for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'prompts/visualization-planner.md', 'tests/visualization_checklist.md']) {
+  const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
+  for (const phrase of ['question', 'concept', 'visual encoding', 'what to observe', 'conclusion', 'limitation']) {
+    if (!text.includes(phrase)) failures.push(`${rel} missing visualization contract phrase: ${phrase}`);
+  }
+}
+
+const commandCoverage = [
+  ['scan', 'templates/paper_map.md', 'prompts/paper-scanner.md'],
+  ['prerequisites', 'templates/prerequisite_ladder.md', 'prompts/prerequisite-analyzer.md'],
+  ['equation', 'templates/equation_card.md', 'prompts/equation-analyzer.md'],
+  ['derive', 'templates/derivation_trace.md', 'prompts/derivation-tracer.md'],
+  ['dependencies', 'templates/dependency_trace.md', 'prompts/dependency-tracer.md'],
+  ['proof', 'templates/proof_walkthrough.md', 'prompts/proof-analyzer.md'],
+  ['method', 'templates/method_dissection.md', 'prompts/method-analyzer.md'],
+  ['confusion', 'templates/confusion_response.md', 'prompts/confusion-resolver.md'],
+  ['why', 'templates/recursive_why.md', 'prompts/confusion-resolver.md'],
+  ['mental-model', 'templates/mental_model.md', 'prompts/mental-model-extractor.md'],
+  ['visualize', 'templates/visualization_card.md', 'prompts/visualization-planner.md']
+];
+const commandsText = readFileSync(join(root, 'skills/papermentor/commands.md'), 'utf8');
+for (const [command, template, prompt] of commandCoverage) {
+  if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
+  if (!existsSync(join(root, template))) failures.push(`missing template for ${command}: ${template}`);
+  if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
+}
+
+function validateInstalledArtifact() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-validate-'));
+  try {
+    const codexHome = join(temp, '.codex');
+    execFileSync(join(root, 'install.sh'), { cwd: root, env: { ...process.env, CODEX_HOME: codexHome }, stdio: 'pipe' });
+    const dest = join(codexHome, 'skills', 'papermentor');
+    const installedRequired = [
+      'SKILL.md',
+      'commands.md',
+      'examples.md',
+      ...required
+        .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/'))
+    ];
+    for (const rel of installedRequired) {
+      if (!existsSync(join(dest, rel))) failures.push(`installed artifact missing ${rel}`);
+    }
+
+    for (const dir of ['prompts', 'templates', 'examples', 'tests']) {
+      const sourceCount = required.filter((rel) => rel.startsWith(`${dir}/`)).length;
+      const installedCount = installedRequired.filter((rel) => rel.startsWith(`${dir}/`)).length;
+      if (sourceCount !== installedCount) failures.push(`installed ${dir}/ expectation mismatch: ${installedCount} of ${sourceCount}`);
+    }
+  } catch (error) {
+    failures.push(`install smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
+validateInstalledArtifact();
 
 if (failures.length) {
   console.error('PaperMentor validation failed:');

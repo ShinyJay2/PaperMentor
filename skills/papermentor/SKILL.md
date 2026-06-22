@@ -40,4 +40,4 @@ Debug the user's understanding of a research paper. Do not provide a high-level 
 - Mental model: use after the paper is understood.
 - Visualization card: use only to support conceptual confusion.
 
-See `commands.md` and `examples.md` for concrete patterns.
+See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, repository `examples/`, and `tests/` checklist resources copied by the installer.

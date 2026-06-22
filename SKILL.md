@@ -75,8 +75,10 @@ Use visualization only as a support tool for conceptual confusion. Use it for ge
 
 - question;
 - concept;
+- visual encoding;
 - what to observe;
-- conclusion.
+- conclusion;
+- limitation.
 
 ## Language policy
 
