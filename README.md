@@ -1,54 +1,66 @@
 # PaperMentor
 
-> **Debug paper understanding — one equation, dependency, and interruption at a time.**
+Turn any research paper into an interruptible understanding session: trace the math, repair confusion, and leave with a mental model you can reconstruct.
+Works with Codex as an installable Skill.
 
-PaperMentor is an installable Codex Skill for interactive research-paper tutoring. It does **not** turn papers into shallow summaries. It helps a reader reconstruct how the paper works: the problem, the assumptions, the definitions, the derivations, the proofs, the method, and the final one-sentence mental model.
+PaperMentor. Paper understanding should be debugged, not guessed.
 
-## Why PaperMentor exists
+[![Quick Start](https://img.shields.io/badge/Quick%20Start-Install%20Skill-0ea5e9)](#-quick-start)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Codex Skill](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
+[![LaTeX First](https://img.shields.io/badge/Math-LaTeX%20First-8b5cf6)](#-latex-first)
+[![Korean Support](https://img.shields.io/badge/Language-English%20%7C%20Korean-f97316)](#-korean-support)
+[![Tests](https://img.shields.io/badge/Tests-npm%20test-22c55e)](#-testing)
 
-Most AI paper tools answer: “What is this paper about?” PaperMentor answers: “Where exactly did your understanding break?”
+---
 
-Research papers are hard because meaning is distributed across notation, hidden assumptions, theorem dependencies, derivation shortcuts, experimental design, and domain prerequisites. A useful tutor must pause at the failure point, expose the missing dependency, and reconnect the explanation to the exact sentence or equation the reader was reading.
+You just opened a dense paper. Equation (3) depends on Definition 2, Lemma 1 silently invokes an assumption from page 4, and the proof says “clearly” right where your understanding breaks. Where do you even start?
 
-## Why ordinary paper summarizers fail
-
-Ordinary summarizers usually:
-
-- compress math before explaining it;
-- skip notation because it looks “obvious”;
-- jump between equations without naming the operation;
-- blur definitions, assumptions, lemmas, and claims into prose;
-- answer interruptions as isolated Q&A instead of repairing the dependency chain;
-- produce a gist but not a reconstructable mental model.
-
-PaperMentor's philosophy is different:
+PaperMentor is a Codex Skill that turns paper reading into a guided tutoring loop. It scans the paper, exposes definitions and assumptions, explains equations symbol by symbol, traces every derivation step, repairs interruptions, and extracts the final mental model.
 
 > **Do not summarize papers. Debug understanding.**
 
-A user understands a paper only when they can reconstruct:
+The goal is not a prettier abstract. The goal is a paper you can reconstruct: problem, intuition, equations, derivations, dependencies, assumptions, methods, and the one-sentence model.
 
-1. the problem;
-2. the core intuition;
-3. every major equation;
-4. every derivation transition;
-5. the dependency chain between definitions, lemmas, theorems, methods, and claims;
-6. the one-sentence mental model.
+---
 
-## Core workflow
+## ✨ Features
 
-1. **Scan the paper** with `paper-scanner` to produce a paper map.
-2. **Build prerequisites** with `prerequisite-analyzer` so missing background is explicit.
-3. **Explain equations atomically** with `equation-analyzer`.
-4. **Trace derivations** with `derivation-tracer` without skipping transitions.
-5. **Trace dependencies** with `dependency-tracer` across definitions, lemmas, theorems, algorithms, equations, and claims.
-6. **Walk proofs and methods** with `proof-analyzer` and `method-analyzer`.
-7. **Handle interruptions** with `confusion-resolver` and recursive why.
-8. **Extract the mental model** with `mental-model-extractor`.
-9. **Plan visualizations only when useful** with `visualization-planner`.
+### Explain equations atomically
 
-## Installation
+Every non-trivial equation is shown first in LaTeX, then explained symbol by symbol: operators, domains, codomains, expectations, norms, constants, index sets, subscripts, and superscripts.
 
-### macOS / Linux
+### Trace derivations without jumps
+
+PaperMentor does not skip from one equation to the next. It names the operation, property, theorem, substitution, cancellation, assumption, and validity reason for each transition.
+
+### Map dependencies across the paper
+
+Definitions, lemmas, theorems, algorithms, equations, and major claims get backward dependencies, forward dependencies, missing dependency checks, and a recommended explanation order.
+
+### Handle interruptions mid-reading
+
+Ask “why did the sign flip?” or “where did this assumption come from?” PaperMentor pauses the current location, answers the interruption, identifies the missing dependency, gives a minimal example, reconnects to the original line, and resumes.
+
+### Resolve confusion with recursive why
+
+If the first answer still does not land, PaperMentor keeps drilling down until it finds the primitive missing concept: algebra, probability, geometry, optimization, notation, or paper-specific setup.
+
+### Korean support
+
+Ask in Korean and get Korean explanations while equations and notation stay intact in LaTeX.
+
+### Visualization only when it helps
+
+Visualization is used for conceptual confusion — geometry, distributions, random projections, optimization landscapes, algorithm behavior, and experimental trends — not as decoration.
+
+---
+
+## 🚀 Quick Start
+
+### 1. Install the skill
+
+macOS / Linux:
 
 ```bash
 git clone https://github.com/ShinyJay2/PaperMentor.git
@@ -56,7 +68,7 @@ cd PaperMentor
 ./install.sh
 ```
 
-### Windows PowerShell
+Windows PowerShell:
 
 ```powershell
 git clone https://github.com/ShinyJay2/PaperMentor.git
@@ -64,7 +76,7 @@ cd PaperMentor
 .\install.ps1
 ```
 
-The installer copies the canonical `skills/papermentor` entrypoint plus bundled `prompts/`, `templates/`, `examples/`, and `tests/` resources into your Codex skills directory, defaulting to:
+The installer copies the canonical `skills/papermentor` entrypoint plus bundled `prompts/`, `templates/`, `examples/`, and `tests/` resources into:
 
 ```text
 ~/.codex/skills/papermentor
@@ -76,13 +88,15 @@ Override the destination with `CODEX_HOME`:
 CODEX_HOME=/path/to/.codex ./install.sh
 ```
 
-## CLI examples
-
-After installation, invoke the skill in Codex with requests like:
+### 2. Start a paper map
 
 ```text
 Use $papermentor to scan this paper and create a paper map.
 ```
+
+PaperMentor identifies the problem, assumptions, notation, definitions, lemmas, theorems, equations, method flow, proof dependencies, and likely confusion points.
+
+### 3. Deep-dive where understanding breaks
 
 ```text
 Use $papermentor to explain Equation (7) atomically. Do not skip symbols.
@@ -93,14 +107,22 @@ Use $papermentor to trace the derivation from Eq. (3) to Eq. (5), including subs
 ```
 
 ```text
-Use $papermentor in Korean. 이 논문에서 Theorem 2가 왜 필요한지 dependency trace 해줘.
+Pause. Why did the sign flip in the second line?
 ```
 
-## Command-like UX
+### 4. Finish with a mental model
 
-PaperMentor uses command-like intents rather than a separate executable:
+```text
+Use $papermentor to extract the final one-sentence mental model and the dependency chain that supports it.
+```
 
-| Intent | Use when |
+---
+
+## 🧭 Command-like UX
+
+PaperMentor uses conversational command intents rather than a separate executable.
+
+| Intent | What it does |
 | --- | --- |
 | `/papermentor scan` | Build the first paper map |
 | `/papermentor prerequisites` | Identify missing background |
@@ -114,44 +136,20 @@ PaperMentor uses command-like intents rather than a separate executable:
 | `/papermentor mental-model` | Extract the final reconstructable model |
 | `/papermentor visualize` | Plan a support visualization |
 
-See [`skills/papermentor/commands.md`](skills/papermentor/commands.md) for the full command contract.
+Full command contract: [`skills/papermentor/commands.md`](skills/papermentor/commands.md)
 
-## Korean support
+---
 
-PaperMentor supports Korean and English. If the user asks in Korean, explanations should be in Korean while preserving equations and notation in LaTeX.
+## 🧮 LaTeX-first
 
-Example:
-
-```text
-질문: Equation (4)의 \(\mathbb{E}_{x \sim p_{\text{data}}}\)가 무슨 뜻인지 설명해줘.
-```
-
-Response style:
-
-```markdown
-먼저 식을 그대로 보겠습니다.
-
-\[
-\mathcal{L}(\theta)=\mathbb{E}_{x \sim p_{\text{data}}}\left[-\log p_\theta(x)\right]
-\]
-
-- \(\mathcal{L}(\theta)\): 파라미터 \(\theta\)에 대한 손실 함수입니다.
-- \(x \sim p_{\text{data}}\): 데이터 분포 \(p_{\text{data}}\)에서 샘플 \(x\)를 뽑는다는 뜻입니다.
-- \(\mathbb{E}_{x \sim p_{\text{data}}}\): 그 샘플링 과정에 대한 평균입니다.
-```
-
-See [`examples/korean_equation_explanation.md`](examples/korean_equation_explanation.md).
-
-## LaTeX-first examples
-
-PaperMentor has a strict mathematical policy:
+PaperMentor's math policy is strict:
 
 - all non-trivial math must be displayed in LaTeX;
 - never use ASCII math as a replacement;
 - every equation must be shown before explanation;
 - every symbol, subscript, superscript, operator, domain, codomain, expectation, norm, index set, and constant must be explained.
 
-## Atomic equation explanation example
+### Atomic equation explanation example
 
 Input:
 
@@ -180,7 +178,9 @@ This equation defines the expected risk of predictor \(f\).
 | \(\ell(f(x),y)\) | Loss comparing prediction \(f(x)\) with target \(y\). |
 ```
 
-## Derivation trace example
+---
+
+## 🧵 Derivation trace example
 
 ```markdown
 Start:
@@ -203,9 +203,11 @@ Transition:
 - **Why valid:** scalar transposes equal themselves, giving \(-a^\top b-b^\top a=-2a^\top b\).
 ```
 
-See [`examples/derivation_trace_example.md`](examples/derivation_trace_example.md).
+More: [`examples/derivation_trace_example.md`](examples/derivation_trace_example.md)
 
-## Dependency trace example
+---
+
+## 🔗 Dependency trace example
 
 ```markdown
 Claim: Theorem 3 follows from Lemma 1 and Assumption A2.
@@ -224,15 +226,17 @@ Missing dependency check:
 - The proof also uses convexity of \(\ell\), but convexity is not listed in the theorem statement.
 ```
 
-See [`examples/dependency_trace_example.md`](examples/dependency_trace_example.md).
+More: [`examples/dependency_trace_example.md`](examples/dependency_trace_example.md)
 
-## Interruptible reading example
+---
+
+## ⏸️ Interruptible reading
 
 ```text
 User: Pause. Why did the sign flip in the second line?
 ```
 
-PaperMentor response contract:
+PaperMentor's response contract:
 
 1. pause the current location;
 2. answer the question;
@@ -240,8 +244,6 @@ PaperMentor response contract:
 4. give a minimal example;
 5. reconnect to the original equation or sentence;
 6. resume from the exact location.
-
-Example:
 
 ```markdown
 Paused at Eq. (8), transition from line 1 to line 2.
@@ -262,7 +264,33 @@ Missing dependency: algebraic isolation by applying the same operation to both s
 Reconnection: Eq. (8) performs the same operation with \(\lambda\|w\|_2^2\). We now resume at Eq. (8), line 2.
 ```
 
-## Visualization example
+---
+
+## 🇰🇷 Korean support
+
+If the user asks in Korean, PaperMentor explains in Korean while preserving equations and notation in LaTeX.
+
+```text
+질문: Equation (4)의 \(\mathbb{E}_{x \sim p_{\text{data}}}\)가 무슨 뜻인지 설명해줘.
+```
+
+```markdown
+먼저 식을 그대로 보겠습니다.
+
+\[
+\mathcal{L}(\theta)=\mathbb{E}_{x \sim p_{\text{data}}}\left[-\log p_\theta(x)\right]
+\]
+
+- \(\mathcal{L}(\theta)\): 파라미터 \(\theta\)에 대한 손실 함수입니다.
+- \(x \sim p_{\text{data}}\): 데이터 분포 \(p_{\text{data}}\)에서 샘플 \(x\)를 뽑는다는 뜻입니다.
+- \(\mathbb{E}_{x \sim p_{\text{data}}}\): 그 샘플링 과정에 대한 평균입니다.
+```
+
+More: [`examples/korean_equation_explanation.md`](examples/korean_equation_explanation.md)
+
+---
+
+## 🖼️ Visualization example
 
 Visualization is only a support tool for conceptual confusion. Every visualization plan must include a question, concept, visual encoding, what to observe, conclusion, and limitation.
 
@@ -275,7 +303,38 @@ Conclusion: Random projection trades exact geometry for controlled distortion.
 Limitation: A 2D-to-1D sketch illustrates distortion qualitatively; it does not prove the high-dimensional concentration bound.
 ```
 
-## Testing guide
+---
+
+## 🧠 Under the Hood
+
+### Modular tutor prompts
+
+PaperMentor is split into specialized prompt modules:
+
+| Module | Role |
+| --- | --- |
+| `paper-scanner` | Build the paper map |
+| `prerequisite-analyzer` | Find missing background |
+| `equation-analyzer` | Explain one equation atomically |
+| `derivation-tracer` | Reconstruct skipped transitions |
+| `dependency-tracer` | Map backward and forward dependencies |
+| `proof-analyzer` | Walk proof lines and hidden assumptions |
+| `method-analyzer` | Dissect algorithms, objectives, and model flow |
+| `confusion-resolver` | Repair interruptions and resume reading |
+| `mental-model-extractor` | Compress understanding into a reconstructable model |
+| `visualization-planner` | Plan conceptual support visuals |
+
+### Templates that force structure
+
+Templates in [`templates/`](templates/) keep outputs concrete: equation cards, derivation traces, dependency traces, proof walkthroughs, method dissections, confusion responses, recursive why ladders, mental models, and visualization cards.
+
+### Checklists that fight handwaving
+
+The [`tests/`](tests/) directory contains human-review checklists for LaTeX quality, atomic equation explanation, derivation tracing, dependency tracing, no-handwave behavior, Korean support, and visualization quality.
+
+---
+
+## 🧪 Testing
 
 Run structural validation:
 
@@ -283,29 +342,59 @@ Run structural validation:
 npm test
 ```
 
-The test script checks required files, skill frontmatter, prompt/template coverage, and policy keywords. Human reviewers should also use the checklists in [`tests/`](tests/):
+The validator checks:
 
-- LaTeX quality
-- atomic equation quality
-- derivation trace quality
-- dependency trace quality
-- no-handwave quality
-- Korean support
-- visualization support
+- required repository files;
+- skill frontmatter;
+- command-to-prompt/template coverage;
+- README policy phrases;
+- visualization contract consistency;
+- temp install smoke for bundled `prompts/`, `templates/`, `examples/`, and `tests/`.
 
-## Contribution guide
+For release checks, also run:
 
-Contributions should strengthen understanding, not add product sprawl. Before opening a PR:
+```bash
+node --check scripts/validate.mjs
+npm pack --dry-run
+```
 
-1. keep v1 focused on equations, derivations, dependencies, confusion repair, and mental models;
-2. do not add blog export, reviewer simulation, or quiz generation;
-3. update examples when changing behavior;
-4. run `npm test`;
-5. document any new prompt contract in `prompts/` and `skills/papermentor/commands.md`.
+---
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+## 📁 Repository Layout
 
-## Roadmap
+```text
+papermentor/
+  README.md
+  SKILL.md
+  install.sh
+  install.ps1
+  package.json
+  prompts/
+  skills/papermentor/
+  templates/
+  examples/
+  tests/
+```
+
+The root repository is the open-source project. `skills/papermentor/` is the canonical installed skill entrypoint. Installers copy that entrypoint plus bundled resources into your Codex skills directory.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome if they improve paper understanding rather than add product sprawl.
+
+1. Fork the repository.
+2. Create a focused feature branch.
+3. Update the relevant prompt, template, example, and checklist together.
+4. Run `npm test`.
+5. Open a pull request explaining which understanding failure mode your change fixes.
+
+Please do not add blog export, reviewer simulation, or quiz generation to v1. See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+
+---
+
+## 🗺️ Roadmap
 
 ### v1
 
@@ -332,3 +421,9 @@ See [`CONTRIBUTING.md`](CONTRIBUTING.md).
 - Citation graph import helpers
 - Notebook-based visualization snippets
 - Persistent reading session state
+
+---
+
+Stop skimming papers blind. Start debugging understanding.
+
+MIT License © PaperMentor contributors
