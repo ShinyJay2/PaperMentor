@@ -2,9 +2,9 @@
 
 # PaperMentor
 
-### Debug paper understanding — don't summarize it.
+### Understand uploaded papers in one focused 30-minute reading loop.
 
-Turn any research paper into an interruptible tutoring session for equations, derivations, dependencies, assumptions, and mental models.
+Built for the era of overflowing AI papers: upload or paste a paper, trace the math, repair confusion, and leave with a working mental model you can actually reconstruct.
 
 [![Quick Start](https://img.shields.io/badge/Quick%20Start-One--line%20Install-0ea5e9)](#-quick-start)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
@@ -20,9 +20,9 @@ Turn any research paper into an interruptible tutoring session for equations, de
 
 ---
 
-You are reading a paper. A theorem depends on a hidden assumption, an equation skips three algebra steps, and “clearly” is exactly where you got lost.
+AI papers are arriving faster than anyone can read them. PaperMentor is for the moment when you need to understand one now — not skim the abstract, not collect a summary, but build a usable mental model quickly.
 
-PaperMentor helps you find the break in understanding, repair the missing dependency, and resume from the exact line.
+Upload or paste the paper, run the guided loop, and spend the next 30 minutes resolving the exact equations, dependencies, and assumptions that block understanding.
 
 ---
 
