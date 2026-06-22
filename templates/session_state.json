@@ -1,0 +1,23 @@
+{
+  "schema": "papermentor.session.v1",
+  "title": "Paper title",
+  "source": "paper URL or local path",
+  "slug": "paper-slug",
+  "currentLocation": "section/equation/proof line",
+  "currentFocus": "current blocker or reading task",
+  "readingPath": [
+    { "key": "map", "label": "Map the paper", "status": "current" },
+    { "key": "equations", "label": "Decode key equations", "status": "pending" },
+    { "key": "derivations", "label": "Trace derivations", "status": "pending" },
+    { "key": "dependencies", "label": "Connect dependencies", "status": "pending" },
+    { "key": "confusion", "label": "Resolve confusion", "status": "pending" },
+    { "key": "final", "label": "Extract final insight", "status": "pending" }
+  ],
+  "nextChoices": [
+    "Decode key equations",
+    "Trace a derivation",
+    "Explain the missing dependency",
+    "Ask me a diagnostic question"
+  ],
+  "renderedView": ".papermentor/sessions/paper-slug/index.html"
+}

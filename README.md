@@ -114,6 +114,42 @@ Claude Code: ~/.claude/skills/papermentor
 
 ---
 
+
+## Interactive reading dashboard
+
+PaperMentor is guided but interruptible. For each paper, it keeps one local dashboard instead of creating a pile of HTML files:
+
+```text
+.papermentor/sessions/<paper-slug>/
+  index.html      # rendered equations and cards
+  state.json      # Reading Path, current location, choices
+  cards.json      # paper map, equation, derivation, dependency cards
+  notes.md        # portable Markdown notes
+```
+
+The terminal stays lightweight and choice-driven:
+
+```text
+Reading Path
+  [✓] Map the paper
+  [›] Decode key equations
+  [ ] Trace derivations
+  [ ] Connect dependencies
+  [ ] Resolve confusion
+  [ ] Extract final insight
+
+Choose next:
+  [1] Explain Eq. (6) symbol by symbol
+  [2] Trace Eq. (4) → Eq. (6)
+  [3] Explain why stopgrad is used
+  [4] Explain what V_{p,q} means visually
+  [5] I’m confused — ask me diagnostic questions
+```
+
+Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally.
+
+---
+
 ## Try the sample paper
 
 Use the included sample to see the full interaction shape before trying a real paper:

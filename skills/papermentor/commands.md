@@ -1,6 +1,52 @@
 # PaperMentor Commands
 
-These are command-like intents for Codex conversations. They are not shell commands; they define the UX contract for using the skill.
+These are command-like intents for Codex and Claude Code conversations. They define the UX contract for using the skill.
+
+## Interactive session contract
+
+PaperMentor uses one local reading dashboard per paper session:
+
+```text
+.papermentor/sessions/<paper-slug>/
+  index.html      # single browser-rendered dashboard
+  state.json      # current location, Reading Path, choices
+  cards.json      # active cards
+  notes.md        # portable Markdown notes
+```
+
+Use `scripts/papermentor-session.mjs` when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
+
+```bash
+node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf"
+node scripts/papermentor-session.mjs status --session paper-title
+```
+
+Reading Path:
+
+```text
+[✓] Map the paper
+[›] Decode key equations
+[ ] Trace derivations
+[ ] Connect dependencies
+[ ] Resolve confusion
+[ ] Extract final insight
+```
+
+Status marks: `[✓]` complete, `[›]` recommended current step, `[ ]` pending, `[!]` blocked, `[↺]` revisit.
+
+Always offer numbered choices. Accept either the number or a natural-language interruption.
+
+## `/papermentor start`
+
+Purpose: start or resume an interactive reading session.
+
+Required behavior:
+
+- identify the paper title/source;
+- create `.papermentor/sessions/<paper-slug>/index.html`;
+- create `state.json`, `cards.json`, and `notes.md`;
+- run a first paper map when enough text is available;
+- print the Reading Console and next choices.
 
 ## `/papermentor scan`
 
@@ -158,3 +204,53 @@ Required output:
 - what to observe;
 - conclusion;
 - limitation of the visualization.
+
+## `/papermentor choose`
+
+Purpose: continue from a numbered menu choice.
+
+Required behavior:
+
+- map the number to the latest `state.json.nextChoices`;
+- preserve current location unless the choice moves it;
+- add or update the relevant card in `cards.json`;
+- regenerate the same `index.html`;
+- print a new Reading Console.
+
+## `/papermentor render`
+
+Purpose: render or refresh the current session dashboard.
+
+Required behavior:
+
+- do not create extra HTML files;
+- regenerate `.papermentor/sessions/<paper-slug>/index.html`;
+- keep LaTeX display math in card data so MathJax can render it in the dashboard;
+- print the dashboard path.
+
+## `/papermentor state`
+
+Purpose: show the current Reading Path, location, focus, dashboard path, and next choices without adding a new explanation.
+
+## `/papermentor pause`
+
+Purpose: handle an interruption while preserving the current reading location.
+
+Required output:
+
+- paused location;
+- direct answer;
+- missing dependency;
+- minimal example;
+- reconnection to original equation/sentence;
+- resume choices.
+
+## `/papermentor resume`
+
+Purpose: return from an interruption to the exact paused location.
+
+Required behavior:
+
+- restate the saved location;
+- explain what dependency was repaired;
+- continue with the next Reading Path choice.

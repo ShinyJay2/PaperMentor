@@ -1,15 +1,15 @@
-import { existsSync, readFileSync, statSync, mkdtempSync, rmSync } from 'node:fs';
+import { existsSync, readFileSync, statSync, mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md',
-  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md',
+  'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
+  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
@@ -49,12 +49,12 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'Interactive reading dashboard', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
-for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization']) {
+for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'Reading Path', 'index.html']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
 }
 
@@ -85,13 +85,17 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
+for (const command of ['start', 'choose', 'render', 'state', 'pause', 'resume']) {
+  if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
+}
+
 function expectedInstalledResources() {
   return [
     'SKILL.md',
     'commands.md',
     'examples.md',
     ...required
-      .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/'))
+      .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/') || rel.startsWith('scripts/'))
   ];
 }
 
@@ -101,7 +105,7 @@ function assertInstalledArtifact(dest, label) {
     if (!existsSync(join(dest, rel))) failures.push(`${label} installed artifact missing ${rel}`);
   }
 
-  for (const dir of ['prompts', 'templates', 'examples', 'tests']) {
+  for (const dir of ['prompts', 'templates', 'examples', 'tests', 'scripts']) {
     const sourceCount = required.filter((rel) => rel.startsWith(`${dir}/`)).length;
     const installedCount = installedRequired.filter((rel) => rel.startsWith(`${dir}/`)).length;
     if (sourceCount !== installedCount) failures.push(`${label} installed ${dir}/ expectation mismatch: ${installedCount} of ${sourceCount}`);
@@ -125,7 +129,32 @@ function validateInstalledArtifact() {
   }
 }
 
+function validateSessionHelper() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
+  try {
+    const bodyPath = join(temp, 'card.md');
+    writeFileSync(bodyPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\\mathcal{L}=\\mathbb{E}\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\|^2', '--body-file', bodyPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
+    for (const rel of ['index.html', 'state.json', 'cards.json', 'notes.md']) {
+      if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
+    }
+    const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
+    if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFiles.join(',')}`);
+    const html = readFileSync(join(dir, 'index.html'), 'utf8');
+    for (const phrase of ['MathJax', 'Reading Path', 'Equation (6)', 'Choose next']) {
+      if (!html.includes(phrase)) failures.push(`session dashboard missing ${phrase}`);
+    }
+  } catch (error) {
+    failures.push(`session helper smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 validateInstalledArtifact();
+validateSessionHelper();
 
 if (failures.length) {
   console.error('PaperMentor validation failed:');

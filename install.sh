@@ -36,6 +36,7 @@ copy_skill() {
   cp -R "$ROOT_DIR/templates" "$dest/templates"
   cp -R "$ROOT_DIR/examples" "$dest/examples"
   cp -R "$ROOT_DIR/tests" "$dest/tests"
+  cp -R "$ROOT_DIR/scripts" "$dest/scripts"
 }
 
 install_codex() {
@@ -62,4 +63,4 @@ case "$TARGET" in
     ;;
 esac
 
-printf 'Try: Use $papermentor to scan this paper.\n'
+printf 'Try: Use $papermentor on a paper URL, then open .papermentor/sessions/<paper>/index.html.\n'

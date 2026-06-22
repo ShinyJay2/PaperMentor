@@ -32,6 +32,7 @@ function Copy-PaperMentorSkill($Dest) {
   Copy-Item -Recurse -Path (Join-Path $RootDir "templates") -Destination (Join-Path $Dest "templates")
   Copy-Item -Recurse -Path (Join-Path $RootDir "examples") -Destination (Join-Path $Dest "examples")
   Copy-Item -Recurse -Path (Join-Path $RootDir "tests") -Destination (Join-Path $Dest "tests")
+  Copy-Item -Recurse -Path (Join-Path $RootDir "scripts") -Destination (Join-Path $Dest "scripts")
 }
 
 function Install-Codex() {
@@ -57,4 +58,4 @@ switch ($Platform.ToLowerInvariant()) {
   default { throw "Usage: install.ps1 [codex|claude|all]" }
 }
 
-Write-Host 'Try: Use $papermentor to scan this paper.'
+Write-Host 'Try: Use $papermentor on a paper URL, then open .papermentor/sessions/<paper>/index.html.'

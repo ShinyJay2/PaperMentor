@@ -1,12 +1,13 @@
 {
   "name": "papermentor-skill",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "PaperMentor: an interactive research-paper understanding tutor AI Agent Skill.",
   "private": false,
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "test": "node scripts/validate.mjs"
+    "test": "node scripts/validate.mjs",
+    "session": "node scripts/papermentor-session.mjs"
   },
   "keywords": [
     "ai-agent-skill",
@@ -15,6 +16,7 @@
     "latex",
     "math",
     "tutoring",
+    "interactive-dashboard",
     "multilingual"
   ],
   "repository": {
