@@ -48,7 +48,7 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-hero.svg', 'Derivation trace example', 'Dependency trace example', 'Visualization example', 'Scope & Roadmap']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-hero.svg', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 

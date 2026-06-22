@@ -10,76 +10,56 @@ Works with **Codex** and **Claude Code**.
 
 <img src="assets/papermentor-hero.svg" alt="PaperMentor turns a paper into equation cards, dependency traces, interruption repair, and a 30-minute mental model" width="920" />
 
-[![Quick Start](https://img.shields.io/badge/Quick%20Start-One--line%20Install-0ea5e9)](#-quick-start)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
+[![Install](https://img.shields.io/badge/Install-one%20line-0ea5e9)](#install)
 [![Codex](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-6b4fbb)](https://code.claude.com/docs/en/skills)
-[![LaTeX First](https://img.shields.io/badge/Math-LaTeX%20First-8b5cf6)](#-latex-first)
+[![Math](https://img.shields.io/badge/Math-rendered%20LaTeX-8b5cf6)](#what-the-output-looks-like)
+[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **Do not summarize papers. Debug understanding.**
-
-[Install](#-quick-start) · [Use](#-use-it) · [Features](#-features) · [Examples](#-examples) · [Scope](#-scope--roadmap)
 
 </div>
 
 ---
 
-Papers are arriving faster than anyone can read them. PaperMentor is for the moment when you need to understand one now — not skim the abstract, not collect a summary, but build a usable mental model quickly.
+## The problem PaperMentor solves
 
-Upload or paste the paper, run the guided loop, and spend the next 30 minutes resolving the exact equations, dependencies, and assumptions that block understanding.
+Most paper tools compress the paper. PaperMentor does the opposite: it slows down at the exact point where understanding breaks.
 
----
+A useful reading session should answer:
 
-## ✨ Features
-
-<table>
-<tr>
-<td width="50%" valign="top">
-
-### 🧮 Atomic equations
-Show the equation first, then explain every symbol, operator, subscript, superscript, domain, codomain, expectation, norm, index set, and constant.
-
-</td>
-<td width="50%" valign="top">
-
-### 🧵 Derivation tracing
-Never jump between equations. Explain what changed, which operation was applied, what was substituted, what cancelled, and why it is valid.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 🔗 Dependency maps
-Trace definitions, lemmas, theorems, algorithms, equations, assumptions, and claims backward and forward.
-
-</td>
-<td width="50%" valign="top">
-
-### ⏸️ Interruptible reading
-Pause mid-paper, answer the confusion, identify the missing dependency, give a minimal example, reconnect, and resume.
-
-</td>
-</tr>
-<tr>
-<td width="50%" valign="top">
-
-### 🧠 Mental model extraction
-End with the one-sentence model, the dependency chain behind it, and what breaks if assumptions fail.
-
-</td>
-<td width="50%" valign="top">
-
-### 🖼️ Concept visuals
-Use visualization only when it helps: geometry, distributions, random projections, optimization landscapes, algorithms, or trends.
-
-</td>
-</tr>
-</table>
+- What is the paper trying to prove or build?
+- Which definitions and assumptions does this line depend on?
+- What does every symbol in this equation mean?
+- How did the derivation move from one line to the next?
+- What should I remember as the final mental model?
 
 ---
 
-## 🚀 Quick Start
+## The 30-minute paper loop
+
+```mermaid
+flowchart LR
+  A["Upload or paste paper"] --> B["Map problem, notation, assumptions"]
+  B --> C{"Choose the blocker"}
+  C --> D["Equation"]
+  C --> E["Derivation"]
+  C --> F["Dependency"]
+  C --> G["Proof / method"]
+  D --> H["Interrupt anytime"]
+  E --> H
+  F --> H
+  G --> H
+  H --> I["Repair the missing concept"]
+  I --> J["Resume exact location"]
+  J --> K["One-sentence mental model"]
+```
+
+Start broad, then narrow quickly. PaperMentor is designed for active reading, not passive summaries.
+
+---
+
+## Install
 
 Codex:
 
@@ -93,7 +73,7 @@ Claude Code:
 curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s claude
 ```
 
-Install both:
+Both:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s all
@@ -109,7 +89,7 @@ iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.p
 $env:PAPERMENTOR_TARGET='claude'; iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
 ```
 
-Install paths:
+Install locations:
 
 ```text
 Codex:       ~/.codex/skills/papermentor
@@ -118,153 +98,153 @@ Claude Code: ~/.claude/skills/papermentor
 
 ---
 
-## ⚡ Use it
+## How to use it
 
-Start with one simple request, then follow the paper wherever your understanding breaks.
-
-```mermaid
-flowchart TD
-  A["Attach or paste paper text"] --> B["Use $papermentor to scan this paper"]
-  B --> C["Paper map: problem, notation, assumptions, claims"]
-  C --> D{"Where are you stuck?"}
-  D --> E["Equation<br/>Explain every symbol"]
-  D --> F["Derivation<br/>Trace every transition"]
-  D --> G["Dependency<br/>Find definitions, lemmas, assumptions"]
-  D --> H["Proof or method<br/>Walk line by line"]
-  E --> I["Ask interruptions anytime"]
-  F --> I
-  G --> I
-  H --> I
-  I --> J["Repair missing concept + resume exact location"]
-  J --> K["Final mental model"]
-```
-
-### Common starting prompts
-
-| Goal | Say this |
+| Goal | Prompt |
 | --- | --- |
-| Start reading | `Use $papermentor to scan this paper.` |
-| Understand notation | `Use $papermentor to explain Equation (7) atomically.` |
-| Fill skipped math | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
-| Interrupt reading | `Pause. Why did the sign flip here?` |
+| Start a reading session | `Use $papermentor to scan this paper.` |
+| Explain notation | `Use $papermentor to explain Equation (7) atomically.` |
+| Fill skipped algebra | `Trace Eq. (3) → Eq. (5) without skipping derivation steps.` |
+| Repair confusion | `Pause. Why did the sign flip here?` |
 | Finish the paper | `Extract the final mental model and dependency chain.` |
 
----
-
-## 🧭 Commands
-
-| Intent | What it does |
-| --- | --- |
-| `/papermentor scan` | Paper map |
-| `/papermentor prerequisites` | Missing background ladder |
-| `/papermentor equation` | Atomic equation card |
-| `/papermentor derive` | Derivation trace |
-| `/papermentor dependencies` | Backward/forward dependency trace |
-| `/papermentor proof` | Proof walkthrough |
-| `/papermentor method` | Method dissection |
-| `/papermentor confusion` | Interruption repair |
-| `/papermentor why` | Recursive why |
-| `/papermentor mental-model` | Final mental model |
-| `/papermentor visualize` | Visualization plan |
-
-Full contract: [`skills/papermentor/commands.md`](skills/papermentor/commands.md)
+Command intents are documented in [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
 
 ---
 
-## 🧪 Examples
+## Reading modes
 
-### LaTeX-first
+<table>
+<tr>
+<td width="33%" valign="top">
 
-All non-trivial math must be displayed in LaTeX before explanation. Never use ASCII math as a replacement.
+### Paper map
+Problem, notation, assumptions, claims, equations, proof structure, and likely confusion points.
 
-```markdown
-\[
+</td>
+<td width="33%" valign="top">
+
+### Equation card
+Rendered equation first, then symbols, operators, domains, constants, and assumptions.
+
+</td>
+<td width="33%" valign="top">
+
+### Derivation trace
+Every transition names the operation, substitution, cancellation, property, and validity reason.
+
+</td>
+</tr>
+<tr>
+<td width="33%" valign="top">
+
+### Dependency trace
+Backward dependencies, forward dependencies, missing dependency checks, and explanation order.
+
+</td>
+<td width="33%" valign="top">
+
+### Confusion repair
+Pause, answer, identify the missing dependency, give a minimal example, reconnect, resume.
+
+</td>
+<td width="33%" valign="top">
+
+### Mental model
+A compact reconstruction of the problem, intuition, equations, assumptions, and what breaks.
+
+</td>
+</tr>
+</table>
+
+---
+
+## What the output looks like
+
+### Rendered equation explanation
+
+PaperMentor shows the equation before explaining it:
+
+$$
 \mathcal{R}(f)=\mathbb{E}_{(x,y)\sim\mathcal{D}}\left[\ell(f(x),y)\right]
-\]
+$$
 
-| Symbol | Meaning |
-| --- | --- |
-| \(\mathcal{R}(f)\) | Risk functional evaluated at predictor \(f\). |
-| \(\mathbb{E}_{(x,y)\sim\mathcal{D}}\) | Expectation over data pairs from \(\mathcal{D}\). |
-| \(\ell(f(x),y)\) | Loss comparing prediction \(f(x)\) with target \(y\). |
-```
+- $\mathcal{R}(f)$ — risk functional evaluated at predictor $f$.
+- $(x,y)\sim\mathcal{D}$ — an input-label pair sampled from distribution $\mathcal{D}$.
+- $\mathbb{E}_{(x,y)\sim\mathcal{D}}$ — expectation over that sampling process.
+- $\ell(f(x),y)$ — loss comparing prediction $f(x)$ with target $y$.
 
-### Derivation trace example
+### Trace a derivation
 
-```markdown
-\[
+Start:
+
+$$
 \|a-b\|_2^2=(a-b)^\top(a-b)
-\]
+$$
 
-\[
+Next:
+
+$$
 \|a-b\|_2^2=a^\top a-2a^\top b+b^\top b
-\]
+$$
 
-- Operation: expand the quadratic product.
-- Property: bilinearity and \(a^\top b=b^\top a\) for real vectors.
-- Assumption: \(a,b\in\mathbb{R}^d\).
-```
+Transition:
 
-### Dependency trace example
+- **Operation:** expand the quadratic product.
+- **Property:** bilinearity and $a^\top b=b^\top a$ for real vectors.
+- **Assumption:** $a,b\in\mathbb{R}^d$.
+- **Why valid:** real inner products are scalar and symmetric.
 
-```markdown
-Backward dependencies: Definition 1 → Assumption A2 → Lemma 1.
-Forward dependencies: Theorem 3 → Equation (12) → experiment interpretation.
-Missing dependency check: convexity of \(\ell\) is used but not stated.
-Recommended explanation order: Definition 1, Assumption A2, Lemma 1, Theorem 3.
-```
+### Map a dependency chain
 
-### Visualization example
+- **Backward dependencies:** Definition 1 → Assumption A2 → Lemma 1 → Theorem 3
+- **Forward dependencies:** Theorem 3 → Equation (12) → experiment interpretation
+- **Missing dependency check:** convexity of $\ell$ is used but not stated
+- **Recommended explanation order:** Definition 1, Assumption A2, Lemma 1, Theorem 3
 
-Every visualization plan includes: question, concept, visual encoding, what to observe, conclusion, and limitation.
+### Plan a visualization
 
-```markdown
-Question: Why do random projections approximately preserve distances?
-Concept: Johnson-Lindenstrauss intuition.
-Visual encoding: points, projection line, before/after distance bars.
-What to observe: most relative distances remain similar with controlled distortion.
-Conclusion: random projection trades exact geometry for compact representation.
-Limitation: the sketch is intuition, not the concentration proof.
-```
+Every visualization plan includes a **question**, **concept**, **visual encoding**, **what to observe**, **conclusion**, and **limitation**.
 
----
-
-## 🧠 Under the Hood
-
-PaperMentor is modular:
-
-- [`prompts/`](prompts/) — scanner, prerequisite analyzer, equation analyzer, derivation tracer, dependency tracer, proof analyzer, method analyzer, confusion resolver, mental-model extractor, visualization planner.
-- [`templates/`](templates/) — paper maps, equation cards, derivation traces, dependency traces, proof walkthroughs, recursive why, mental models, visualization cards.
-- [`examples/`](examples/) — concrete examples for derivations, dependencies, sign/magnitude confusion, and mental models.
-- [`tests/`](tests/) — checklists for LaTeX quality, no-handwave behavior, visualization quality, and trace completeness.
+| Field | Example |
+| --- | --- |
+| Question | Why do random projections approximately preserve distances? |
+| Concept | Johnson-Lindenstrauss intuition |
+| Visual encoding | Points, projection line, before/after distance bars |
+| What to observe | Most relative distances remain similar with controlled distortion |
+| Conclusion | Random projection trades exact geometry for compact representation |
+| Limitation | The sketch is intuition, not the concentration proof |
 
 ---
 
-## ✅ Testing
+## Project anatomy
+
+```text
+prompts/              specialized tutor modes
+skills/papermentor/   installable Skill entrypoint
+commands.md           command-like interaction contract
+templates/            output structures
+examples/             concrete behavior examples
+tests/                human review checklists
+```
+
+Validation:
 
 ```bash
 npm test
 ```
 
-The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, and install-smoke coverage for bundled resources.
+The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, and install-smoke coverage for both Codex and Claude Code.
 
 ---
 
-## 🤝 Contributing
+## Product boundaries
 
-Improve understanding, not product sprawl. Keep the core product focused on equations, derivations, dependencies, interruptions, recursive why, visual support, and mental model extraction.
+PaperMentor focuses on understanding work: equations, derivations, dependencies, interruptions, recursive why, visual support, and mental model extraction.
 
-See [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Deliberately out of scope: blog export, reviewer simulation, and quiz generation.
 
----
-
-## 🗺️ Scope & Roadmap
-
-**Current focus:** paper maps, prerequisite ladders, atomic equations, derivation traces, dependency traces, proof walkthroughs, method dissection, interruptions, recursive why, visualization support, and mental models.
-
-**Deliberately out of scope:** blog export, reviewer simulation, and quiz generation.
-
-**Planned extensions:** local PDF section locator helpers, citation graph helpers, notebook visualization snippets, and persistent reading sessions.
+Planned extensions: local PDF section locator helpers, citation graph helpers, notebook visualization snippets, and persistent reading sessions.
 
 ---
 
