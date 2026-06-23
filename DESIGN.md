@@ -24,7 +24,7 @@
 ## Information architecture
 - Primary navigation: CLI Reading Path; the HTML itself has no navigation rail.
 - Core screens: generated session block document, terminal Reading Console, README product page.
-- Content hierarchy: quiet paper title sheet followed by appended explanation blocks in HTML; the first paper map includes the actual main method figure image when present; blockers, current choices, and diagnostics stay in terminal/state JSON.
+- Content hierarchy: quiet paper title sheet followed by appended explanation blocks in HTML; the first paper map includes the exact screenshot/crop of the actual main method figure when present; blockers, current choices, and diagnostics stay in terminal/state JSON.
 
 ## Design principles
 - Paper first: dense explanations should read like an arXiv-adjacent annotated paper, not a SaaS dashboard.
@@ -34,14 +34,14 @@
 
 ## Visual language
 - Color: warm off-white paper, muted blue accents, low-contrast grid, black scholarly text.
-- Typography: quiet Claude Code-like gothic/sans for paper content; small monospace labels for state and commands; MathJax owns equation typography.
+- Typography: Anthropic/Claude-style sans first (`Anthropic Sans`, with system sans fallbacks) for paper content; `Anthropic Mono` first for structured labels; MathJax owns equation typography.
 - Spacing/layout rhythm: single-column paper block stack with readable article measure.
 - Shape/radius/elevation: manuscript sheets with subtle inset rules, tiny radius, and soft paper shadow; avoid reference-like boxed corner number tabs.
 - Motion: none required; stable reading environment.
 - Imagery/iconography: generated paper/network assets are acceptable for README; session block document should stay text-first.
 
 ## Components
-- Existing components to reuse: paper title sheet, paper block, actual paper figure block, and LaTeX block only; no topbar, sidebar, product masthead, or Choose Next chrome in HTML.
+- Existing components to reuse: paper title sheet, paper block, exact paper figure screenshot/crop block, and LaTeX block only; no topbar, sidebar, product masthead, or Choose Next chrome in HTML.
 - New/changed components: quiet paper title sheet with source/update metadata; manuscript-style block folio labels that avoid the earlier reference-like corner-tab treatment.
 - Variants and states: done/current/pending Reading Path states; card types for map/equation/derivation/dependency/confusion/final.
 - Token/component ownership: CSS variables and HTML generation live in `scripts/papermentor-session.mjs`.

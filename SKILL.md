@@ -33,7 +33,7 @@ The user understands a paper only when they can reconstruct:
 
 ### Main method figure rule
 
-In the first paper map, include the actual representative method/system/algorithm/architecture figure image from the paper when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Attach it with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`, then explain the components, flow, what to observe, and supported equations/claims directly under the image.
+In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Do not redraw, simplify, or generate a substitute diagram. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`, then explain the components, flow, what to observe, and supported equations/claims directly under the image.
 
 ### HTML block title rule
 

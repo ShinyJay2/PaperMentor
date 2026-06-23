@@ -59,6 +59,11 @@ for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude C
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
+const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
+for (const phrase of ['Anthropic Sans', 'Anthropic Mono', 'paper-figure']) {
+  if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
+}
+
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
 for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'Reading Path', 'index.html']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
@@ -73,7 +78,7 @@ for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'p
 
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md', 'tests/figure_explanation_checklist.md']) {
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
-  for (const phrase of ['actual', 'figure', 'method', 'algorithm', 'what to observe']) {
+  for (const phrase of ['exact', 'crop', 'figure', 'method', 'algorithm', 'what to observe']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
   }
 }

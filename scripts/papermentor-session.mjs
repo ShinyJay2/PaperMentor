@@ -237,8 +237,8 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
   --rule:#2a2723;
   --accent:#405f9f;
   --accent-soft:#eef2f8;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --text: Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --mono: "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  --text: "Anthropic Sans", "Claude Sans", Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }

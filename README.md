@@ -164,7 +164,7 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 
 ## Command intents
 
-- `scan` — produce the paper map before details, including the actual main method/system/algorithm figure image when present, with explanation underneath.
+- `scan` — produce the paper map before details, including the exact cropped/screenshot main method/system/algorithm figure when present, with explanation underneath.
 - `equation` — explain every symbol and operator after showing the equation.
 - `derivation` — trace each transition without skipped algebra.
 - `dependency` — reveal what a claim depends on and what depends on it.
