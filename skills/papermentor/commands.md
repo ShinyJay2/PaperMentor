@@ -61,10 +61,11 @@ Required output:
 - major definitions;
 - lemmas/theorems/claims;
 - major equations;
+- figure map for important method/system/algorithm/architecture figures;
 - method pipeline;
 - experiment logic if present;
 - suggested reading order;
-- likely confusion points.
+- likely confusion points for CLI next choices only, not for HTML rendering.
 
 ## `/papermentor prerequisites`
 

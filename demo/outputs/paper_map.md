@@ -13,6 +13,10 @@ The excerpt asks how to choose a predictor when the true data distribution is un
 - $\ell:\mathcal{Y}\times\mathcal{Y}\to\mathbb{R}_{\ge 0}$ — nonnegative loss.
 - $S=\{(x_i,y_i)\}_{i=1}^n$ — observed sample.
 
+## Figure map
+
+No figure is present in the excerpt. If the full paper included a method or system diagram, PaperMentor would explain its components, flow, what to observe, and which equations or claims it supports.
+
 ## Core equations
 
 $$
@@ -23,7 +27,7 @@ $$
 \widehat{\mathcal{R}}_S(f)=\frac{1}{n}\sum_{i=1}^{n}\ell(f(x_i),y_i)
 $$
 
-## Likely confusion points
+## CLI-only likely confusion points
 
 - Why expectation becomes an average.
 - Why low empirical risk may not imply low population risk.

@@ -20,7 +20,7 @@ The user understands a paper only when they can reconstruct:
 
 ## Workflow
 
-1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, proofs, experiments.
+1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, important figures/diagrams, proofs, experiments.
 2. Build prerequisite ladders for missing background.
 3. Explain equations atomically before interpreting them.
 4. Trace derivations one transition at a time.
@@ -29,6 +29,11 @@ The user understands a paper only when they can reconstruct:
 7. Use recursive why when the user says they still do not understand.
 8. Extract the final insight only after dependencies and math are clear.
 
+
+
+### HTML block title rule
+
+Use semantic block titles. Avoid bare titles like `Equation (6)` when the equation role is known; prefer `Training objective — Eq. (6)`, `Risk decomposition — Eq. (3)`, or `Update rule — Eq. (12)`. Preserve the original equation number after an em dash so the reader can find it in the paper.
 
 ## Interactive session policy
 
@@ -40,7 +45,7 @@ When starting a paper:
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start with `Map the paper`, then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start with `Map the paper`, including important method/system/algorithm figures when present, then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 

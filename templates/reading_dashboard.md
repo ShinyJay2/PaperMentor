@@ -16,7 +16,7 @@ Use `scripts/papermentor-session.mjs` when available:
 
 ```bash
 node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf"
-node scripts/papermentor-session.mjs card --session paper-title --type equation --title "Equation (6)" --latex "..." --body-file /tmp/card.md --choices "Explain symbols|Trace derivation|Explain stopgrad"
+node scripts/papermentor-session.mjs card --session paper-title --type equation --title "Training objective — Eq. (6)" --latex "..." --body-file /tmp/card.md --choices "Explain symbols|Trace derivation|Explain stopgrad"
 node scripts/papermentor-session.mjs status --session paper-title
 ```
 

@@ -139,14 +139,14 @@ Reading Path
   [ ] Extract final insight
 
 Choose next:
-  [1] Explain Eq. (6) symbol by symbol
-  [2] Trace Eq. (4) → Eq. (6)
+  [1] Explain Training objective — Eq. (6) symbol by symbol
+  [2] Trace Drift update — Eq. (4) → Training objective — Eq. (6)
   [3] Explain why stopgrad is used
   [4] Explain what V_{p,q} means visually
   [5] I’m confused — ask me diagnostic questions
 ```
 
-Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally.
+Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally. Use semantic equation block titles such as `Training objective — Eq. (6)` so the block is readable and still traceable to the paper.
 
 ---
 
@@ -164,7 +164,7 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 
 ## Command intents
 
-- `scan` — produce the paper map before details.
+- `scan` — produce the paper map before details, including important method/system/algorithm figures when present.
 - `equation` — explain every symbol and operator after showing the equation.
 - `derivation` — trace each transition without skipped algebra.
 - `dependency` — reveal what a claim depends on and what depends on it.

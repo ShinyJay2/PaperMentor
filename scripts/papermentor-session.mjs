@@ -361,7 +361,7 @@ body {
     <div class="paper-meta">${(cards.cards || []).length} block${(cards.cards || []).length === 1 ? '' : 's'} · updated ${escapeHtml(state.updatedAt || '')}</div>
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
+    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
 $$</div>` : ''}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body || ''))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
@@ -372,6 +372,13 @@ $$</div>` : ''}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body 
 }
 
 
+function displayCardTitle(card) {
+  const title = String(card?.title || card?.type || 'Paper block').trim();
+  const bareEquation = title.match(/^Equation\s*\(([^)]+)\)$/i);
+  if (bareEquation) return `Equation block — Eq. (${bareEquation[1].trim()})`;
+  return title;
+}
+
 function htmlExplanationOnly(markdown) {
   const lines = String(markdown || '').split(/\r?\n/);
   const kept = [];
@@ -380,7 +387,7 @@ function htmlExplanationOnly(markdown) {
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       const title = heading[2].trim().toLowerCase().replace(/[:.!?]+$/g, '');
-      skipping = /^(likely\s+blockers?|blockers?|recommended\s+next|next\s+actions?|choose\s+next|diagnostic\s+questions?)$/.test(title);
+      skipping = /^(cli-only.*|likely\s+blockers?|blockers?|likely\s+confusion.*|confusion\s+risk.*|recommended\s+next|next\s+actions?|choose\s+next|diagnostic\s+questions?)$/.test(title);
       if (skipping) continue;
     }
     if (!skipping) kept.push(line);

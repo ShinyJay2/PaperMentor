@@ -25,8 +25,8 @@ Reading Path
   [ ] Extract final insight
 
 Choose next:
-  [1] Decode Eq. (6) symbol by symbol
-  [2] Trace Eq. (4) → Eq. (6)
+  [1] Decode Training objective — Eq. (6) symbol by symbol
+  [2] Trace Drift update — Eq. (4) → Training objective — Eq. (6)
   [3] Explain why stopgrad is used
   [4] Explain what V_{p,q} means visually
   [5] I’m confused — ask me diagnostic questions

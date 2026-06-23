@@ -10,11 +10,17 @@ const required = [
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
   'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md',
-  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md',
+  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
 
 const failures = [];
+
+function readJson(path, fallback) {
+  try { return JSON.parse(readFileSync(path, 'utf8')); }
+  catch { return fallback; }
+}
+
 for (const rel of required) {
   const p = join(root, rel);
   if (!existsSync(p)) failures.push(`missing ${rel}`);
@@ -62,6 +68,13 @@ for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'p
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
   for (const phrase of ['question', 'concept', 'visual encoding', 'what to observe', 'conclusion', 'limitation']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing visualization contract phrase: ${phrase}`);
+  }
+}
+
+for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md', 'tests/figure_explanation_checklist.md']) {
+  const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
+  for (const phrase of ['figure', 'method', 'algorithm', 'what to observe']) {
+    if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
   }
 }
 
@@ -132,22 +145,34 @@ function validateInstalledArtifact() {
 function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
-    const bodyPath = join(temp, 'card.md');
-    writeFileSync(bodyPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    const mapPath = join(temp, 'map.md');
+    const equationPath = join(temp, 'equation.md');
+    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure map\n\n- Figure / location: Figure 1.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\\mathcal{L}=\\mathbb{E}\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\|^2', '--body-file', bodyPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
     }
+    const htmlFilesAfterFirst = readdirSync(dir).filter((name) => name.endsWith('.html'));
+    if (htmlFilesAfterFirst.length !== 1 || htmlFilesAfterFirst[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFilesAfterFirst.join(',')}`);
+    let html = readFileSync(join(dir, 'index.html'), 'utf8');
+    if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
+    if (!html.includes('Figure map')) failures.push('session paper map should render figure explanations');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\\mathcal{L}=\\mathbb{E}\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
-    if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFiles.join(',')}`);
-    const html = readFileSync(join(dir, 'index.html'), 'utf8');
-    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation (6)', 'class="paper-title"', 'class="block"', 'data-index="1"']) {
+    if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should keep exactly one HTML file, got ${htmlFiles.join(',')}`);
+    html = readFileSync(join(dir, 'index.html'), 'utf8');
+    const cardData = readJson(join(dir, 'cards.json'), { cards: [] });
+    if ((cardData.cards || []).length !== 2) failures.push('session helper should persist two cards after second card');
+    if ((html.match(/class="block"/g) || []).length !== 2) failures.push('session helper should render two blocks after second card');
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'class="paper-title"', 'class="block"', 'data-index="1"', 'data-index="2"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
-    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'Likely blockers', 'This should stay in CLI/state']) {
-      if (html.includes(phrase)) failures.push(`session block document should not render dashboard chrome: ${phrase}`);
+    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state']) {
+      if (html.includes(phrase)) failures.push(`session block document should not render CLI-only content or dashboard chrome: ${phrase}`);
     }
   } catch (error) {
     failures.push(`session helper smoke failed: ${error.message}`);

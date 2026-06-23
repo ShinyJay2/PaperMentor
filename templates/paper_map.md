@@ -14,10 +14,22 @@
 
 ## Major equations
 
+## Figure map
+
+For each important method/system/algorithm/architecture figure:
+
+- Figure / location:
+- What it shows:
+- Components:
+- Flow or sequence:
+- What to observe:
+- Equations or claims it supports:
+- Explanation priority:
+
 ## Method pipeline
 
 ## Dependency graph
 
 ## Recommended reading order
 
-## Likely confusion points
+## CLI-only likely confusion points
