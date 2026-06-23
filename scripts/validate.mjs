@@ -5,7 +5,7 @@ import { execFileSync } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','scripts/papermentor-session.mjs',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/lecture-note-scanner.md','prompts/slide-deck-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/start_here.md','templates/lecture_note_start_here.md','templates/slide_deck_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
@@ -60,13 +60,22 @@ for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude C
 }
 
 const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
-for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure']) {
+for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure', 'assets/mathjax/tex-svg.js', 'extractFigure', 'pendingBlockPrompt', 'pdftoppm', 'soffice']) {
   if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
 }
-for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css']) {
+for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css', 'cdn.jsdelivr.net/npm/mathjax']) {
   if (sessionScript.includes(phrase)) failures.push(`session renderer should not rely on remote font CSS: ${phrase}`);
 }
 
+for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote']) {
+  if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
+}
+
+
+const mathjaxReadme = readFileSync(join(root, 'assets/mathjax/README.md'), 'utf8');
+for (const phrase of ['MathJax v3.2.2', 'Apache License 2.0', 'SHA-256', 'LICENSE.txt']) {
+  if (!mathjaxReadme.includes(phrase)) failures.push(`MathJax vendor README missing phrase: ${phrase}`);
+}
 
 const prerequisitePrompt = readFileSync(join(root, 'prompts/prerequisite-analyzer.md'), 'utf8');
 for (const phrase of ['Primitive vocabulary', 'Notation decoding', 'concrete example', 'one-sentence reconstruction', 'bit', 'binary string', 'unbiased estimator']) {
@@ -125,7 +134,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -175,6 +184,12 @@ function validateSessionHelper() {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
     if (!helpOutput.includes('Usage:')) failures.push('start --help should print usage');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
+      failures.push('start should reject path-traversal session slugs');
+    } catch {
+      // expected
+    }
     const figurePath = join(temp, 'exact-pdf-crop-fixture.svg');
     const mapPath = join(temp, 'map.md');
     const equationPath = join(temp, 'equation.md');
@@ -201,9 +216,22 @@ function validateSessionHelper() {
     if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Eq. (6) training objective'))) failures.push('analyze should generate method equation actions from section equations');
     if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Map equation dependencies'))) failures.push('analyze should suggest visual repair diagram actions for equation-heavy method sections');
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor Live', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
+    for (const phrase of ['PaperMentor Live', 'Claude-like start surface', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
     }
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.lastChoiceKind !== 'section' || navState.pendingBlockPrompt || existsSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'))) failures.push('run should select a section without writing a pending HTML prompt');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (6) $(touch should-not-run) symbol by symbol|Ask anything about Eq. (6)'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    const pendingPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'), 'utf8');
+    if (!navState.pendingBlockPrompt || !pendingPrompt.includes('PaperMentor HTML Block Runner Prompt') || !pendingPrompt.includes('Template to follow')) failures.push('run command should write a pending HTML block-generation prompt for action choices');
+    if (!pendingPrompt.includes("--title 'Explain Eq. (6) $(touch should-not-run) symbol by symbol'") || existsSync(join(temp, 'should-not-run'))) failures.push('runner prompt should shell-quote dynamic action titles without executing them');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'generative-modeling-via-drifting', '--source', figurePath, '--title', 'Representative method crop', '--caption', 'Figure 1. Method loop.', '--body', '## Extracted visual explanation\n\n- **Question:** What is the method loop?\n- **Concept:** generator-to-drift target.\n- **What to observe:** the generator is trained against a target.\n- **Conclusion:** this figure anchors the method explanation.'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.pendingBlockPrompt || existsSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'))) failures.push('adding a card should clear consumed pending runner prompt state');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'generative-modeling-via-drifting', '--source', figurePath, '--title', 'Representative method crop', '--caption', 'Figure 1. Method loop.', '--body', '## Extracted visual explanation\n\n- **Question:** What changed?\n- **Concept:** repeated crop.\n- **What to observe:** filename remains unique.\n- **Conclusion:** older cards are not overwritten.'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'turns.jsonl', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
@@ -212,7 +240,9 @@ function validateSessionHelper() {
     if (htmlFilesAfterFirst.length !== 1 || htmlFilesAfterFirst[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFilesAfterFirst.join(',')}`);
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
-    if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
+    if ((html.match(/class="block"/g) || []).length < 1) failures.push('session helper should render at least one block after first card');
+    if (!html.includes('assets/mathjax/tex-svg.js') || html.includes('cdn.jsdelivr.net/npm/mathjax')) failures.push('session HTML should use local bundled MathJax, not CDN');
+    if (!existsSync(join(dir, 'assets', 'mathjax', 'tex-svg.js'))) failures.push('session should copy local MathJax bundle into report assets');
     for (const phrase of [`Main ${'method'} figure`, 'Figure explanation under image']) {
       if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
     }
@@ -230,7 +260,7 @@ function validateSessionHelper() {
     for (const phrase of ['assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
       if (!html.includes(phrase)) failures.push(`session HTML should load local bundled font: ${phrase}`);
     }
-    for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css']) {
+    for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css', 'cdn.jsdelivr.net/npm/mathjax']) {
       if (html.includes(phrase)) failures.push(`session HTML should not depend on remote font CSS: ${phrase}`);
     }
     if (!cardData.cards?.[0]?.figure?.src?.startsWith('assets/')) failures.push('session card should persist copied figure asset metadata');
@@ -277,14 +307,16 @@ function validateSessionHelper() {
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should keep exactly one HTML file, got ${htmlFiles.join(',')}`);
     html = readFileSync(join(dir, 'index.html'), 'utf8');
     cardData = readJson(join(dir, 'cards.json'), { cards: [] });
-    if ((cardData.cards || []).length !== 3) failures.push('session helper should persist three cards after diagram plus equation card');
+    if ((cardData.cards || []).length !== 5) failures.push('session helper should persist five cards after repeated extraction, diagram, and equation card');
     for (const requiredField of ['id', 'type', 'title', 'location', 'userQuestion', 'originTurn', 'promotionReason', 'body', 'choices', 'createdAt']) {
       if (!(requiredField in (cardData.cards?.[0] || {}))) failures.push(`session card should keep structured report field: ${requiredField}`);
     }
     if (!cardData.schema || !cardData.cards?.[0]?.figure?.src) failures.push('session cards.json should keep schema and figure asset data');
-    if (cardData.cards?.[2]?.userQuestion !== 'Why is stopgrad used in Eq. (6)?' || cardData.cards?.[2]?.originTurn !== 'turn-001') failures.push('promoted conversation cards should persist user question and origin turn metadata');
-    if ((html.match(/class="block"/g) || []).length !== 3) failures.push('session helper should render three blocks after diagram plus equation card');
-    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"', 'data-index="3"']) {
+    const extractedFigureSrcs = (cardData.cards || []).filter((card) => card.title === 'Representative method crop').map((card) => card.figure?.src).filter(Boolean);
+    if (new Set(extractedFigureSrcs).size !== extractedFigureSrcs.length) failures.push('repeated extract-figure calls should create unique asset filenames, not overwrite older cards');
+    if (cardData.cards?.[4]?.userQuestion !== 'Why is stopgrad used in Eq. (6)?' || cardData.cards?.[4]?.originTurn !== 'turn-001') failures.push('promoted conversation cards should persist user question and origin turn metadata');
+    if ((html.match(/class="block"/g) || []).length !== 5) failures.push('session helper should render five blocks after repeated extraction, diagram, and equation card');
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"', 'data-index="3"', 'data-index="4"', 'data-index="5"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
     for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state', 'Block 01', 'Block 02', 'updated ']) {
@@ -309,7 +341,7 @@ function validateSessionHelper() {
     for (const rel of ['assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
       if (!existsSync(join(koreanDir, rel))) failures.push(`Korean report should have local bundled font asset: ${rel}`);
     }
-    for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css']) {
+    for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css', 'cdn.jsdelivr.net/npm/mathjax']) {
       if (koreanHtml.includes(phrase)) failures.push(`Korean report should not depend on remote font CSS: ${phrase}`);
     }
     const awkwardObjective = '학습' + ' ' + '목적' + '식';
@@ -431,7 +463,7 @@ function validateAllBlockTypes() {
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Block Coverage Report', '--source', 'fixture-paper.pdf', '--slug', 'block-coverage-report'], { cwd: temp, stdio: 'pipe' });
     const bodies = {
       'paper-map': '## What this paper is doing\n\nThe paper trains a generator by moving samples toward a target distribution.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the method flow rather than experiment results.\n- What it shows: prior samples pass through a generator and approach the data distribution.\n- Flow or sequence: prior sample → generator → pushforward distribution → data target.\n- What to observe: training changes the generator, not an inference-time sampler.\n- Equations or claims it supports: Eq. (6).',
-      prerequisite: '## Target concept\n\nDrift field $V_{p,q}(x)$.\n\n## Ladder\n\n1. Understand a distribution $q$.\n2. Understand pushforward $q=f_{\\#}p_{\\mathrm{prior}}$.\n3. Understand vector field $V_{p,q}(x)$.\n\n## Readiness check\n\nYou should be able to say what object moves and what defines the direction.',
+      prerequisite: '## Target concept\n\nDrift field $V_{p,q}(x)$.\n\n## Ladder\n\n### 1. Distribution $q$\n\nUnderstand a distribution $q$.\n\n### 2. Pushforward $q=f_{\\#}p_{\\mathrm{prior}}$\n\nUnderstand how a function moves a prior distribution.\n\n### 3. Vector field $V_{p,q}(x)$\n\nUnderstand the direction assigned to each generated sample.\n\n## Readiness check\n\nYou should be able to say what object moves and what defines the direction.',
       method: '## Method mechanism\n\n1. Sample $z\\sim p_{\\mathrm{prior}}$.\n2. Produce $x=f(z)$.\n3. Estimate $V_{p,q}(x)$.\n4. Update $f$ against the training objective.\n\n## Method-level final insight\n\nThe method learns a one-pass generator by turning distribution matching into a drift target.',
       equation: '## Equation role\n\nThis training objective makes the generator output imitate a stop-gradient drift target.\n\n## Symbol roles\n\n- $x$ — generated sample.\n- $V_{p,q}(x)$ — drift vector.\n- $\\operatorname{stopgrad}$ — fixed target operator.',
       derivation: '## Transition\n\n### Previous equation\n\n$$x^{+}=x+V_{p,q}(x)$$\n\n### Next equation\n\n$$\\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x^{+})\\right\\|_2^2\\right]$$\n\n- Operation: substitute $x^{+}$.\n- Property used: definition of the drift target.\n- Assumption invoked: target is fixed by $\\operatorname{stopgrad}$.\n- Why valid: the target branch should not receive gradient.',
@@ -472,9 +504,10 @@ function validateAllBlockTypes() {
     for (const phrase of ['Prerequisite ladder', 'Method dissection', 'Training objective', 'Derivation trace', 'Dependency trace', 'Proof walkthrough', 'Confusion repair', 'Recursive why', 'Visualization card', 'Final insight']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing stage phrase: ${phrase}`);
     }
-    for (const phrase of ['MathJax', '<ol>', '<table>', '<th>Line</th>', 'User question', 'Why is stopgrad used here?', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
+    for (const phrase of ['MathJax', 'assets/mathjax/tex-svg.js', '<ol>', '<table>', '<th>Line</th>', 'User question', 'Why is stopgrad used here?', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing structural phrase: ${phrase}`);
     }
+    if (!html.includes('class="ladder-heading"')) failures.push('all-block HTML should style numbered ladder headings for long prerequisite ladders');
     if (html.includes('학습' + ' ' + '목적' + '식')) failures.push('all-block HTML should not contain awkward Korean technical phrasing');
     if (html.includes('Block 01') || /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(html)) failures.push('all-block HTML should not display block badges or ISO timestamps');
   } catch (error) {

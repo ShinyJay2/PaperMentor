@@ -131,6 +131,9 @@ PaperMentor is intentionally optimized for concrete reading artifacts: papers, l
 
 ## HTML-first reading room
 
+The session helper keeps one `index.html` open and appends a new explanation block after each chosen reading action. The TUI writes a `pending-prompt.md` runner prompt for the selected action, and `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests.
+
+
 PaperMentor is guided but interruptible. For each source, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
 
 ```text

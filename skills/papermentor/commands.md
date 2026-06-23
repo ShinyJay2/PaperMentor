@@ -408,17 +408,43 @@ Required behavior:
 - write only the cleaned learning explanation into `cards.json` and `index.html`;
 - never dump the whole chat transcript into the report.
 
-## `/papermentor choose`
+## `/papermentor choose` / `/papermentor run`
 
-Purpose: continue from a numbered menu choice.
+Purpose: continue from a numbered menu choice and connect it to the HTML-block runner.
 
 Required behavior:
 
 - map the number to the latest `state.json.nextChoices`;
 - preserve current location unless the choice moves it;
-- add or update the relevant card in `cards.json`;
-- regenerate the same `index.html`;
-- print a new Reading Console.
+- if the choice selects a section/slide, show its dynamic actions;
+- if the choice selects an action, write `.papermentor/sessions/<slug>/pending-prompt.md` with the exact block-generation prompt, inferred card type, selected section, equations, concepts, citations, and template path;
+- regenerate the same `index.html` without adding placeholder explanation blocks;
+- print a polished Reading Console.
+
+Example:
+
+```sh
+node scripts/papermentor-session.mjs run --session drifting-models --index 2
+```
+
+## `/papermentor extract-figure`
+
+Purpose: extract an actual representative figure/slide crop from a PDF, PPT/PPTX, or image source and attach it to the next HTML block.
+
+Required behavior:
+
+- prefer real source crops over generated diagrams for method/system/algorithm figures;
+- for PDFs, render the requested page with Poppler `pdftoppm`;
+- for PPT/PPTX, convert through LibreOffice `soffice`, then render the selected slide;
+- crop with ImageMagick or macOS `sips` when `--auto figure1` or `--crop x,y,width,height` is provided;
+- attach the extracted image as a normal card figure and write the explanation under the image;
+- never use Mermaid as a replacement for an actual paper/slide figure.
+
+Example:
+
+```sh
+node scripts/papermentor-session.mjs extract-figure --session drifting-models --source paper.pdf --page 1 --auto figure1 --title "Representative method figure"
+```
 
 ## `/papermentor render`
 
