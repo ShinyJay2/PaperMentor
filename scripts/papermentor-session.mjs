@@ -198,6 +198,8 @@ function addCard(args) {
   state.updatedAt = now();
   writeJson(cardsPath(slug), cards);
   writeJson(statePath(slug), state);
+  const noteFigureExplanation = figureExplanationMarkdown(card);
+  const noteBody = card.figure ? bodyWithoutFigureExplanation(card.body || '') : (card.body || '');
   appendFileSync(notesPath(slug), `
 ## ${card.title}
 
@@ -209,9 +211,9 @@ $$
 
 ` : ''}${card.figure ? `![${card.figure.alt}](${card.figure.src})
 
-${card.figure.caption ? `${card.figure.caption}
+${noteFigureExplanation ? `${noteFigureExplanation}
 
-` : ''}` : ''}${card.body}
+` : ''}` : ''}${noteBody}
 `);
   renderHtml(slug);
   printConsole(state, cards);
@@ -254,7 +256,7 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
   --accent:#405f9f;
   --accent-soft:#eef2f8;
   --mono: "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --text: "Anthropic Sans", "Claude Sans", Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --text: "Styrene B", "Styrene A", "Anthropic Sans", "Claude Sans", Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
@@ -381,11 +383,13 @@ body {
   object-fit:contain;
 }
 .paper-figure figcaption {
-  margin-top:9px;
-  color:var(--muted);
-  font-size:13px;
-  line-height:1.45;
+  margin-top:10px;
+  color:#3e3830;
+  font-size:13.5px;
+  line-height:1.55;
 }
+.paper-figure figcaption p { margin:6px 0; }
+.paper-figure figcaption strong { color:var(--ink); font-weight:720; }
 
 .latex {
   position:relative;
@@ -447,7 +451,7 @@ body {
   <section class="blocks">
     ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
-$$</div>` : ''}${renderFigure(card.figure)}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body || ''))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
+$$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div class="body">${markdownToHtml(htmlExplanationOnly(bodyWithoutFigureExplanation(card.body || '')))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
 </body>
@@ -456,9 +460,10 @@ $$</div>` : ''}${renderFigure(card.figure)}<div class="body">${markdownToHtml(ht
 }
 
 
-function renderFigure(figure) {
+function renderFigure(figure, explanation = '') {
   if (!figure || !figure.src) return '';
-  const caption = figure.caption ? `<figcaption>${escapeHtml(figure.caption)}</figcaption>` : '';
+  const captionMarkdown = String(explanation || figure.caption || '').trim();
+  const caption = captionMarkdown ? `<figcaption>${markdownToHtml(captionMarkdown)}</figcaption>` : '';
   return `<figure class="paper-figure"><img src="${escapeHtml(figure.src)}" alt="${escapeHtml(figure.alt || 'Paper figure')}" loading="lazy" />${caption}</figure>`;
 }
 
@@ -467,6 +472,83 @@ function displayCardTitle(card) {
   const bareEquation = title.match(/^Equation\s*\(([^)]+)\)$/i);
   if (bareEquation) return `Equation block — Eq. (${bareEquation[1].trim()})`;
   return title;
+}
+
+function normalizeHeading(value) {
+  return String(value || '').trim().toLowerCase().replace(/[:.!?]+$/g, '');
+}
+
+function isFigureExplanationHeading(title) {
+  return /^(main\s+method\s+figure|main\s+figure|representative\s+figure\s+explanation|figure\s+explanation|figure\s+explanation\s+under\s+image)$/.test(normalizeHeading(title));
+}
+
+function splitFigureExplanationSection(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const body = [];
+  const figure = [];
+  let inFigure = false;
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      if (isFigureExplanationHeading(heading[2])) {
+        inFigure = true;
+        continue;
+      }
+      if (inFigure) inFigure = false;
+    }
+    if (inFigure) figure.push(line);
+    else body.push(line);
+  }
+  return { body: body.join('\n').trim(), figure: figure.join('\n').trim() };
+}
+
+function bodyWithoutFigureExplanation(markdown) {
+  return splitFigureExplanationSection(markdown).body;
+}
+
+function stripBulletLabel(line) {
+  return String(line || '')
+    .replace(/^-\s+/, '')
+    .replace(/^\*\*([^*]+)\*\*:\s*/, '$1: ')
+    .trim();
+}
+
+function labeledFigureFacts(markdown) {
+  const facts = {};
+  for (const raw of String(markdown || '').split(/\r?\n/)) {
+    const line = stripBulletLabel(raw);
+    const match = line.match(/^([^:]{2,80}):\s*(.+)$/);
+    if (!match) continue;
+    const key = normalizeHeading(match[1]).replace(/\s+or\s+/g, ' / ');
+    facts[key] = match[2].trim();
+  }
+  return facts;
+}
+
+function sentence(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  return /[.!?]$/.test(text) ? text : `${text}.`;
+}
+
+function figureExplanationMarkdown(card) {
+  if (!card?.figure) return '';
+  const section = splitFigureExplanationSection(card.body || '').figure;
+  const facts = labeledFigureFacts(section);
+  const semanticCaption = String(card.figure.caption || '').trim();
+  const identity = semanticCaption || facts['figure / location'] || facts['figure location'] || '';
+  const what = facts['what it shows'] || facts['why this is the main method figure'] || '';
+  const flow = facts['flow / sequence'] || facts['flow or sequence'] || '';
+  const observe = facts['what to observe'] || '';
+  const supports = facts['equations / claims it supports'] || facts['equations or claims it supports'] || '';
+  const parts = [];
+  if (identity) parts.push(`**${sentence(identity)}**`);
+  if (what) parts.push(`What it shows: ${sentence(what)}`);
+  if (flow) parts.push(`How to read it: ${sentence(flow)}`);
+  if (observe) parts.push(`Watch for this: ${sentence(observe)}`);
+  if (supports) parts.push(`Connects to: ${sentence(supports)}`);
+  if (parts.length) return parts.join('\n\n');
+  return semanticCaption;
 }
 
 function htmlExplanationOnly(markdown) {

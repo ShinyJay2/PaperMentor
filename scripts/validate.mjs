@@ -60,7 +60,7 @@ for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude C
 }
 
 const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
-for (const phrase of ['Anthropic Sans', 'Anthropic Mono', 'paper-figure']) {
+for (const phrase of ['Styrene B', 'Anthropic Sans', 'Anthropic Mono', 'paper-figure']) {
   if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
 }
 
@@ -169,8 +169,11 @@ function validateSessionHelper() {
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
-    if (!html.includes('Main method figure')) failures.push('session paper map should explain the main method figure');
+    if (html.includes('Main method figure')) failures.push('session paper map should move the figure explanation under the image and remove the Main method figure body heading');
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
+    for (const phrase of ['What it shows:', 'How to read it:', 'Watch for this:', 'Connects to:']) {
+      if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);
+    }
     for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Main method figure from the paper.']) {
       if (html.includes(phrase)) failures.push(`session paper map should suppress provenance-only figure captions: ${phrase}`);
     }
@@ -179,6 +182,7 @@ function validateSessionHelper() {
     const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
     if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
+    if (notes.includes('## Main method figure')) failures.push('session notes should move the figure explanation under the image and remove the heading');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
