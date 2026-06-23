@@ -33,7 +33,7 @@ The user understands a paper only when they can reconstruct:
 
 ### Main method figure rule
 
-In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`, then explain the components, flow, what to observe, and supported equations/claims directly under the image.
+In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …”; use a semantic caption like `Figure 1. Drifting Model` only when helpful, then explain the components, flow, what to observe, and supported equations/claims directly under the image in the body.
 
 ### HTML block title rule
 
@@ -49,7 +49,7 @@ When starting a paper:
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start with `Map the paper`, including important method/system/algorithm figures when present, then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start with `Map the paper`, including the actual main method/system/algorithm figure image when present. The HTML should show the figure followed by an explanation of components, flow, what to observe, and supported equations/claims; it should not show extraction/provenance text such as “Exact crop of …”. Then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 

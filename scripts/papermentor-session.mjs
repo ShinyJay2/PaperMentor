@@ -129,6 +129,22 @@ function isUrl(value) {
   return /^https?:\/\//i.test(String(value || '')) || /^data:/i.test(String(value || ''));
 }
 
+function isProvenanceOnlyCaption(value) {
+  const caption = String(value || '').trim().toLowerCase();
+  if (!caption) return false;
+  return /^(exact|actual)?\s*(crop|screenshot|capture|extraction)\s+(of|from)\b/.test(caption)
+    || /^exact\s+crop\b/.test(caption)
+    || /^captured\s+from\b/.test(caption)
+    || /^extracted\s+from\b/.test(caption)
+    || /^main\s+method\s+figure\s+from\s+the\s+paper\.?$/.test(caption)
+    || /^figure\s+from\s+the\s+paper\.?$/.test(caption);
+}
+
+function figureCaption(args) {
+  const caption = args['figure-caption'] || args.caption || '';
+  return isProvenanceOnlyCaption(caption) ? '' : caption;
+}
+
 function prepareFigure(slug, cardId, args) {
   const source = args['figure-file'] || args.figure || args['figure-url'] || args['image-file'] || args.image;
   if (!source) return null;
@@ -148,7 +164,7 @@ function prepareFigure(slug, cardId, args) {
   return {
     src,
     alt: args['figure-alt'] || args.alt || `${args.title || 'Paper'} figure`,
-    caption: args['figure-caption'] || args.caption || ''
+    caption: figureCaption(args)
   };
 }
 

@@ -159,7 +159,7 @@ function validateSessionHelper() {
     writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Main method figure\n\n- Figure / location: Figure 1.\n- Why this is the main method figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Main method figure from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
@@ -170,11 +170,15 @@ function validateSessionHelper() {
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
     if (!html.includes('Main method figure')) failures.push('session paper map should explain the main method figure');
-    if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/') || !html.includes('Main method figure from the paper.')) failures.push('session paper map should render the actual method figure image and caption');
+    if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
+    for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Main method figure from the paper.']) {
+      if (html.includes(phrase)) failures.push(`session paper map should suppress provenance-only figure captions: ${phrase}`);
+    }
     if (!cardData.cards?.[0]?.figure?.src?.startsWith('assets/')) failures.push('session card should persist copied figure asset metadata');
     if (!existsSync(join(dir, cardData.cards?.[0]?.figure?.src || 'missing'))) failures.push('session helper should copy figure file into session assets');
     const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
     if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
+    if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
