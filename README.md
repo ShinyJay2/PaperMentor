@@ -125,7 +125,7 @@ PaperMentor runs one of three modes, selected automatically from the uploaded ma
 | `lecture-note` | long-form notes, chapters, tutorials, arXiv teaching notes | one-sentence learning model and concept ladder | sections → concept ladder, definitions, examples, proofs, readiness checks, ask/chat |
 | `slide-deck` | PPT/PDF decks and lecture slides | deck map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
 
-A syllabus or lecture index is treated as a directory of sources: choose a specific paper, note, or slide deck from it, then PaperMentor starts the matching mode.
+PaperMentor is intentionally optimized for concrete reading artifacts: papers, lecture notes, and slide decks.
 
 ---
 

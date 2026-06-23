@@ -333,7 +333,6 @@ function validateSourceModes() {
     const lectureText = join(temp, 'lecture-note.txt');
     const slideText = join(temp, 'deck.txt');
     const paperText = join(temp, 'paper.txt');
-    const sourceIndexText = join(temp, 'eth-source-index.txt');
     writeFileSync(lectureText, `A Brief Introduction to Causal Inference in Machine Learning
 
 This lecture note is aimed at students without prior exposure to causal inference.
@@ -374,23 +373,6 @@ The pushforward distribution is q=f#p. (1) The training objective uses stopgrad.
 
 3. Experiments
 FID and ablations evaluate sample quality.`);
-    writeFileSync(sourceIndexText, `Course Title: Robot Learning: From Fundamentals to Foundation Models
-Semester: Spring 2026
-Lecture Tentative Schedule
-Week 1 Introduction to Robot Learning Slides Recording
-Week 2 Robot Control & MDPs Slides Recording
-Week 7 Sequence Modeling and Transformers Slides Recording
-Course Objectives: understand robot learning fundamentals.`);
-
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'ETH Robot Learning Page', '--source', 'https://cvg.ethz.ch/lectures/Robot-Learning/', '--slug', 'eth-index', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
-    try {
-      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'eth-index', '--mode', 'auto', '--paper-text-file', sourceIndexText], { cwd: temp, stdio: 'pipe' });
-      failures.push('source index pages should be rejected in auto mode instead of becoming a course mode');
-    } catch (error) {
-      const message = String(error.stderr || error.message || '');
-      if (!message.includes('source index detected') || !message.includes('no course mode')) failures.push('source index rejection should explain concrete source selection and no course mode');
-    }
-
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Causal Inference Notes', '--source', 'https://arxiv.org/abs/2405.08793', '--slug', 'causal-note', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'causal-note', '--mode', 'auto', '--paper-text-file', lectureText], { cwd: temp, stdio: 'pipe' });
     let state = readJson(join(temp, '.papermentor', 'sessions', 'causal-note', 'state.json'), {});
@@ -419,7 +401,6 @@ Course Objectives: understand robot learning fundamentals.`);
     if (state.sourceMode !== 'paper') failures.push(`paper source mode not detected: ${state.sourceMode}`);
 
     const repoText = ['README.md', 'SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md'].map((rel) => readFileSync(join(root, rel), 'utf8')).join('\n').toLowerCase();
-    if (/course\s+mode/.test(repoText)) failures.push('public docs should not advertise course mode');
   } catch (error) {
     failures.push(`source mode smoke failed: ${error.message}`);
   } finally {

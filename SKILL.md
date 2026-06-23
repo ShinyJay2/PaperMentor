@@ -26,7 +26,7 @@ PaperMentor supports three source modes:
 - `lecture-note`: instructional notes and technical chapters. Prioritize concept ladders, definitions, worked examples, exercises, proofs, derivations, and readiness checks.
 - `slide-deck`: PDF/PPT slide decks. Treat slides as navigable sections, reconstruct missing lecturer narration, explain visual labels/arrows, connect adjacent slides, and extract equations/notation on the slide.
 
-A syllabus or lecture landing page is only a source index. In auto mode, stop and ask the user to pick a concrete paper, note, or slide deck from it, then start the appropriate mode. Do not invent another mode and do not attach unrelated local diagrams as evidence for the source.
+Only support concrete reading artifacts: `paper`, `lecture-note`, and `slide-deck`. Do not invent additional modes or attach unrelated local diagrams as evidence for a source.
 If a selected slide deck is protected or text extraction fails, keep `slide-deck` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
 
 ## Workflow
