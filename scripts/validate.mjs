@@ -249,6 +249,7 @@ function validateSessionHelper() {
       if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
     }
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
+    if (html.includes('loading="lazy"')) failures.push('session report figures should load eagerly for reliable browser screenshots and first-open rendering');
     if (!(html.indexOf('One-sentence paper model') < html.indexOf('class="paper-figure"') && html.indexOf('class="paper-figure"') < html.indexOf('Preliminary ladder'))) failures.push('Start Here should render one-sentence model first, then representative figure, then preliminaries');
     for (const phrase of ['Figure 1', 'Read it as', 'The key observation', 'This visual anchors']) {
       if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);

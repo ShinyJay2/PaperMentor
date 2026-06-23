@@ -1685,7 +1685,7 @@ function renderFigure(figure, explanation = '') {
   if (!figure || !figure.src) return '';
   const captionMarkdown = String(explanation || figure.caption || '').trim();
   const caption = captionMarkdown ? `<figcaption>${markdownToHtml(captionMarkdown)}</figcaption>` : '';
-  return `<figure class="paper-figure"><img src="${escapeHtml(figure.src)}" alt="${escapeHtml(figure.alt || 'Paper figure')}" loading="lazy" />${caption}</figure>`;
+  return `<figure class="paper-figure"><img src="${escapeHtml(figure.src)}" alt="${escapeHtml(figure.alt || 'Paper figure')}" decoding="sync" fetchpriority="high" />${caption}</figure>`;
 }
 
 function displayCardTitle(card) {
