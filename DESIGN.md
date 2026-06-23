@@ -24,7 +24,7 @@
 ## Information architecture
 - Primary navigation: CLI Reading Path; the HTML itself has no navigation rail.
 - Core screens: generated session block document, terminal Reading Console, README product page.
-- Content hierarchy: quiet paper title sheet followed by appended explanation blocks in HTML; the first paper map includes the exact screenshot/crop of the actual representative method figure when present; blockers, current choices, and diagnostics stay in terminal/state JSON.
+- Content hierarchy: quiet paper title sheet followed by appended explanation blocks in HTML; the first paper map includes the exact screenshot/crop of the actual representative method figure when present, with the figure explanation directly under the image; blockers, current choices, and diagnostics stay in terminal/state JSON.
 
 ## Design principles
 - Paper first: dense explanations should read like an arXiv-adjacent annotated paper, not a SaaS dashboard.
@@ -34,7 +34,7 @@
 
 ## Visual language
 - Color: warm off-white paper, muted blue accents, low-contrast grid, black scholarly text.
-- Typography: Satoshi first for English text and Pretendard for Korean fallback; `Anthropic Mono` or system mono for structured labels; MathJax owns equation typography.
+- Typography: Satoshi is the primary English font and Pretendard is the Korean font/fallback. Generated reports use bundled local WOFF2 files copied from `assets/fonts/` into each session, not remote-only CSS imports; `Anthropic Mono` or system mono may be used only for structured labels; MathJax owns equation typography.
 - Spacing/layout rhythm: single-column paper block stack with readable article measure.
 - Shape/radius/elevation: manuscript sheets with subtle inset rules, tiny radius, and soft paper shadow; avoid reference-like boxed corner number tabs.
 - Motion: none required; stable reading environment.

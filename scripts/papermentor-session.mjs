@@ -1,8 +1,12 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
-import { basename, extname, join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync } from 'node:fs';
+import { basename, dirname, extname, join, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
+const scriptDir = dirname(fileURLToPath(import.meta.url));
+const skillRoot = dirname(scriptDir);
+const bundledAssetsDir = join(skillRoot, 'assets');
 const baseDir = join(root, '.papermentor', 'sessions');
 const pathItems = [
   ['map', 'Map the paper'],
@@ -145,6 +149,13 @@ function figureCaption(args) {
   return isProvenanceOnlyCaption(caption) ? '' : caption;
 }
 
+function copyBundledReportAssets(slug) {
+  const sourceFonts = join(bundledAssetsDir, 'fonts');
+  if (!existsSync(sourceFonts)) return;
+  mkdirSync(assetDir(slug), { recursive: true });
+  cpSync(sourceFonts, join(assetDir(slug), 'fonts'), { recursive: true });
+}
+
 function prepareFigure(slug, cardId, args) {
   const source = args['figure-file'] || args.figure || args['figure-url'] || args['image-file'] || args.image;
   if (!source) return null;
@@ -223,6 +234,19 @@ function escapeHtml(value) {
   return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
 }
 
+function containsKorean(value) {
+  return /[\u3131-\u318e\uac00-\ud7a3]/.test(String(value || ''));
+}
+
+function documentLanguage(state, cards) {
+  const text = [
+    state?.title,
+    state?.source,
+    ...(cards?.cards || []).flatMap((card) => [card.title, card.location, card.body, card.figure?.caption])
+  ].join('\n');
+  return containsKorean(text) ? 'ko' : 'en';
+}
+
 function statusIcon(status) {
   return { done: '✓', current: '›', pending: ' ', blocked: '!', review: '↺' }[status] || ' ';
 }
@@ -232,10 +256,12 @@ function statusClass(status) {
 }
 
 function renderHtml(slug) {
+  copyBundledReportAssets(slug);
   const state = readJson(statePath(slug), {});
   const cards = readJson(cardsPath(slug), { cards: [] });
+  const lang = documentLanguage(state, cards);
   const html = `<!doctype html>
-<html lang="en">
+<html lang="${escapeHtml(lang)}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -245,8 +271,12 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <style>
-@import url("https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap");
-@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
+@font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-300.woff2") format("woff2"); font-weight:300; font-style:normal; font-display:swap; }
+@font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-400.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap; }
+@font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-500.woff2") format("woff2"); font-weight:500; font-style:normal; font-display:swap; }
+@font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-700.woff2") format("woff2"); font-weight:700; font-style:normal; font-display:swap; }
+@font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-900.woff2") format("woff2"); font-weight:900; font-style:normal; font-display:swap; }
+@font-face { font-family:"Pretendard"; src:url("assets/fonts/pretendard/PretendardVariable.woff2") format("woff2-variations"); font-weight:45 920; font-style:normal; font-display:swap; }
 :root {
   color-scheme: light;
   --field:#f3efe4;
@@ -418,6 +448,7 @@ body {
 .body p { margin:12px 0; }
 .body ul { margin:12px 0; padding-left:24px; }
 .body li { margin:7px 0; }
+.body ol { margin:12px 0; padding-left:24px; }
 .body code {
   background:#f0eadf;
   border:1px solid #d4cab8;
@@ -431,6 +462,12 @@ body {
   font-family:var(--mono);
   font-size:12px;
   text-align:center;
+}
+:lang(ko) .body,
+:lang(ko) .paper-figure figcaption {
+  word-break:keep-all;
+  overflow-wrap:anywhere;
+  line-height:1.72;
 }
 @media (max-width: 640px) {
   .page { width:min(100% - 24px, 900px); padding:24px 0 52px; }
@@ -481,7 +518,9 @@ function normalizeHeading(value) {
 }
 
 function isFigureExplanationHeading(title) {
-  return /^(main\s+method\s+figu?re|main\s+figu?re|representative\s+(method\s+)?figu?re|representative\s+figu?re\s+explanation|figu?re\s+explanation|figu?re\s+explanation\s+under\s+image)$/.test(normalizeHeading(title));
+  const normalized = normalizeHeading(title);
+  return /^(main\s+method\s+figu?re|main\s+figu?re|representative\s+(method\s+)?figu?re|representative\s+figu?re\s+explanation|figu?re\s+explanation|figu?re\s+explanation\s+under\s+image)$/.test(normalized)
+    || /^(그림\s*설명|이미지\s*아래\s*설명|대표\s*(그림|도식|피겨)|대표\s*(그림|도식|피겨)\s*설명|방법\s*(그림|도식|피겨)\s*설명)$/.test(normalized);
 }
 
 function splitFigureExplanationSection(markdown) {
@@ -538,20 +577,54 @@ function figureExplanationMarkdown(card) {
   const section = splitFigureExplanationSection(card.body || '').figure;
   const facts = labeledFigureFacts(section);
   const semanticCaption = String(card.figure.caption || '').trim();
-  const identity = semanticCaption || facts['figure / location'] || facts['figure location'] || '';
-  const what = facts['what it shows'] || facts['why this is the representative figure'] || facts['why this figure matters'] || '';
-  const flow = facts['flow / sequence'] || facts['flow or sequence'] || '';
-  const observe = facts['what to observe'] || '';
-  const supports = facts['equations / claims it supports'] || facts['equations or claims it supports'] || '';
+  const korean = containsKorean(section || card.body || card.title);
+  const identity = semanticCaption
+    || facts['figure / location']
+    || facts['figure location']
+    || facts['그림 / 위치']
+    || facts['그림 위치']
+    || facts['위치']
+    || '';
+  const what = facts['what it shows']
+    || facts['why this is the representative figure']
+    || facts['why this figure matters']
+    || facts['무엇을 보여주는가']
+    || facts['보여주는 것']
+    || facts['왜 대표 그림인가']
+    || facts['왜 이 그림이 중요한가']
+    || '';
+  const flow = facts['flow / sequence']
+    || facts['flow or sequence']
+    || facts['흐름 / 순서']
+    || facts['흐름 또는 순서']
+    || facts['읽는 법']
+    || facts['해석 순서']
+    || '';
+  const observe = facts['what to observe']
+    || facts['관찰할 점']
+    || facts['핵심 관찰']
+    || facts['봐야 할 점']
+    || '';
+  const supports = facts['equations / claims it supports']
+    || facts['equations or claims it supports']
+    || facts['연결되는 수식 / 주장']
+    || facts['연결되는 수식 또는 주장']
+    || facts['지원하는 수식 또는 주장']
+    || facts['관련 수식']
+    || '';
   const parts = [];
   if (identity) parts.push(`**${sentence(identity)}**`);
   if (what) parts.push(sentence(what));
-  const reading = [flow && `Read it as ${sentence(flow).replace(/^./, (ch) => ch.toLowerCase())}`, observe && `The key observation is that ${sentence(observe).replace(/^the\s+/i, '')}`]
+  const reading = [
+    flow && (korean ? `읽는 법: ${sentence(flow)}` : `Read it as ${sentence(flow).replace(/^./, (ch) => ch.toLowerCase())}`),
+    observe && (korean ? `핵심 관찰: ${sentence(observe)}` : `The key observation is that ${sentence(observe).replace(/^the\s+/i, '')}`)
+  ]
     .filter(Boolean)
     .join(' ');
   if (reading) parts.push(reading);
-  if (supports) parts.push(`This visual anchors ${sentence(supports).replace(/^the\s+/i, '')}`);
+  if (supports) parts.push(korean ? `연결되는 내용: ${sentence(supports)}` : `This visual anchors ${sentence(supports).replace(/^the\s+/i, '')}`);
   if (parts.length) return parts.join('\n\n');
+  if (section.trim()) return section.trim();
   return semanticCaption;
 }
 
@@ -575,16 +648,28 @@ function markdownToHtml(markdown) {
   const escaped = escapeHtml(markdown);
   const lines = escaped.split(/\r?\n/);
   let html = '';
-  let inList = false;
+  let listType = '';
+  const closeList = () => {
+    if (!listType) return;
+    html += `</${listType}>`;
+    listType = '';
+  };
   for (const line of lines) {
-    if (/^###\s+/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
-    else if (/^##\s+/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
-    else if (/^#\s+/.test(line)) { if (inList) { html += '</ul>'; inList = false; } html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
-    else if (/^-\s+/.test(line)) { if (!inList) { html += '<ul>'; inList = true; } html += `<li>${formatInline(line.replace(/^-\s+/, ''))}</li>`; }
-    else if (line.trim() === '') { if (inList) { html += '</ul>'; inList = false; } }
-    else { if (inList) { html += '</ul>'; inList = false; } html += `<p>${formatInline(line)}</p>`; }
+    if (/^###\s+/.test(line)) { closeList(); html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
+    else if (/^##\s+/.test(line)) { closeList(); html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
+    else if (/^#\s+/.test(line)) { closeList(); html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
+    else if (/^-\s+/.test(line)) {
+      if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
+      html += `<li>${formatInline(line.replace(/^-\s+/, ''))}</li>`;
+    }
+    else if (/^\d+\.\s+/.test(line)) {
+      if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
+      html += `<li>${formatInline(line.replace(/^\d+\.\s+/, ''))}</li>`;
+    }
+    else if (line.trim() === '') { closeList(); }
+    else { closeList(); html += `<p>${formatInline(line)}</p>`; }
   }
-  if (inList) html += '</ul>';
+  closeList();
   return html;
 }
 

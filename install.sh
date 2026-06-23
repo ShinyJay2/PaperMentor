@@ -37,6 +37,7 @@ copy_skill() {
   cp -R "$ROOT_DIR/examples" "$dest/examples"
   cp -R "$ROOT_DIR/tests" "$dest/tests"
   cp -R "$ROOT_DIR/scripts" "$dest/scripts"
+  cp -R "$ROOT_DIR/assets" "$dest/assets"
 }
 
 install_codex() {

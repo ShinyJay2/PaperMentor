@@ -8,3 +8,5 @@
 - [ ] Explanation under the figure names components, flow or sequence, what to observe, and the conclusion.
 - [ ] Figure explanation links back to supporting equations, assumptions, algorithms, or claims.
 - [ ] Visual confusion is repaired with a minimal example when needed.
+
+- [ ] Korean figure-explanation headings such as `그림 설명` are moved directly under the image, not left as body sections.

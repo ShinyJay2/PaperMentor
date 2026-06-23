@@ -148,6 +148,8 @@ Choose next:
 
 Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally. Use semantic equation block titles such as `Training objective — Eq. (6)` so the block is readable and still traceable to the paper.
 
+Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies these font files into the skill, and each generated session copies them into `.papermentor/sessions/<paper-slug>/assets/fonts/`, so the report typography works after installing the skill without remote font CSS.
+
 ---
 
 ## Try the sample paper

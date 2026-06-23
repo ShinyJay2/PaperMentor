@@ -33,6 +33,7 @@ function Copy-PaperMentorSkill($Dest) {
   Copy-Item -Recurse -Path (Join-Path $RootDir "examples") -Destination (Join-Path $Dest "examples")
   Copy-Item -Recurse -Path (Join-Path $RootDir "tests") -Destination (Join-Path $Dest "tests")
   Copy-Item -Recurse -Path (Join-Path $RootDir "scripts") -Destination (Join-Path $Dest "scripts")
+  Copy-Item -Recurse -Path (Join-Path $RootDir "assets") -Destination (Join-Path $Dest "assets")
 }
 
 function Install-Codex() {
