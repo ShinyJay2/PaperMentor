@@ -1,10 +1,10 @@
 # Figure Explanation Checklist
 
-- [ ] Paper map includes the exact screenshot/crop of the representative main method/system/algorithm/architecture figure from the PDF/page when present.
-- [ ] Experiment/result plots are not used as the main method figure unless no method figure exists, and that exception is stated in CLI/state.
+- [ ] Paper map includes the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present.
+- [ ] Experiment/result plots are not used as the representative figure unless no method figure exists, and that exception is stated in CLI/state.
 - [ ] Figure screenshot/crop is attached to the HTML block with `--figure-file` or `--figure-url`, not merely described as text and not redrawn as a substitute diagram. Mermaid/ASCII/SVG schematic substitutes are rejected.
-- [ ] HTML does not show the body heading “Main method figure”; the figure explanation appears directly under the image.
-- [ ] HTML does not show provenance filler such as “Exact crop of …”, “captured from …”, or “main method figure from the paper.”
+- [ ] HTML does not show a separate figure-section body heading; the figure explanation appears directly under the image.
+- [ ] HTML does not show provenance filler such as “Exact crop of …”, “captured from …”, or “figure from the paper.”
 - [ ] Explanation under the figure names components, flow or sequence, what to observe, and the conclusion.
 - [ ] Figure explanation links back to supporting equations, assumptions, algorithms, or claims.
 - [ ] Visual confusion is repaired with a minimal example when needed.

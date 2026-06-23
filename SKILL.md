@@ -20,7 +20,7 @@ The user understands a paper only when they can reconstruct:
 
 ## Workflow
 
-1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, the actual main method figure/diagram, proofs, experiments.
+1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, the actual representative method figure, proofs, experiments.
 2. Build prerequisite ladders for missing background.
 3. Explain equations atomically before interpreting them.
 4. Trace derivations one transition at a time.
@@ -31,9 +31,9 @@ The user understands a paper only when they can reconstruct:
 
 
 
-### Main method figure rule
+### Representative figure rule
 
-In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …”; use a semantic caption like `Figure 1. Drifting Model` only when helpful, then explain the components, flow, what to observe, and supported equations/claims directly under the image in the body.
+In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the representative figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …”; use a semantic caption like `Figure 1. Drifting Model` only when helpful, then explain the components, flow, what to observe, and supported equations/claims directly under the image in the body.
 
 ### HTML block title rule
 
@@ -49,7 +49,7 @@ When starting a paper:
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start with `Map the paper`, including the actual main method/system/algorithm figure image when present. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate “Main method figure” heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start with `Map the paper`, including the actual main method/system/algorithm figure image when present. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 

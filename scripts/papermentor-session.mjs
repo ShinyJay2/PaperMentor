@@ -245,6 +245,8 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 </script>
 <script defer src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-svg.js"></script>
 <style>
+@import url("https://api.fontshare.com/v2/css?f[]=satoshi@300,400,500,700,900&display=swap");
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css");
 :root {
   color-scheme: light;
   --field:#f3efe4;
@@ -256,7 +258,7 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
   --accent:#405f9f;
   --accent-soft:#eef2f8;
   --mono: "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --text: "Styrene B", "Styrene A", "Anthropic Sans", "Claude Sans", Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  --text: "Satoshi", "Pretendard", "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
@@ -479,7 +481,7 @@ function normalizeHeading(value) {
 }
 
 function isFigureExplanationHeading(title) {
-  return /^(main\s+method\s+figure|main\s+figure|representative\s+figure\s+explanation|figure\s+explanation|figure\s+explanation\s+under\s+image)$/.test(normalizeHeading(title));
+  return /^(main\s+method\s+figu?re|main\s+figu?re|representative\s+(method\s+)?figu?re|representative\s+figu?re\s+explanation|figu?re\s+explanation|figu?re\s+explanation\s+under\s+image)$/.test(normalizeHeading(title));
 }
 
 function splitFigureExplanationSection(markdown) {
@@ -537,16 +539,18 @@ function figureExplanationMarkdown(card) {
   const facts = labeledFigureFacts(section);
   const semanticCaption = String(card.figure.caption || '').trim();
   const identity = semanticCaption || facts['figure / location'] || facts['figure location'] || '';
-  const what = facts['what it shows'] || facts['why this is the main method figure'] || '';
+  const what = facts['what it shows'] || facts['why this is the representative figure'] || facts['why this figure matters'] || '';
   const flow = facts['flow / sequence'] || facts['flow or sequence'] || '';
   const observe = facts['what to observe'] || '';
   const supports = facts['equations / claims it supports'] || facts['equations or claims it supports'] || '';
   const parts = [];
   if (identity) parts.push(`**${sentence(identity)}**`);
-  if (what) parts.push(`What it shows: ${sentence(what)}`);
-  if (flow) parts.push(`How to read it: ${sentence(flow)}`);
-  if (observe) parts.push(`Watch for this: ${sentence(observe)}`);
-  if (supports) parts.push(`Connects to: ${sentence(supports)}`);
+  if (what) parts.push(sentence(what));
+  const reading = [flow && `Read it as ${sentence(flow).replace(/^./, (ch) => ch.toLowerCase())}`, observe && `The key observation is that ${sentence(observe).replace(/^the\s+/i, '')}`]
+    .filter(Boolean)
+    .join(' ');
+  if (reading) parts.push(reading);
+  if (supports) parts.push(`This visual anchors ${sentence(supports).replace(/^the\s+/i, '')}`);
   if (parts.length) return parts.join('\n\n');
   return semanticCaption;
 }

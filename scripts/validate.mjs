@@ -60,7 +60,7 @@ for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude C
 }
 
 const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
-for (const phrase of ['Styrene B', 'Anthropic Sans', 'Anthropic Mono', 'paper-figure']) {
+for (const phrase of ['Satoshi', 'Pretendard', 'api.fontshare.com', 'orioncactus/pretendard', 'Anthropic Mono', 'paper-figure']) {
   if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
 }
 
@@ -156,7 +156,7 @@ function validateSessionHelper() {
     // This is a test fixture for attachment/copy/render behavior only. Product guidance rejects
     // Mermaid/redrawn schematics for real papers; real sessions must pass an actual PDF crop.
     writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280"><rect width="720" height="280" fill="#fbfaf6"/><rect x="26" y="24" width="668" height="210" rx="2" fill="#fff" stroke="#d8d0c3"/><text x="50" y="58" font-family="Times New Roman, serif" font-size="18" fill="#1f2937">Exact PDF crop fixture — replace with actual paper figure in real sessions</text><path d="M68 190 C150 88, 260 92, 338 170 S520 226, 626 112" fill="none" stroke="#222" stroke-width="2.5"/><circle cx="68" cy="190" r="4" fill="#222"/><circle cx="338" cy="170" r="4" fill="#222"/><circle cx="626" cy="112" r="4" fill="#222"/><line x1="68" y1="216" x2="626" y2="216" stroke="#222"/><line x1="68" y1="86" x2="68" y2="216" stroke="#222"/><text x="330" y="254" font-family="Times New Roman, serif" font-size="14" fill="#374151">Figure 1: fixture crop region</text></svg>');
-    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Main method figure\n\n- Figure / location: Figure 1.\n- Why this is the main method figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
@@ -169,12 +169,14 @@ function validateSessionHelper() {
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
-    if (html.includes('Main method figure')) failures.push('session paper map should move the figure explanation under the image and remove the Main method figure body heading');
+    for (const phrase of ['Main method figure', 'Figure explanation under image']) {
+      if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
+    }
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
-    for (const phrase of ['What it shows:', 'How to read it:', 'Watch for this:', 'Connects to:']) {
+    for (const phrase of ['Figure 1', 'Read it as', 'The key observation', 'This visual anchors']) {
       if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);
     }
-    for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Main method figure from the paper.']) {
+    for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Figure from the paper.']) {
       if (html.includes(phrase)) failures.push(`session paper map should suppress provenance-only figure captions: ${phrase}`);
     }
     if (!cardData.cards?.[0]?.figure?.src?.startsWith('assets/')) failures.push('session card should persist copied figure asset metadata');
@@ -182,7 +184,7 @@ function validateSessionHelper() {
     const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
     if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
-    if (notes.includes('## Main method figure')) failures.push('session notes should move the figure explanation under the image and remove the heading');
+    if (notes.includes('## Figure explanation under image')) failures.push('session notes should move the figure explanation under the image and remove the heading');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));

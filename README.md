@@ -127,7 +127,7 @@ PaperMentor is guided but interruptible. For each paper, it keeps one local HTML
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first paper-map block should include the actual main method figure image when the paper has one. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first paper-map block should include the actual representative method figure image when the paper has one. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
 
 ```text
 Reading Path
