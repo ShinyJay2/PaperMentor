@@ -74,6 +74,25 @@ Codex decides whether a turn belongs in the polished HTML report. Do not ask aft
 - Promoted conversation blocks must include the user question, paper location, missing dependency when applicable, answer, paper reconnection, and resume point.
 
 
+
+## Source modes
+
+Use `--mode auto` unless the user explicitly chooses a mode. Supported modes are `paper`, `lecture-note`, and `slide-deck`. A syllabus or lecture index is a source directory; select a concrete paper, note, or slide deck from it before starting the reading room.
+
+```bash
+node scripts/papermentor-session.mjs start --title "Source title" --source source.pdf --mode auto
+node scripts/papermentor-session.mjs analyze --session source-title --mode auto --paper-text-file source.txt
+node scripts/papermentor-session.mjs tui --session source-title
+```
+
+Mode-specific dynamic menus:
+
+- `paper`: section actions expose equations, derivations, dependencies, method figures, experiments, ask/chat.
+- `lecture-note`: section actions expose concept ladders, definitions, worked examples, exercises, proofs, readiness checks, ask/chat.
+- `slide-deck`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
+
+If a slide PDF is protected or not text-extractable, stay in `slide-deck` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
+
 ## `/papermentor start`
 
 Purpose: start or resume an interactive reading session.
@@ -90,8 +109,9 @@ Recommended helper call after scanning the PDF:
 
 ```bash
 node scripts/papermentor-session.mjs start \
-  --title "<paper title>" \
+  --title "<source title>" \
   --source "<pdf path or URL>" \
+  --mode auto \
   --sections "1. Introduction|2. Background|3. Methods|4. Experiments" \
   --body-file start-here.md \
   --figure-file figure-1-method-crop.png

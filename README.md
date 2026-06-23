@@ -2,9 +2,9 @@
 
 # PaperMentor
 
-### Upload a paper. Understand it in 30 minutes.
+### Upload a paper, lecture note, or slide deck. Understand the hard part in 30 minutes.
 
-Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, and conceptual confusion until you can reconstruct the paper yourself.
+Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, slide narration, and conceptual confusion until you can reconstruct the source yourself.
 
 <img src="assets/papermentor-demo.svg" alt="PaperMentor converts a paper excerpt into a paper map, equation card, derivation trace, and final insight" width="920" />
 
@@ -22,14 +22,14 @@ Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, d
 
 ## Why PaperMentor exists
 
-Most paper tools compress the paper. PaperMentor does the opposite: it slows down at the exact line where understanding breaks.
+Most reading tools compress the source. PaperMentor does the opposite: it slows down at the exact line, equation, slide, or definition where understanding breaks.
 
-A useful reading session should leave you able to reconstruct:
+A useful session should leave you able to reconstruct:
 
 - the problem and core intuition,
-- every major equation,
+- every major equation or notation-heavy slide,
 - every derivation transition,
-- the dependency chain between definitions, assumptions, lemmas, methods, and claims,
+- the dependency chain between definitions, assumptions, lemmas, methods, examples, visuals, and claims,
 - and the final insight in one sentence.
 
 ---
@@ -115,9 +115,23 @@ Claude Code: ~/.claude/skills/papermentor
 ---
 
 
+## Source modes
+
+PaperMentor runs one of three modes, selected automatically from the uploaded material:
+
+| Mode | Use it for | First thing rendered | CLI menus become |
+| --- | --- | --- | --- |
+| `paper` | arXiv papers, conference papers, technical reports | one-sentence paper model, representative method figure, preliminaries | detected sections → equations, derivations, dependencies, figures, ask/chat |
+| `lecture-note` | long-form notes, chapters, tutorials, arXiv teaching notes | one-sentence learning model and concept ladder | sections → concept ladder, definitions, examples, proofs, readiness checks, ask/chat |
+| `slide-deck` | PPT/PDF decks and lecture slides | deck map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
+
+A syllabus or lecture index is treated as a directory of sources: choose a specific paper, note, or slide deck from it, then PaperMentor starts the matching mode.
+
+---
+
 ## HTML-first reading room
 
-PaperMentor is guided but interruptible. For each paper, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
+PaperMentor is guided but interruptible. For each source, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
 
 ```text
 .papermentor/sessions/<paper-slug>/
@@ -128,7 +142,7 @@ PaperMentor is guided but interruptible. For each paper, it renders the HTML rea
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the paper does, the actual representative method figure image when the paper has one, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the source teaches or claims, the actual representative method/system figure when present, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
 
 ```text
 ╭──────────────────────────── PaperMentor Live ─────────────────────────────╮
@@ -181,7 +195,15 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 
 ## Command intents
 
-- `scan` — produce the paper map before details, including the exact cropped/screenshot representative method/system/algorithm figure when present, with explanation underneath. Never substitute Mermaid or a redrawn schematic for the paper figure.
+One-line starts:
+
+```bash
+node scripts/papermentor-session.mjs start --title "My source" --source source.pdf --mode auto
+node scripts/papermentor-session.mjs analyze --session my-source --mode auto --paper-text-file source.txt
+node scripts/papermentor-session.mjs tui --session my-source
+```
+
+- `scan` — produce the source map before details, including the exact cropped/screenshot representative method/system/algorithm figure when present, with explanation underneath. Never substitute Mermaid or a redrawn schematic for the paper figure.
 - `equation` — explain every symbol and operator after showing the equation.
 - `derivation` — trace each transition without skipped algebra.
 - `dependency` — reveal what a claim depends on and what depends on it.

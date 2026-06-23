@@ -17,7 +17,10 @@
     "math",
     "tutoring",
     "interactive-dashboard",
-    "multilingual"
+    "multilingual",
+    "lecture-notes",
+    "slide-decks",
+    "paper-understanding"
   ],
   "repository": {
     "type": "git",

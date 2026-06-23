@@ -17,6 +17,47 @@ const pathItems = [
   ['final', 'Extract final insight']
 ];
 
+const sourceModePathItems = {
+  paper: pathItems,
+  'lecture-note': [
+    ['map', 'Map the lecture note'],
+    ['prerequisites', 'Build concept ladder'],
+    ['notation', 'Decode notation and examples'],
+    ['derivations', 'Trace derivations / proofs'],
+    ['confusion', 'Resolve confusion'],
+    ['final', 'Extract final insight']
+  ],
+  'slide-deck': [
+    ['map', 'Map the slide deck'],
+    ['slides', 'Explain key slides'],
+    ['narration', 'Reconstruct missing narration'],
+    ['flow', 'Connect slide flow'],
+    ['confusion', 'Resolve confusion'],
+    ['final', 'Extract final insight']
+  ]
+};
+
+function normalizeSourceMode(value, fallback = 'paper') {
+  const raw = String(value || '').toLowerCase().trim().replace(/_/g, '-');
+  if (['paper', 'research-paper', 'article', 'pdf-paper'].includes(raw)) return 'paper';
+  if (['lecture-note', 'lecture-notes', 'note', 'notes', 'technical-note', 'monograph'].includes(raw)) return 'lecture-note';
+  if (['slide', 'slides', 'slide-deck', 'deck', 'ppt', 'pptx', 'presentation'].includes(raw)) return 'slide-deck';
+  if (raw === 'auto' || raw === '') return fallback;
+  return fallback;
+}
+
+function sourceModeLabel(mode) {
+  return { paper: 'Paper', 'lecture-note': 'Lecture note', 'slide-deck': 'Slide deck' }[normalizeSourceMode(mode)] || 'Paper';
+}
+
+function sourceModeNoun(mode) {
+  return { paper: 'paper', 'lecture-note': 'lecture note', 'slide-deck': 'slide deck' }[normalizeSourceMode(mode)] || 'paper';
+}
+
+function readingPathForMode(mode) {
+  return sourceModePathItems[normalizeSourceMode(mode)] || pathItems;
+}
+
 function parseArgs(argv) {
   const args = { _: [] };
   for (let i = 0; i < argv.length; i += 1) {
@@ -60,39 +101,49 @@ function writeJson(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-function defaultState({ title, source, slug, sections = [] }) {
+
+function argsModeFromSource(source) {
+  const value = String(source || '').toLowerCase();
+  if (/\.(pptx?|key)(\?|#|$)/.test(value) || /slide|deck|presentation/.test(value)) return 'slide-deck';
+  if (/lecture[-\s]?note|notes|monograph/.test(value)) return 'lecture-note';
+  return 'paper';
+}
+
+function defaultState({ title, source, slug, sections = [], sourceMode = 'paper' }) {
   return {
     schema: 'papermentor.session.v1',
     title,
     source,
     slug,
+    sourceMode: normalizeSourceMode(sourceMode),
     createdAt: now(),
     updatedAt: now(),
-    currentLocation: 'Paper map',
-    currentFocus: 'Open the HTML reading room first, then choose a paper section.',
-    readingPath: pathItems.map(([key, label], index) => ({ key, label, status: index === 0 ? 'current' : 'pending' })),
+    currentLocation: `${sourceModeLabel(sourceMode)} map`,
+    currentFocus: `Open the HTML reading room first, then choose a ${sourceModeNoun(sourceMode)} section.`,
+    readingPath: readingPathForMode(sourceMode).map(([key, label], index) => ({ key, label, status: index === 0 ? 'current' : 'pending' })),
     paperSections: sections,
     currentSection: '',
     currentMode: '',
     detectedItems: [],
     nextChoices: sections.length ? sections : [
       'Open the HTML reading room',
-      'Detect paper sections',
-      'Ask a paper question'
+      `Detect ${sourceModeNoun(sourceMode)} sections`,
+      `Ask a ${sourceModeNoun(sourceMode)} question`
     ],
     renderedView: `.papermentor/sessions/${slug}/index.html`
   };
 }
 
-function ensureSession({ title, source, slug, sections = [] }) {
+function ensureSession({ title, source, slug, sections = [], sourceMode }) {
   const dir = sessionDir(slug);
   mkdirSync(dir, { recursive: true });
   const state = existsSync(statePath(slug))
     ? readJson(statePath(slug), {})
-    : defaultState({ title, source, slug, sections });
+    : defaultState({ title, source, slug, sections, sourceMode: sourceMode || argsModeFromSource(source) });
   state.updatedAt = now();
   state.title = title || state.title;
   state.source = source || state.source;
+  state.sourceMode = normalizeSourceMode(sourceMode || argsModeFromSource(source) || state.sourceMode, state.sourceMode || 'paper');
   state.renderedView = `.papermentor/sessions/${slug}/index.html`;
   if (sections.length) {
     state.paperSections = sections;
@@ -296,6 +347,30 @@ function readPaperText(args) {
   return readTextArg(args);
 }
 
+function detectSourceMode(text, args = {}, state = {}) {
+  const explicit = args.mode || args['source-mode'] || args.sourceMode;
+  if (explicit && String(explicit).toLowerCase() !== 'auto') return normalizeSourceMode(explicit, state.sourceMode || 'paper');
+  const sourceHint = `${args.source || state.source || ''} ${args.title || state.title || ''}`;
+  const bySource = argsModeFromSource(sourceHint);
+  if (bySource !== 'paper') return bySource;
+  const value = String(text || '');
+  const lower = value.toLowerCase();
+  const slideMatches = (value.match(/^\s*(slide|page)\s+\d+\b/gim) || []).length;
+  const pageBreaks = (value.match(/\f/g) || []).length;
+  const bulletLines = (value.match(/^\s*[-•▪◦]\s+/gm) || []).length;
+  const paragraphLines = value.split(/\r?\n/).filter((line) => line.trim().length > 120).length;
+  if (slideMatches >= 2 || (/\bslides?\b|\bdeck\b|\bpresentation\b/.test(lower) && bulletLines >= 8) || (pageBreaks >= 5 && bulletLines > paragraphLines * 2)) {
+    return 'slide-deck';
+  }
+  if (/lecture\s+notes?|course\s+notes?|chapter\s+\d+|exercise\s+\d+|problem\s+set|learning\s+objective|worked\s+example/.test(lower)) {
+    return 'lecture-note';
+  }
+  if (/this\s+lecture\s+note|these\s+notes|aimed\s+at\s+students|without\s+prior\s+exposure/.test(lower)) {
+    return 'lecture-note';
+  }
+  return 'paper';
+}
+
 function cleanHeadingTitle(raw) {
   return String(raw || '')
     .replace(/\s{2,}.+$/g, '')
@@ -331,6 +406,33 @@ function extractSectionBlocks(text, preferredSections = []) {
     };
   });
   return blocks.sort(compareSectionBlocks);
+}
+
+function extractSlideBlocks(text, preferredSections = []) {
+  const source = String(text || '').replace(/\r/g, '');
+  const markers = [];
+  for (const match of source.matchAll(/^\s*(?:slide|page)\s+(\d{1,3})\s*[:.\-–]?\s*(.*)$/gim)) {
+    const titleTail = cleanHeadingTitle(match[2] || '');
+    markers.push({ title: `Slide ${match[1]}${titleTail ? ` — ${titleTail}` : ''}`, index: match.index });
+  }
+  if (!markers.length && source.includes('\f')) {
+    let offset = 0;
+    source.split('\f').forEach((chunk, index) => {
+      const titleLine = chunk.split(/\n/).map((line) => line.trim()).find((line) => line.length >= 4 && line.length <= 90 && !/^[-•▪◦]/.test(line));
+      markers.push({ title: `Slide ${index + 1}${titleLine ? ` — ${cleanHeadingTitle(titleLine)}` : ''}`, index: offset });
+      offset += chunk.length + 1;
+    });
+  }
+  const sections = markers.length ? markers.slice(0, 60) : preferredSections.map((title) => ({ title, index: source.indexOf(title) })).filter((item) => item.index >= 0);
+  return sections.map((item, index) => {
+    const next = sections[index + 1]?.index ?? source.length;
+    return { title: item.title, body: source.slice(item.index, next).trim().slice(0, 14000) };
+  });
+}
+
+function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
+  if (normalizeSourceMode(sourceMode) === 'slide-deck') return extractSlideBlocks(text, preferredSections);
+  return extractSectionBlocks(text, preferredSections);
 }
 
 function sectionNumberParts(title) {
@@ -376,10 +478,36 @@ function detectConcepts(text) {
     ['one-step', 'one-step inference'],
     ['FID', 'FID evaluation'],
     ['ImageNet', 'ImageNet experiment setup'],
-    ['robotic', 'robotic control experiment']
+    ['robotic', 'robotic control experiment'],
+    ['causal inference', 'causal inference'],
+    ['causal', 'causal reasoning'],
+    ['counterfactual', 'counterfactual reasoning'],
+    ['confound', 'confounding'],
+    ['intervention', 'intervention'],
+    ['do-calculus', 'do-calculus'],
+    ['structural causal model', 'structural causal model'],
+    ['SCM', 'structural causal model'],
+    ['DAG', 'directed acyclic graph'],
+    ['potential outcome', 'potential outcomes'],
+    ['OOD', 'out-of-distribution generalization'],
+    ['out-of-distribution', 'out-of-distribution generalization'],
+    ['transformer', 'Transformer sequence model'],
+    ['attention', 'attention mechanism'],
+    ['decision transformer', 'Decision Transformer'],
+    ['imitation learning', 'imitation learning'],
+    ['reinforcement learning', 'reinforcement learning'],
+    ['foundation model', 'foundation model'],
+    ['diffusion policy', 'diffusion policy'],
+    ['ALOHA', 'ALOHA robotic imitation system']
   ];
   const lower = String(text || '').toLowerCase();
   return unique(concepts.filter(([needle]) => lower.includes(needle.toLowerCase())).map(([, label]) => label)).slice(0, 8);
+}
+
+function detectDefinitions(text) {
+  return unique([...String(text || '').matchAll(/\b(?:Definition|Def\.|Assumption|Example|Exercise|Theorem|Lemma|Proposition)\s+([0-9.]+)?\s*([^\n.]{0,80})/gi)]
+    .map((match) => `${match[0].replace(/\s+/g, ' ').trim()}`))
+    .slice(0, 10);
 }
 
 function isVisualRepairRequest(text) {
@@ -439,7 +567,49 @@ function equationLabel(number, body) {
   return `Explain Eq. (${number}) symbol by symbol`;
 }
 
-function actionProfileForSection(section, body) {
+function lectureNoteActionProfile(section, body) {
+  const title = String(section || 'this lecture-note section');
+  const equations = detectEquationNumbers(body);
+  const concepts = detectConcepts(body);
+  const definitions = detectDefinitions(body);
+  const actions = [];
+  actions.push(`Build the concept ladder for ${title}`);
+  for (const concept of concepts.slice(0, 4)) actions.push(`Explain ${concept} from first principles`);
+  for (const item of definitions.slice(0, 3)) actions.push(`Walk through ${item} and why it is needed`);
+  for (const number of equations.slice(0, 5)) actions.push(equationLabel(number, body));
+  if (/example|worked example/i.test(body)) actions.push(`Work through the example in ${title} step by step`);
+  if (/exercise|problem/i.test(body)) actions.push(`Turn the exercise in ${title} into a guided solution path`);
+  if (/proof|lemma|theorem|proposition/i.test(body)) actions.push(`Trace the proof logic in ${title}`);
+  actions.push(...visualRepairActions(title, body));
+  actions.push(`Run a readiness checkpoint for ${title}`);
+  actions.push(`Ask anything about ${title}`);
+  actions.push(`Chat about this section`);
+  return unique(actions).slice(0, 12);
+}
+
+function slideDeckActionProfile(section, body) {
+  const title = String(section || 'this slide');
+  const equations = detectEquationNumbers(body);
+  const concepts = detectConcepts(body);
+  const citations = detectCitations(body);
+  const actions = [];
+  actions.push(`Explain ${title} as if the lecturer paused here`);
+  actions.push(`Reconstruct the missing narration for ${title}`);
+  for (const concept of concepts.slice(0, 4)) actions.push(`Explain slide concept: ${concept}`);
+  for (const number of equations.slice(0, 4)) actions.push(equationLabel(number, body));
+  if (/figure|diagram|architecture|pipeline|model|image|visual|robot|trajectory/i.test(body)) actions.push(`Explain every label/arrow/visual element on ${title}`);
+  if (citations.length) actions.push(`Explain why ${citations[0]} appears on this slide`);
+  actions.push(`Connect ${title} to the previous and next slide`);
+  actions.push(...visualRepairActions(title, body));
+  actions.push(`Ask anything about ${title}`);
+  actions.push(`Chat about this slide`);
+  return unique(actions).slice(0, 12);
+}
+
+function actionProfileForSection(section, body, sourceMode = 'paper') {
+  const normalizedMode = normalizeSourceMode(sourceMode);
+  if (normalizedMode === 'lecture-note') return lectureNoteActionProfile(section, body);
+  if (normalizedMode === 'slide-deck') return slideDeckActionProfile(section, body);
   const title = String(section || '');
   const lowerTitle = title.toLowerCase();
   const equations = detectEquationNumbers(body);
@@ -504,8 +674,14 @@ function analyzePaper(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const text = readPaperText(args);
   if (!text.trim()) throw new Error('analyze requires --paper-text-file, --paper-text, --section-file, or --section-text');
-  const blocks = extractSectionBlocks(text, state.paperSections || []);
-  if (!blocks.length) throw new Error('could not detect paper sections from text');
+  const sourceMode = detectSourceMode(text, args, state);
+  state.sourceMode = sourceMode;
+  state.readingPath = readingPathForMode(sourceMode).map(([key, label], index) => {
+    const existing = state.readingPath?.find((item) => item.key === key);
+    return { key, label, status: existing?.status || (index === 0 ? 'current' : 'pending') };
+  });
+  const blocks = extractSourceBlocks(text, state.paperSections || [], sourceMode);
+  if (!blocks.length) throw new Error(`could not detect ${sourceModeNoun(sourceMode)} sections from text`);
   state.paperSections = blocks.map((block) => block.title);
   state.sectionActions = {};
   state.sectionInsights = {};
@@ -514,7 +690,7 @@ function analyzePaper(args) {
     const equations = detectEquationNumbers(block.body);
     const citations = detectCitations(block.body);
     const concepts = detectConcepts(block.body);
-    state.sectionActions[key] = actionProfileForSection(block.title, block.body);
+    state.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
     state.sectionInsights[key] = {
       equations,
       citations,
@@ -526,8 +702,8 @@ function analyzePaper(args) {
   state.currentMode = '';
   state.detectedItems = [];
   state.nextChoices = state.paperSections;
-  state.currentLocation = 'Paper section navigator';
-  state.currentFocus = 'Arrow-key TUI ready. Choose a section; explanations render only in HTML.';
+  state.currentLocation = `${sourceModeLabel(sourceMode)} section navigator`;
+  state.currentFocus = `Arrow-key TUI ready. Choose a ${sourceModeNoun(sourceMode)} section; explanations render only in HTML.`;
   state.updatedAt = now();
   writeJson(statePath(slug), state);
   renderHtml(slug);
@@ -541,9 +717,10 @@ function setSections(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const sections = splitChoices(args.sections || readTextArg(args));
   if (!sections.length) throw new Error('sections requires --sections "A|B|C" or --text-file');
+  if (args.mode || args['source-mode']) state.sourceMode = normalizeSourceMode(args.mode || args['source-mode'], state.sourceMode || 'paper');
   state.paperSections = sections;
-  state.currentLocation = 'Paper section navigator';
-  state.currentFocus = 'Choose a paper section; explanations render only in HTML.';
+  state.currentLocation = `${sourceModeLabel(state.sourceMode)} section navigator`;
+  state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} section; explanations render only in HTML.`;
   state.currentSection = '';
   state.currentMode = '';
   state.detectedItems = [];
@@ -1209,7 +1386,7 @@ function bodyWithoutFigureExplanation(markdown) {
 
 function isStartHereLeadHeading(title) {
   const normalized = normalizeHeading(title);
-  return /^(one[-\s]?sentence\s+paper\s+model|one[-\s]?sentence\s+summary|what\s+this\s+paper\s+does|paper\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
+  return /^(one[-\s]?sentence\s+(paper\s+)?model|one[-\s]?sentence\s+summary|what\s+this\s+(paper|source|note|deck)\s+does|(paper|source|note|deck)\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
     || /^(한\s*문장\s*(논문\s*)?(요약|모델)|이\s*논문이\s*하는\s*일)$/.test(normalized);
 }
 
@@ -1426,14 +1603,15 @@ function trim(value, width = 62) {
 function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: [] })) {
   const width = 74;
   console.log(`╭─ PaperMentor Navigator ${line(width - 23)}╮`);
-  console.log(`│ Paper: ${trim(state.title, width - 10).padEnd(width - 8)} │`);
+  console.log(`│ Source: ${trim(state.title, width - 11).padEnd(width - 9)} │`);
+  console.log(`│ Source mode: ${trim(sourceModeLabel(state.sourceMode), width - 17).padEnd(width - 15)} │`);
   console.log(`│ View: ${trim(state.renderedView, width - 9).padEnd(width - 7)} │`);
   if (state.currentSection) console.log(`│ Section: ${trim(state.currentSection, width - 12).padEnd(width - 10)} │`);
   if (state.currentMode) console.log(`│ Mode: ${trim(state.currentMode, width - 9).padEnd(width - 7)} │`);
   console.log(`╰${line(width)}╯`);
   console.log('\nHTML first: explanations are written to index.html. The CLI is only for navigation, choices, and questions.');
   if ((state.paperSections || []).length && !state.currentSection) {
-    console.log('\nPaper sections');
+    console.log(`\n${sourceModeLabel(state.sourceMode)} sections`);
     (state.paperSections || []).forEach((section, index) => console.log(`  [${index + 1}] ${section}`));
   } else if (state.currentSection && !state.currentMode) {
     console.log(`\nSelected section: ${state.currentSection}`);
@@ -1482,7 +1660,7 @@ function boxLine(content = '', width = 84, color = ansi.cyan) {
 }
 
 function currentMenuLabel(state) {
-  if ((state.paperSections || []).length && !state.currentSection) return 'Paper sections';
+  if ((state.paperSections || []).length && !state.currentSection) return `${sourceModeLabel(state.sourceMode)} sections`;
   if (state.currentSection && !state.currentMode) return 'Section actions';
   return 'Choose next';
 }
@@ -1497,16 +1675,16 @@ function renderTuiScreen(state, selected = 0) {
   const width = 86;
   const items = currentMenuItems(state);
   const label = currentMenuLabel(state);
-  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : 'choose a paper section';
+  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : `choose a ${sourceModeNoun(state.sourceMode)} section`;
   const top = `${ansi.cyan}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.cyan}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.magenta}PaperMentor Live${ansi.reset} ${ansi.dim}HTML-first research paper navigator${ansi.reset}`, width),
+    boxLine(`${ansi.bold}${ansi.magenta}PaperMentor Live${ansi.reset} ${ansi.dim}HTML-first ${sourceModeNoun(state.sourceMode)} navigator${ansi.reset}`, width),
     boxLine(`${ansi.bold}${trim(state.title, 68)}${ansi.reset}`, width),
     boxLine(`${ansi.dim}View:${ansi.reset} ${ansi.green}${state.renderedView}${ansi.reset}`, width),
     boxLine(`${ansi.dim}Focus:${ansi.reset} ${trim(focus, 68)}`, width),
-    boxLine(`${ansi.dim}Blocks in HTML:${ansi.reset} ${cards.cards?.length || 0}  ${ansi.dim}Mode:${ansi.reset} explanations never print in CLI`, width),
+    boxLine(`${ansi.dim}Blocks in HTML:${ansi.reset} ${cards.cards?.length || 0}  ${ansi.dim}Source mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}  ${ansi.dim}CLI:${ansi.reset} navigation only`, width),
     `${ansi.cyan}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset} ${ansi.dim}(↑/↓ select · Enter choose · / ask anything · q quit)${ansi.reset}`, width)
   ];
@@ -1603,7 +1781,7 @@ function runTui(args) {
 }
 
 function usage() {
-  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs analyze --session <slug> --paper-text-file paper.txt\n  node scripts/papermentor-session.mjs tui --session <slug>\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
+    console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs analyze --session <slug> --mode auto --paper-text-file source.txt\n  node scripts/papermentor-session.mjs tui --session <slug>\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
   node scripts/papermentor-session.mjs section --session <slug> --index 2
   node scripts/papermentor-session.mjs mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
   node scripts/papermentor-session.mjs diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
@@ -1618,7 +1796,9 @@ try {
     const slug = args.slug || slugify(title);
     const source = args.source || '';
     const sections = splitChoices(args.sections || '');
-    const { state, cards } = ensureSession({ title, source, slug, sections });
+    const modeHint = argsModeFromSource(`${source} ${title}`);
+    const sourceMode = normalizeSourceMode(args.mode || args['source-mode'] || args.sourceMode || modeHint, modeHint);
+    const { state, cards } = ensureSession({ title, source, slug, sections, sourceMode });
     const hasStartHereBody = Boolean(args.body || args['body-file'] || args['figure-file'] || args['figure-url'] || args.figure || args['image-file'] || args.image || args.latex);
     if (hasStartHereBody) {
       addCard({

@@ -1,6 +1,6 @@
 ---
 name: papermentor
-description: Interactive research-paper understanding tutor AI Agent Skill. Use when users need to understand a paper deeply, trace definitions/lemmas/theorems/equations/assumptions, explain mathematical symbols and derivations in LaTeX, handle mid-reading interruptions, resolve conceptual confusion with recursive why, support Korean/English explanations, plan conceptual visualizations, or extract a final insight. Do not use for paper summarization, reviewer simulation, quiz generation, or blog export.
+description: Interactive research-paper, lecture-note, and slide-deck understanding tutor AI Agent Skill. Use when users need to understand a paper deeply, trace definitions/lemmas/theorems/equations/assumptions, explain mathematical symbols and derivations in LaTeX, handle mid-reading interruptions, resolve conceptual confusion with recursive why, support Korean/English explanations, plan conceptual visualizations, or extract a final insight. Do not use for paper summarization, reviewer simulation, quiz generation, or blog export.
 ---
 
 # PaperMentor
@@ -18,6 +18,17 @@ The user understands a paper only when they can reconstruct:
 - the dependency chain between definitions, lemmas, theorems, methods, and claims;
 - the final one-sentence insight.
 
+## Source modes
+
+PaperMentor supports three source modes:
+
+- `paper`: research articles and preprints. Preserve the paper workflow: map, equations, derivations, dependencies, confusion repair, final insight.
+- `lecture-note`: instructional notes and technical chapters. Prioritize concept ladders, definitions, worked examples, exercises, proofs, derivations, and readiness checks.
+- `slide-deck`: PDF/PPT slide decks. Treat slides as navigable sections, reconstruct missing lecturer narration, explain visual labels/arrows, connect adjacent slides, and extract equations/notation on the slide.
+
+A syllabus or lecture landing page is only a source index. Ask the user to pick a concrete paper, note, or slide deck from it, then start the appropriate mode. Do not invent another mode.
+If a selected slide deck is protected or text extraction fails, keep `slide-deck` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
+
 ## Workflow
 
 1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, the actual representative method figure, proofs, experiments.
@@ -33,9 +44,9 @@ The user understands a paper only when they can reconstruct:
 
 ### HTML-first reading room rule
 
-On paper start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the paper is doing, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections. The CLI must not contain the explanation body; it only shows the HTML path, detected paper sections, numbered choices, and a place for user questions.
+On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the paper is doing, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections. The CLI must not contain the explanation body; it only shows the HTML path, detected paper sections, numbered choices, and a place for user questions.
 
-The CLI interaction is a branching section navigator. Prefer the arrow-key TUI (`scripts/papermentor-session.mjs tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the paper table of contents or section structure, then analyze section text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer.
+The CLI interaction is a branching section/slide navigator. Prefer the arrow-key TUI (`scripts/papermentor-session.mjs tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer.
 
 ### Representative figure rule
 
