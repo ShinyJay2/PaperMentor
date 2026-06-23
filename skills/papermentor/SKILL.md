@@ -19,6 +19,10 @@ Debug the user's understanding of a research paper. Do not provide a high-level 
 
 
 
+### Main method figure rule
+
+In the first paper map, include the actual representative method/system/algorithm/architecture figure image from the paper when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Attach it with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`, then explain the components, flow, what to observe, and supported equations/claims directly under the image.
+
 ### HTML block title rule
 
 Use semantic block titles. Avoid bare titles like `Equation (6)` when the equation role is known; prefer `Training objective — Eq. (6)`, `Risk decomposition — Eq. (3)`, or `Update rule — Eq. (12)`. Preserve the original equation number after an em dash so the reader can find it in the paper.
@@ -33,7 +37,7 @@ When starting a paper:
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start with `Map the paper`, including important method/system/algorithm figures when present, including components, flow, what to observe, and supported equations/claims, then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start with `Map the paper`, including the actual main method/system/algorithm figure image when present, with components, flow, what to observe, and supported equations/claims explained underneath, then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 

@@ -127,7 +127,7 @@ PaperMentor is guided but interruptible. For each paper, it keeps one local HTML
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first paper-map block should include the actual main method figure image when the paper has one. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
 
 ```text
 Reading Path
@@ -164,7 +164,7 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 
 ## Command intents
 
-- `scan` — produce the paper map before details, including important method/system/algorithm figures when present.
+- `scan` — produce the paper map before details, including the actual main method/system/algorithm figure image when present, with explanation underneath.
 - `equation` — explain every symbol and operator after showing the equation.
 - `derivation` — trace each transition without skipped algebra.
 - `dependency` — reveal what a claim depends on and what depends on it.

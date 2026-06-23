@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync } from 'node:fs';
+import { basename, extname, join, resolve } from 'node:path';
 
 const root = process.cwd();
 const baseDir = join(root, '.papermentor', 'sessions');
@@ -44,6 +44,7 @@ function statePath(slug) { return join(sessionDir(slug), 'state.json'); }
 function cardsPath(slug) { return join(sessionDir(slug), 'cards.json'); }
 function notesPath(slug) { return join(sessionDir(slug), 'notes.md'); }
 function indexPath(slug) { return join(sessionDir(slug), 'index.html'); }
+function assetDir(slug) { return join(sessionDir(slug), 'assets'); }
 
 function readJson(path, fallback) {
   if (!existsSync(path)) return fallback;
@@ -123,6 +124,34 @@ function splitChoices(value) {
   return String(value).split('|').map((x) => x.trim()).filter(Boolean);
 }
 
+
+function isUrl(value) {
+  return /^https?:\/\//i.test(String(value || '')) || /^data:/i.test(String(value || ''));
+}
+
+function prepareFigure(slug, cardId, args) {
+  const source = args['figure-file'] || args.figure || args['figure-url'] || args['image-file'] || args.image;
+  if (!source) return null;
+
+  let src = String(source);
+  if (!isUrl(src)) {
+    const absoluteSource = resolve(src);
+    if (!existsSync(absoluteSource)) throw new Error(`figure file not found: ${src}`);
+    mkdirSync(assetDir(slug), { recursive: true });
+    const extension = extname(absoluteSource) || '.png';
+    const safeBase = slugify(`${cardId}-${basename(absoluteSource, extension)}`) || slugify(cardId);
+    const fileName = `${safeBase}${extension.toLowerCase()}`;
+    copyFileSync(absoluteSource, join(assetDir(slug), fileName));
+    src = `assets/${fileName}`;
+  }
+
+  return {
+    src,
+    alt: args['figure-alt'] || args.alt || `${args.title || 'Paper'} figure`,
+    caption: args['figure-caption'] || args.caption || ''
+  };
+}
+
 function addCard(args) {
   const slug = args.session || args.slug;
   if (!slug) throw new Error('card requires --session <slug>');
@@ -130,12 +159,14 @@ function addCard(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const cards = readJson(cardsPath(slug), { schema: 'papermentor.cards.v1', cards: [] });
   const type = args.type || 'note';
+  const cardId = args.id || `${type}-${String(cards.cards.length + 1).padStart(3, '0')}`;
   const card = {
-    id: args.id || `${type}-${String(cards.cards.length + 1).padStart(3, '0')}`,
+    id: cardId,
     type,
     title: args.title || type,
     location: args.location || state.currentLocation,
     latex: args.latex || '',
+    figure: prepareFigure(slug, cardId, args),
     body: readBody(args),
     choices: splitChoices(args.choices),
     createdAt: now()
@@ -151,7 +182,21 @@ function addCard(args) {
   state.updatedAt = now();
   writeJson(cardsPath(slug), cards);
   writeJson(statePath(slug), state);
-  appendFileSync(notesPath(slug), `\n## ${card.title}\n\nLocation: ${card.location}\n\n${card.latex ? `$$\n${card.latex}\n$$\n\n` : ''}${card.body}\n`);
+  appendFileSync(notesPath(slug), `
+## ${card.title}
+
+Location: ${card.location}
+
+${card.latex ? `$$
+${card.latex}
+$$
+
+` : ''}${card.figure ? `![${card.figure.alt}](${card.figure.src})
+
+${card.figure.caption ? `${card.figure.caption}
+
+` : ''}` : ''}${card.body}
+`);
   renderHtml(slug);
   printConsole(state, cards);
 }
@@ -193,14 +238,14 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
   --accent:#405f9f;
   --accent-soft:#eef2f8;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --serif: "Times New Roman", Times, Charter, Georgia, serif;
+  --text: Pretendard, "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
 body {
   margin:0;
   color:var(--ink);
-  font-family:var(--serif);
+  font-family:var(--text);
   background:
     linear-gradient(90deg, rgba(79,60,32,.035) 1px, transparent 1px),
     linear-gradient(180deg, rgba(79,60,32,.035) 1px, transparent 1px),
@@ -225,11 +270,11 @@ body {
 .paper-title h1 {
   margin:0;
   color:var(--ink);
-  font-family:var(--serif);
-  font-size:clamp(32px, 5vw, 52px);
+  font-family:var(--text);
+  font-size:clamp(31px, 4.7vw, 50px);
   line-height:1.04;
-  font-weight:700;
-  letter-spacing:-.025em;
+  font-weight:760;
+  letter-spacing:-.045em;
 }
 .paper-source,
 .paper-meta {
@@ -273,10 +318,10 @@ body {
 .block h2,
 .block h3 {
   color:var(--ink);
-  font-family:var(--serif);
-  font-weight:700;
+  font-family:var(--text);
+  font-weight:740;
   line-height:1.12;
-  letter-spacing:-.015em;
+  letter-spacing:-.035em;
 }
 .block-title {
   margin:0;
@@ -303,6 +348,29 @@ body {
   letter-spacing:.04em;
   text-transform:uppercase;
 }
+
+.paper-figure {
+  position:relative;
+  z-index:1;
+  margin:18px auto 26px;
+  max-width:760px;
+  border:1px solid #d8cebd;
+  background:#fbf7ef;
+  padding:12px;
+}
+.paper-figure img {
+  display:block;
+  width:100%;
+  height:auto;
+  object-fit:contain;
+}
+.paper-figure figcaption {
+  margin-top:9px;
+  color:var(--muted);
+  font-size:13px;
+  line-height:1.45;
+}
+
 .latex {
   position:relative;
   z-index:1;
@@ -319,8 +387,8 @@ body {
   max-width:760px;
   margin:0 auto;
   color:#1d1d1d;
-  font-size:17px;
-  line-height:1.62;
+  font-size:16px;
+  line-height:1.68;
 }
 .body h1 { font-size:28px; margin:26px 0 12px; }
 .body h2 { font-size:24px; margin:26px 0 12px; }
@@ -349,7 +417,7 @@ body {
   .block:after { inset:7px; }
   .block-head { grid-template-columns:1fr; gap:10px; }
   .block-title { font-size:26px; }
-  .body { font-size:16px; }
+  .body { font-size:15px; }
 }
 </style>
 </head>
@@ -363,7 +431,7 @@ body {
   <section class="blocks">
     ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
-$$</div>` : ''}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body || ''))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
+$$</div>` : ''}${renderFigure(card.figure)}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body || ''))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
 </body>
@@ -371,6 +439,12 @@ $$</div>` : ''}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body 
   writeFileSync(indexPath(slug), html);
 }
 
+
+function renderFigure(figure) {
+  if (!figure || !figure.src) return '';
+  const caption = figure.caption ? `<figcaption>${escapeHtml(figure.caption)}</figcaption>` : '';
+  return `<figure class="paper-figure"><img src="${escapeHtml(figure.src)}" alt="${escapeHtml(figure.alt || 'Paper figure')}" loading="lazy" />${caption}</figure>`;
+}
 
 function displayCardTitle(card) {
   const title = String(card?.title || card?.type || 'Paper block').trim();
@@ -442,7 +516,7 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
 }
 
 function usage() {
-  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>]\n  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
+  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>]\n  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
 }
 
 const args = parseArgs(process.argv.slice(2));

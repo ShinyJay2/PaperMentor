@@ -61,7 +61,8 @@ Required output:
 - major definitions;
 - lemmas/theorems/claims;
 - major equations;
-- figure map for important method/system/algorithm/architecture figures;
+- actual main method figure image for the representative method/system/algorithm/architecture figure, attached with `--figure-file` or `--figure-url`;
+- explanation under the figure: components, flow/sequence, what to observe, and supported equations/claims;
 - method pipeline;
 - experiment logic if present;
 - suggested reading order;

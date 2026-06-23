@@ -20,7 +20,7 @@ The user understands a paper only when they can reconstruct:
 
 ## Workflow
 
-1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, important figures/diagrams, proofs, experiments.
+1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, the actual main method figure/diagram, proofs, experiments.
 2. Build prerequisite ladders for missing background.
 3. Explain equations atomically before interpreting them.
 4. Trace derivations one transition at a time.
@@ -30,6 +30,10 @@ The user understands a paper only when they can reconstruct:
 8. Extract the final insight only after dependencies and math are clear.
 
 
+
+### Main method figure rule
+
+In the first paper map, include the actual representative method/system/algorithm/architecture figure image from the paper when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the main figure unless no method figure exists. Attach it with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`, then explain the components, flow, what to observe, and supported equations/claims directly under the image.
 
 ### HTML block title rule
 

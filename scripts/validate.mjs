@@ -73,7 +73,7 @@ for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'p
 
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md', 'tests/figure_explanation_checklist.md']) {
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
-  for (const phrase of ['figure', 'method', 'algorithm', 'what to observe']) {
+  for (const phrase of ['actual', 'figure', 'method', 'algorithm', 'what to observe']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
   }
 }
@@ -145,12 +145,14 @@ function validateInstalledArtifact() {
 function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
+    const figurePath = join(temp, 'main-method-figure.svg');
     const mapPath = join(temp, 'map.md');
     const equationPath = join(temp, 'equation.md');
-    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure map\n\n- Figure / location: Figure 1.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220"><rect width="640" height="220" fill="#fbf7ef"/><rect x="42" y="78" width="120" height="64" fill="#eef2f8" stroke="#405f9f"/><rect x="260" y="78" width="120" height="64" fill="#fff" stroke="#405f9f"/><rect x="478" y="78" width="120" height="64" fill="#eef2f8" stroke="#405f9f"/><path d="M172 110h76M390 110h76" stroke="#405f9f" stroke-width="4" marker-end="url(#a)"/><defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#405f9f"/></marker></defs><text x="102" y="116" text-anchor="middle" font-family="Arial" font-size="18">Noise</text><text x="320" y="116" text-anchor="middle" font-family="Arial" font-size="18">Generator</text><text x="538" y="116" text-anchor="middle" font-family="Arial" font-size="18">Drift target</text></svg>');
+    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Main method figure\n\n- Figure / location: Figure 1.\n- Why this is the main method figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Main method figure from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
@@ -158,17 +160,23 @@ function validateSessionHelper() {
     const htmlFilesAfterFirst = readdirSync(dir).filter((name) => name.endsWith('.html'));
     if (htmlFilesAfterFirst.length !== 1 || htmlFilesAfterFirst[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFilesAfterFirst.join(',')}`);
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
+    let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
-    if (!html.includes('Figure map')) failures.push('session paper map should render figure explanations');
+    if (!html.includes('Main method figure')) failures.push('session paper map should explain the main method figure');
+    if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/') || !html.includes('Main method figure from the paper.')) failures.push('session paper map should render the actual method figure image and caption');
+    if (!cardData.cards?.[0]?.figure?.src?.startsWith('assets/')) failures.push('session card should persist copied figure asset metadata');
+    if (!existsSync(join(dir, cardData.cards?.[0]?.figure?.src || 'missing'))) failures.push('session helper should copy figure file into session assets');
+    const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
+    if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\\mathcal{L}=\\mathbb{E}\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should keep exactly one HTML file, got ${htmlFiles.join(',')}`);
     html = readFileSync(join(dir, 'index.html'), 'utf8');
-    const cardData = readJson(join(dir, 'cards.json'), { cards: [] });
+    cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((cardData.cards || []).length !== 2) failures.push('session helper should persist two cards after second card');
     if ((html.match(/class="block"/g) || []).length !== 2) failures.push('session helper should render two blocks after second card');
-    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'class="paper-title"', 'class="block"', 'data-index="1"', 'data-index="2"']) {
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
     for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state']) {
