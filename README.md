@@ -115,19 +115,19 @@ Claude Code: ~/.claude/skills/papermentor
 ---
 
 
-## Interactive reading dashboard
+## Append-only reading document
 
-PaperMentor is guided but interruptible. For each paper, it keeps one local dashboard instead of creating a pile of HTML files:
+PaperMentor is guided but interruptible. For each paper, it keeps one local HTML document that grows block by block instead of creating a dashboard or a pile of separate HTML files:
 
 ```text
 .papermentor/sessions/<paper-slug>/
-  index.html      # rendered equations and cards
-  state.json      # Reading Path, current location, choices
+  index.html      # rendered paper blocks, appended one section at a time
+  state.json      # current location, Reading Path, choices
   cards.json      # paper map, equation, derivation, dependency cards
   notes.md        # portable Markdown notes
 ```
 
-The terminal stays lightweight and choice-driven:
+The browser view is intentionally minimal: no left panel, no product header, no app chrome — just rendered blocks. The terminal stays lightweight and choice-driven:
 
 ```text
 Reading Path

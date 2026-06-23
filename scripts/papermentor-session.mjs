@@ -186,275 +186,39 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 :root {
   color-scheme: light;
   --field:#f4f1e8;
-  --paper:#fffdf7;
-  --paper2:#fbf8ef;
-  --ink:#1b1b1b;
-  --muted:#6a6a6a;
-  --faint:#e7dfd0;
-  --line:#bdb5a5;
-  --rule:#222222;
+  --paper:#fffdf8;
+  --ink:#191919;
+  --muted:#6f6a60;
+  --line:#c9bfae;
+  --rule:#222;
   --accent:#2f54b8;
-  --accent2:#5b21ff;
-  --accentSoft:#eef2ff;
-  --green:#18805b;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-  --sans: "Helvetica Neue", Arial, ui-sans-serif, system-ui, sans-serif;
   --serif: "Times New Roman", Times, Charter, Georgia, serif;
 }
-* { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+* { box-sizing:border-box; }
+html { scroll-behavior:smooth; }
 body {
   margin:0;
   color:var(--ink);
   font-family:var(--serif);
   background:
-    linear-gradient(90deg, rgba(47,84,184,.045) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(47,84,184,.045) 1px, transparent 1px),
-    radial-gradient(circle at 12% 0%, rgba(47,84,184,.06), transparent 30%),
+    linear-gradient(90deg, rgba(47,84,184,.04) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(47,84,184,.04) 1px, transparent 1px),
     var(--field);
-  background-size: 28px 28px, 28px 28px, auto, auto;
+  background-size:28px 28px;
 }
-body:before {
-  content:'';
-  position:fixed;
-  inset:14px;
-  border:1px solid rgba(30,30,30,.16);
-  pointer-events:none;
-  z-index:20;
-}
-.shell { max-width: 1260px; margin: 0 auto; padding: 32px 28px 72px; }
-.topbar {
-  display:grid;
-  grid-template-columns: 1fr auto;
-  align-items:center;
-  gap:20px;
-  border:1px solid var(--line);
-  background:rgba(255,253,247,.86);
-  padding:14px 18px;
-  margin-bottom:18px;
-}
-.brand { display:flex; align-items:center; gap:14px; }
-.logo {
-  width:38px; height:38px;
-  display:grid; place-items:center;
-  border:1px solid var(--rule);
-  background:var(--paper);
-  color:var(--accent);
-  font-family:var(--mono);
-  font-weight:900;
-  font-size:13px;
-}
-.brand h1 { margin:0; font-family:var(--sans); font-size:22px; letter-spacing:-.035em; }
-.brand p { margin:1px 0 0; color:var(--muted); font-family:var(--mono); font-size:10px; letter-spacing:.06em; }
-.open-pill {
-  border:1px dashed var(--line);
-  color:#333;
-  background:var(--paper2);
-  padding:8px 10px;
-  font-family:var(--mono);
-  font-size:10px;
-  max-width:520px;
-  overflow:hidden;
-  text-overflow:ellipsis;
-  white-space:nowrap;
-}
-.workspace {
-  display:grid;
-  grid-template-columns: 300px minmax(0, 1fr);
-  gap:22px;
-  align-items:start;
-}
-.sidebar { position:sticky; top:28px; display:grid; gap:14px; font-family:var(--sans); }
-.panel {
-  background:rgba(255,253,247,.90);
-  border:1px solid var(--line);
-}
-.paper-title { padding:16px; }
-.kicker {
-  color:var(--accent);
-  text-transform:uppercase;
-  letter-spacing:.13em;
-  font-size:10px;
-  font-family:var(--mono);
-  font-weight:700;
-}
-.paper-title h2 {
-  margin:9px 0 14px;
-  font-family:var(--serif);
-  font-size:21px;
-  line-height:1.08;
-  font-weight:700;
-  letter-spacing:-.015em;
-}
-.meta { display:grid; grid-template-columns:1fr; gap:6px; }
-.badge {
-  border:1px dashed var(--line);
-  padding:6px 8px;
-  color:#333;
-  font-family:var(--mono);
-  font-size:10px;
-  background:rgba(251,248,239,.72);
-}
-.panel-title {
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  border-bottom:1px solid var(--line);
-  padding:10px 12px;
-  background:rgba(246,241,230,.86);
-}
-.panel-title strong { font-size:11px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.08em; }
-.hint { color:var(--muted); font-size:10px; font-family:var(--mono); }
-.path { list-style:none; padding:10px; margin:0; display:grid; gap:7px; }
-.path li {
-  display:grid;
-  grid-template-columns:24px 1fr;
-  align-items:center;
-  gap:9px;
-  min-height:37px;
-  padding:7px 8px;
-  border:1px solid rgba(80,80,80,.28);
-  background:rgba(255,253,247,.74);
-  color:#222;
-  font-size:13px;
-}
-.path .icon {
-  width:20px; height:20px;
-  display:grid;
-  place-items:center;
-  border:1px solid var(--line);
-  font-family:var(--mono);
-  font-weight:800;
-  font-size:12px;
-  background:var(--paper);
-}
-.path li.done .icon { background:var(--green); border-color:var(--green); color:white; }
-.path li.current {
-  border:1.5px solid var(--accent);
-  background:var(--accentSoft);
-}
-.path li.current .icon { background:var(--accent); border-color:var(--accent); color:white; }
-.choices { counter-reset: choice; display:grid; gap:7px; padding:10px; }
-.choice {
-  position:relative;
-  border:1px solid rgba(80,80,80,.35);
-  background:rgba(255,253,247,.82);
-  padding:9px 10px 9px 36px;
-  color:#222;
-  font-size:12px;
-  line-height:1.35;
-}
-.choice:before {
-  counter-increment: choice;
-  content:'[' counter(choice) ']';
-  position:absolute;
-  left:9px;
-  top:9px;
-  color:var(--accent);
-  font-family:var(--mono);
-  font-weight:800;
-}
-.content { min-width:0; }
-.session-head {
-  position:relative;
-  border:1px solid var(--line);
-  background:rgba(255,253,247,.94);
-  padding:38px 54px 34px;
-  margin-bottom:18px;
-  overflow:hidden;
-}
-.session-head:before {
-  content:'PaperMentor';
-  position:absolute;
-  right:24px;
-  top:18px;
-  border:1px dashed var(--line);
-  padding:6px 9px;
-  font-family:var(--mono);
-  font-size:10px;
-  color:var(--muted);
-}
-.session-head:after {
-  content:'';
-  position:absolute;
-  right:-58px;
-  bottom:-72px;
-  width:230px;
-  height:230px;
-  border:1px solid rgba(47,84,184,.20);
-  background:
-    linear-gradient(90deg, rgba(47,84,184,.07) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(47,84,184,.07) 1px, transparent 1px);
-  background-size:16px 16px;
-  transform:rotate(-8deg);
-}
-.session-head .kicker { color:var(--accent); }
-.session-head h2 {
-  position:relative;
-  z-index:1;
-  max-width:720px;
-  margin:18px auto 10px;
-  font-family:var(--serif);
-  font-size: clamp(34px, 4.3vw, 52px);
-  line-height:1.03;
-  letter-spacing:-.025em;
-  text-align:center;
-  font-weight:700;
-}
-.session-head p {
-  position:relative;
-  z-index:1;
+.page {
+  width:min(920px, calc(100% - 40px));
   margin:0 auto;
-  max-width:760px;
-  color:#333;
-  line-height:1.55;
-  font-size:15px;
-  text-align:center;
+  padding:44px 0 80px;
 }
-.session-meta {
-  position:relative;
-  z-index:1;
-  margin:0 auto;
-  max-width:760px;
-  display:flex;
-  justify-content:center;
-  gap:10px;
-  flex-wrap:wrap;
-  color:var(--muted);
-  font-family:var(--mono);
-  font-size:10px;
-  letter-spacing:.04em;
-}
-.abstract {
-  position:relative;
-  z-index:1;
-  max-width:720px;
-  margin:20px auto 0;
-  border-top:1px solid var(--rule);
-  padding-top:13px;
-  text-align:left;
-  font-size:15px;
-  line-height:1.55;
-}
-.abstract strong {
-  font-variant:small-caps;
-  letter-spacing:.06em;
-  font-size:12px;
-}
-.session-head code {
-  background:#f0eadf;
-  color:#111;
-  padding:1px 5px;
-  border:1px solid #d4cab8;
-  font-family:var(--mono);
-  font-size:.9em;
-}
-.timeline { display:grid; gap:18px; padding-bottom:20px; }
+.blocks { display:grid; gap:26px; }
 .block {
   position:relative;
   background:var(--paper);
-  color:var(--ink);
   border:1px solid var(--line);
+  padding:42px 56px 50px;
+  box-shadow:0 1px 0 rgba(0,0,0,.04);
 }
 .block:before {
   content:attr(data-index);
@@ -467,165 +231,89 @@ body:before {
   place-items:center;
   border-right:1px solid var(--line);
   border-bottom:1px solid var(--line);
-  background:#f0eadf;
+  background:#f1eadf;
   color:var(--accent);
   font-family:var(--mono);
-  font-weight:800;
-  z-index:2;
+  font-size:13px;
+  font-weight:700;
 }
-.block:after {
-  content:'';
-  position:absolute;
-  inset:0;
-  pointer-events:none;
-  background:
-    linear-gradient(90deg, rgba(47,84,184,.012) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(47,84,184,.012) 1px, transparent 1px);
-  background-size:28px 28px;
-}
-.block-inner { position:relative; z-index:1; padding:34px 54px 42px; max-width:920px; margin:0 auto; }
 .block-head {
-  display:grid;
-  grid-template-columns: 1fr auto;
-  gap:16px;
-  align-items:start;
-  padding-bottom:12px;
   border-bottom:1px solid var(--rule);
-  margin-bottom:20px;
+  padding-bottom:12px;
+  margin-bottom:22px;
 }
-.block h2 {
-  margin:0;
+.block h1,
+.block h2,
+.block h3 {
   color:var(--ink);
   font-family:var(--serif);
-  font-size:30px;
-  line-height:1.05;
-  letter-spacing:-.025em;
   font-weight:700;
-}
-.type-chip {
-  border:1px solid var(--line);
-  background:#f0eadf;
-  color:var(--accent);
-  padding:6px 8px;
-  font-size:10px;
-  white-space:nowrap;
-  font-family:var(--mono);
-  font-weight:800;
-  text-transform:uppercase;
-  letter-spacing:.05em;
-}
-.location { color:var(--muted); font-size:10px; margin-top:7px; font-family:var(--mono); text-transform:uppercase; letter-spacing:.04em; }
-.latex {
-  border:1px solid var(--line);
-  padding:18px;
-  background:#f7f1e6;
-  overflow-x:auto;
-  margin:18px 0 22px;
-  font-size:16px;
-}
-.body {
-  color:#1d1d1d;
-  line-height:1.58;
-  font-size:17px;
-  max-width:760px;
-  margin:0 auto;
-}
-.body h1,.body h2,.body h3 {
-  color:var(--ink);
-  font-family:var(--serif);
-  letter-spacing:-.02em;
   line-height:1.12;
-  font-weight:700;
+  letter-spacing:-.015em;
 }
-.body h2 { margin-top:24px; font-size:24px; }
-.body h3 { font-size:20px; }
-.body code { background:#f0eadf; border:1px solid #d4cab8; padding:1px 5px; color:#111; font-family:var(--mono); font-size:.88em; }
-.body p { margin:12px 0; }
-.body ul { padding-left:24px; }
-.body li { margin:7px 0; }
-.empty { padding:30px; color:var(--muted); }
-.footer {
-  margin-top:24px;
-  border:1px dashed var(--line);
-  background:rgba(255,253,247,.74);
-  padding:10px;
+.block-title {
+  margin:0;
+  font-size:31px;
+}
+.location {
+  margin-top:7px;
   color:var(--muted);
   font-family:var(--mono);
   font-size:10px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.latex {
+  margin:18px 0 24px;
+  padding:18px 20px;
+  overflow-x:auto;
+  border:1px solid #d8cebd;
+  background:#f8f2e8;
+  font-size:16px;
+}
+.body {
+  max-width:760px;
+  margin:0 auto;
+  color:#1d1d1d;
+  font-size:17px;
+  line-height:1.62;
+}
+.body h1 { font-size:28px; margin:26px 0 12px; }
+.body h2 { font-size:24px; margin:26px 0 12px; }
+.body h3 { font-size:20px; margin:22px 0 10px; }
+.body p { margin:12px 0; }
+.body ul { margin:12px 0; padding-left:24px; }
+.body li { margin:7px 0; }
+.body code {
+  background:#f0eadf;
+  border:1px solid #d4cab8;
+  padding:1px 5px;
+  color:#111;
+  font-family:var(--mono);
+  font-size:.88em;
+}
+.empty {
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:12px;
   text-align:center;
 }
-@media (max-width: 980px) {
-  .workspace { grid-template-columns: 1fr; }
-  .sidebar { position:static; }
-  .topbar { grid-template-columns:1fr; }
-}
 @media (max-width: 640px) {
-  body:before { inset:10px; }
-  .shell { padding:22px 18px 54px; }
-  .session-head { padding:34px 22px 28px; }
-  .session-head h2 { font-size:34px; }
-  .block-inner { padding:58px 24px 30px; }
-  .block-head { grid-template-columns:1fr; }
+  .page { width:min(100% - 24px, 920px); padding:24px 0 52px; }
+  .block { padding:54px 24px 32px; }
+  .block-title { font-size:26px; }
+  .body { font-size:16px; }
 }
 </style>
 </head>
 <body>
-<div class="shell">
-  <header class="topbar">
-    <div class="brand">
-      <div class="logo">PM</div>
-      <div>
-        <h1>PaperMentor</h1>
-        <p>Debug understanding, one paper block at a time.</p>
-      </div>
-    </div>
-    <div class="open-pill">Rendered view · ${escapeHtml(state.renderedView || 'index.html')}</div>
-  </header>
-
-  <main class="workspace">
-    <aside class="sidebar">
-      <section class="panel paper-title">
-        <div class="kicker">Current paper</div>
-        <h2>${escapeHtml(state.title || 'Paper reading session')}</h2>
-        <div class="meta">
-          <span class="badge">${escapeHtml(state.currentLocation || 'Location not set')}</span>
-          <span class="badge">${escapeHtml(state.currentFocus || 'Focus not set')}</span>
-        </div>
-      </section>
-
-      <section class="panel">
-        <div class="panel-title"><strong>Reading Path</strong><span class="hint">guided, interruptible</span></div>
-        <ul class="path">
-          ${(state.readingPath || []).map((item) => `<li class="${statusClass(item.status)}"><span class="icon">${statusIcon(item.status)}</span><span>${escapeHtml(item.label)}</span></li>`).join('\n')}
-        </ul>
-      </section>
-
-      <section class="panel">
-        <div class="panel-title"><strong>Choose next</strong><span class="hint">type a number</span></div>
-        <div class="choices">${(state.nextChoices || []).map((choice) => `<div class="choice">${escapeHtml(choice)}</div>`).join('\n')}</div>
-      </section>
-    </aside>
-
-    <section class="content">
-      <div class="session-head">
-        <div class="kicker">Reading session</div>
-        <h2>${escapeHtml(state.title || 'Paper reading session')}</h2>
-        <div class="session-meta">
-          <span>${escapeHtml(state.currentLocation || 'Location not set')}</span>
-          <span>·</span>
-          <span>${escapeHtml(state.currentFocus || 'Focus not set')}</span>
-        </div>
-        <p class="abstract"><strong>Abstract.</strong> Each Reading Path action appends a new paper block below: map, equation, derivation, dependency, confusion repair, or final insight. This single <code>index.html</code> is rerendered from <code>state.json</code> and <code>cards.json</code>, so the session reads like a living annotated paper.</p>
-      </div>
-
-      <section class="timeline">
-        ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><div class="block-inner"><div class="block-head"><div><h2>${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="type-chip">${escapeHtml(card.type)}</span></div>${card.latex ? `<div class="latex">$$\n${escapeHtml(card.latex)}\n$$</div>` : ''}<div class="body">${markdownToHtml(card.body || '')}</div></div></article>`).join('\n') || '<article class="block empty" data-index="1"><h2>No blocks yet</h2><div class="body">Start by adding a paper map, equation card, derivation trace, dependency trace, or confusion repair block.</div></article>'}
-      </section>
-    </section>
-  </main>
-
-  <div class="footer">One session, one dashboard. Blocks are appended from cards.json and rendered with MathJax.</div>
-</div>
+<main class="page">
+  <section class="blocks">
+    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><h2 class="block-title">${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></header>${card.latex ? `<div class="latex">$$
+${escapeHtml(card.latex)}
+$$</div>` : ''}<div class="body">${markdownToHtml(card.body || '')}</div></article>`).join('\n') || '<article class="block empty" data-index="0">No paper blocks yet.</article>'}
+  </section>
+</main>
 <script id="papermentor-data" type="application/json">${data}</script>
 </body>
 </html>`;

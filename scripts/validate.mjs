@@ -49,7 +49,7 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'Interactive reading dashboard', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'Append-only reading document', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
@@ -143,8 +143,11 @@ function validateSessionHelper() {
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFiles.join(',')}`);
     const html = readFileSync(join(dir, 'index.html'), 'utf8');
-    for (const phrase of ['MathJax', 'Reading Path', 'Equation (6)', 'Choose next']) {
-      if (!html.includes(phrase)) failures.push(`session dashboard missing ${phrase}`);
+    for (const phrase of ['MathJax', 'Equation (6)', 'class="block"', 'data-index="1"']) {
+      if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
+    }
+    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head']) {
+      if (html.includes(phrase)) failures.push(`session block document should not render dashboard chrome: ${phrase}`);
     }
   } catch (error) {
     failures.push(`session helper smoke failed: ${error.message}`);

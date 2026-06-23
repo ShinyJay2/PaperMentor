@@ -4,11 +4,11 @@ These are command-like intents for Codex and Claude Code conversations. They def
 
 ## Interactive session contract
 
-PaperMentor uses one local reading dashboard per paper session:
+PaperMentor uses one local append-only reading document per paper session:
 
 ```text
 .papermentor/sessions/<paper-slug>/
-  index.html      # single browser-rendered dashboard
+  index.html      # single browser-rendered block document
   state.json      # current location, Reading Path, choices
   cards.json      # active cards
   notes.md        # portable Markdown notes
@@ -219,18 +219,18 @@ Required behavior:
 
 ## `/papermentor render`
 
-Purpose: render or refresh the current session dashboard.
+Purpose: render or refresh the current session block document.
 
 Required behavior:
 
 - do not create extra HTML files;
 - regenerate `.papermentor/sessions/<paper-slug>/index.html`;
-- keep LaTeX display math in card data so MathJax can render it in the dashboard;
-- print the dashboard path.
+- keep LaTeX display math in card data so MathJax can render it in the block document;
+- print the block document path.
 
 ## `/papermentor state`
 
-Purpose: show the current Reading Path, location, focus, dashboard path, and next choices without adding a new explanation.
+Purpose: show the current Reading Path, location, focus, block document path, and next choices without adding a new explanation.
 
 ## `/papermentor pause`
 

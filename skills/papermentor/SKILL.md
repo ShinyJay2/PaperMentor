@@ -20,14 +20,14 @@ Debug the user's understanding of a research paper. Do not provide a high-level 
 
 ## Interactive session policy
 
-PaperMentor is guided but interruptible. Preserve the existing math/dependency/confusion policies, but present the reading process as a session with one reusable browser-rendered dashboard and a CLI Reading Console.
+PaperMentor is guided but interruptible. Preserve the existing math/dependency/confusion policies, but present the reading process as a session with one reusable browser-rendered block document and a CLI Reading Console.
 
 When starting a paper:
 
 1. Create or update one session folder at `.papermentor/sessions/<paper-slug>/`.
-2. Keep exactly one rendered HTML dashboard per paper: `index.html`. Do not create one HTML file per equation.
+2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, and `notes.md`.
-4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the dashboard, and print the CLI console.
+4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
 5. Start with `Map the paper`, then offer numbered next actions.
 
 Use this Reading Path unless the user explicitly asks for a different route:
