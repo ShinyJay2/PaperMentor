@@ -170,16 +170,34 @@ function setPathStatus(state, key, status) {
   });
 }
 
-function inferPathKey(type) {
-  const map = {
-    'paper-map': 'map', scan: 'map', prerequisite: 'map', prerequisites: 'map', 'prerequisite-ladder': 'map', method: 'map',
-    'start-here': 'map',
-    equation: 'equations', 'equation-card': 'equations', derivation: 'derivations', 'derivation-trace': 'derivations',
-    dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies',
+function inferPathKey(type, state = {}) {
+  const normalizedType = String(type || '').toLowerCase();
+  const sourceMode = normalizeSourceMode(state.sourceMode || 'paper');
+  const shared = {
+    'paper-map': 'map', scan: 'map', method: 'map', 'start-here': 'map',
+    derivation: 'derivations', 'derivation-trace': 'derivations',
     confusion: 'confusion', why: 'confusion', 'recursive-why': 'confusion', visualization: 'confusion', visualize: 'confusion', diagram: 'confusion', 'concept-diagram': 'confusion',
     final: 'final', 'final-insight': 'final'
   };
-  return map[type] || null;
+  const byMode = {
+    paper: {
+      prerequisite: 'map', prerequisites: 'map', 'prerequisite-ladder': 'map',
+      equation: 'equations', 'equation-card': 'equations',
+      dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies'
+    },
+    'lecture-note': {
+      prerequisite: 'prerequisites', prerequisites: 'prerequisites', 'prerequisite-ladder': 'prerequisites', 'concept-ladder': 'prerequisites',
+      equation: 'notation', 'equation-card': 'notation', example: 'notation', 'example-walkthrough': 'notation',
+      dependency: 'derivations', dependencies: 'derivations', proof: 'derivations', 'proof-walkthrough': 'derivations'
+    },
+    'slide-deck': {
+      'slide-explanation': 'slides', slide: 'slides',
+      equation: 'slides', 'equation-card': 'slides',
+      narration: 'narration', 'missing-narration': 'narration',
+      transition: 'flow', 'slide-transition': 'flow', dependency: 'flow', dependencies: 'flow'
+    }
+  };
+  return byMode[sourceMode]?.[normalizedType] || shared[normalizedType] || null;
 }
 
 function readBody(args) {
@@ -994,9 +1012,10 @@ function addCard(args) {
     createdAt: now()
   };
   cards.cards.push(card);
-  const pathKey = inferPathKey(type);
+  const pathKey = inferPathKey(type, state);
   if (pathKey) setPathStatus(state, pathKey, args.status || 'done');
-  const nextKey = args.next || pathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
+  const activePathItems = readingPathForMode(state.sourceMode || 'paper');
+  const nextKey = args.next || activePathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
   if (nextKey) setPathStatus(state, nextKey, 'current');
   state.currentLocation = card.location;
   state.currentFocus = card.title;
@@ -1794,6 +1813,10 @@ function usage() {
 
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
+if (args.help || args.h || command === 'help' || command === '--help' || command === '-h') {
+  usage();
+  process.exit(0);
+}
 try {
   if (command === 'start') {
     const title = args.title || 'Paper reading session';

@@ -172,6 +172,9 @@ function validateInstalledArtifact() {
 function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
+    const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
+    if (!helpOutput.includes('Usage:')) failures.push('start --help should print usage');
+    if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const figurePath = join(temp, 'exact-pdf-crop-fixture.svg');
     const mapPath = join(temp, 'map.md');
     const equationPath = join(temp, 'equation.md');
@@ -383,6 +386,12 @@ FID and ablations evaluate sample quality.`);
     }
     const lectureTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'causal-note', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!lectureTui.includes('Source mode:') || !lectureTui.includes('Lecture note sections')) failures.push('lecture note TUI should show source mode and lecture note sections');
+    const conceptBodyPath = join(temp, 'concept-ladder.md');
+    writeFileSync(conceptBodyPath, '## Target concept\n\nIntervention.\n\n## Ladder\n\n### 1. Observational distribution\n\n- Why needed: separates seeing from doing.');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'causal-note', '--type', 'concept-ladder', '--title', 'Concept ladder — intervention', '--body-file', conceptBodyPath], { cwd: temp, stdio: 'pipe' });
+    state = readJson(join(temp, '.papermentor', 'sessions', 'causal-note', 'state.json'), {});
+    if (state.readingPath?.find((item) => item.key === 'prerequisites')?.status !== 'done') failures.push('lecture-note concept ladder should complete the prerequisites reading-path step');
+    if (state.readingPath?.find((item) => item.key === 'notation')?.status !== 'current') failures.push('lecture-note concept ladder should advance to notation, not paper derivations');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Robot Learning Transformer Slides', '--source', 'lecture-slides.pdf', '--slug', 'robot-slides', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'robot-slides', '--mode', 'auto', '--paper-text-file', slideText], { cwd: temp, stdio: 'pipe' });
@@ -394,6 +403,12 @@ FID and ablations evaluate sample quality.`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!slideTui.includes('Slide deck sections') || !slideTui.includes('HTML-first slide deck navigator')) failures.push('slide deck TUI should show slide-deck navigator');
+    const slideBodyPath = join(temp, 'slide-explanation.md');
+    writeFileSync(slideBodyPath, '## Slide role\n\nExplain the Transformer policy diagram.');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'robot-slides', '--type', 'slide-explanation', '--title', 'Slide explanation — Transformer policy diagram', '--body-file', slideBodyPath], { cwd: temp, stdio: 'pipe' });
+    state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
+    if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide-deck slide explanation should complete the slides reading-path step');
+    if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide-deck slide explanation should advance to missing narration');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Method Paper', '--source', 'paper.pdf', '--slug', 'method-paper', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'method-paper', '--mode', 'auto', '--paper-text-file', paperText], { cwd: temp, stdio: 'pipe' });

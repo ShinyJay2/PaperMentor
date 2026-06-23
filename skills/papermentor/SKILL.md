@@ -32,7 +32,7 @@ If a selected slide deck is protected or text extraction fails, keep `slide-deck
 
 ### HTML-first reading room rule
 
-On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the paper is doing, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections. The CLI must not contain the explanation body; it only shows the HTML path, detected paper sections, numbered choices, and a place for user questions.
+On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the HTML path, detected sections/slides, numbered choices, and a place for user questions.
 
 The CLI interaction is a branching section/slide navigator. Prefer the arrow-key TUI (`scripts/papermentor-session.mjs tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer.
 
@@ -66,13 +66,13 @@ Use semantic block titles. Avoid bare titles like `Equation (6)` when the equati
 
 PaperMentor is guided but interruptible. Preserve the existing math/dependency/confusion policies, but present the reading process as a session with one reusable browser-rendered block document and a CLI Reading Console.
 
-When starting a paper:
+When starting a source:
 
-1. Create or update one session folder at `.papermentor/sessions/<paper-slug>/`.
-2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
+1. Create or update one session folder at `.papermentor/sessions/<source-slug>/`.
+2. Keep exactly one rendered HTML block document per source: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, `turns.jsonl`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start by rendering the `Start Here` HTML block, including one-sentence paper model, actual representative method/system/algorithm figure image when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful paper content. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then show detected paper sections in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start by rendering the `Start Here` HTML block, including a one-sentence source model, actual representative method/system/algorithm figure image when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful paper content. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then show detected paper sections in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 
