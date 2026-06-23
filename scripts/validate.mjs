@@ -8,7 +8,7 @@ const required = [
   'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
+  'templates/start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
   'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
@@ -68,7 +68,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 }
 
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
-for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'Reading Path', 'index.html', 'Satoshi', 'Pretendard', 'Report structure', 'HTML-first']) {
+for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'conceptual diagram', 'mono-tone SVG', 'Reading Path', 'index.html', 'Satoshi', 'Pretendard', 'Report structure', 'HTML-first']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
 }
 
@@ -97,7 +97,8 @@ const commandCoverage = [
   ['confusion', 'templates/confusion_response.md', 'prompts/confusion-resolver.md'],
   ['why', 'templates/recursive_why.md', 'prompts/confusion-resolver.md'],
   ['final-insight', 'templates/final_insight.md', 'prompts/final-insight-extractor.md'],
-  ['visualize', 'templates/visualization_card.md', 'prompts/visualization-planner.md']
+  ['visualize', 'templates/visualization_card.md', 'prompts/visualization-planner.md'],
+  ['diagram', 'templates/conceptual_diagram.md', 'prompts/visualization-planner.md']
 ];
 const commandsText = readFileSync(join(root, 'skills/papermentor/commands.md'), 'utf8');
 for (const [command, template, prompt] of commandCoverage) {
@@ -177,6 +178,7 @@ function validateSessionHelper() {
     if (!navState.sectionActions?.['1-introduction']?.some((choice) => choice.includes('pushforward distribution'))) failures.push('analyze should generate Introduction actions from section concepts');
     if (!navState.sectionActions?.['2-related-work']?.some((choice) => choice.includes('Sohl-Dickstein et al., 2015'))) failures.push('analyze should generate Related Work actions from citations');
     if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Eq. (6) training objective'))) failures.push('analyze should generate method equation actions from section equations');
+    if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Map equation dependencies'))) failures.push('analyze should suggest visual repair diagram actions for equation-heavy method sections');
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor Live', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
@@ -222,6 +224,17 @@ function validateSessionHelper() {
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
     if (notes.includes('## Figure explanation under image')) failures.push('session notes should move the figure explanation under the image and remove the heading');
 
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'diagram', '--session', 'generative-modeling-via-drifting', '--kind', 'equation-dependency', '--nodes', 'Eq. (1) pushforward|Eq. (2) drift update|Eq. (6) training objective'], { cwd: temp, stdio: 'pipe' });
+    let diagramHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'index.html'), 'utf8');
+    let diagramCards = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'cards.json'), { cards: [] });
+    const diagramCard = diagramCards.cards?.find((card) => card.type === 'concept-diagram');
+    if (!diagramCard?.figure?.src?.endsWith('.svg')) failures.push('diagram command should create a concept-diagram card with an SVG figure');
+    if (diagramHtml.includes('mermaid')) failures.push('diagram command should not use Mermaid');
+    for (const phrase of ['Conceptual diagram generated by PaperMentor', 'Not a figure from the paper', 'Question', 'Visual encoding', 'What to observe', 'Conclusion', 'Limitation']) {
+      if (!diagramHtml.includes(phrase)) failures.push(`diagram block missing required phrase: ${phrase}`);
+    }
+
     const badDiagramPath = join(temp, 'bad-mermaid.md');
     writeFileSync(badDiagramPath, `${'```'}${'mermaid'}\n${'flowchart'} ${'TD'}\nA-->B\n${'```'}\n`);
     try {
@@ -231,7 +244,9 @@ function validateSessionHelper() {
       // expected: representative figures must be actual crops/screenshots or prose, not Mermaid substitutes.
     }
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'turn', '--session', 'generative-modeling-via-drifting', '--role', 'user', '--text', 'Why is stopgrad used in Eq. (6)?', '--promote', '--reason', 'paper equation confusion'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'turn', '--session', 'generative-modeling-via-drifting', '--role', 'user', '--text', '전체 흐름이 안 보여. Eq. (1)이 Eq. (6)이랑 어떻게 연결돼?', '--promote', '--reason', 'paper equation confusion'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (!navState.nextChoices?.some((choice) => choice.includes('Generate conceptual diagram'))) failures.push('turn logging should suggest visual repair when user confusion asks for flow/dependency');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'turn', '--session', 'generative-modeling-via-drifting', '--role', 'assistant', '--text', 'It freezes the drift target branch so the generator output moves toward a fixed target.', '--promote', '--saved-as', 'confusion-003'], { cwd: temp, stdio: 'pipe' });
     const turns = readFileSync(join(dir, 'turns.jsonl'), 'utf8').trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
     if (turns.length !== 2 || turns[0].promotion !== 'promote' || turns[1].savedAs !== 'confusion-003') failures.push('turns.jsonl should record promoted user/assistant turns with metadata');
@@ -241,14 +256,14 @@ function validateSessionHelper() {
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should keep exactly one HTML file, got ${htmlFiles.join(',')}`);
     html = readFileSync(join(dir, 'index.html'), 'utf8');
     cardData = readJson(join(dir, 'cards.json'), { cards: [] });
-    if ((cardData.cards || []).length !== 2) failures.push('session helper should persist two cards after second card');
+    if ((cardData.cards || []).length !== 3) failures.push('session helper should persist three cards after diagram plus equation card');
     for (const requiredField of ['id', 'type', 'title', 'location', 'userQuestion', 'originTurn', 'promotionReason', 'body', 'choices', 'createdAt']) {
       if (!(requiredField in (cardData.cards?.[0] || {}))) failures.push(`session card should keep structured report field: ${requiredField}`);
     }
     if (!cardData.schema || !cardData.cards?.[0]?.figure?.src) failures.push('session cards.json should keep schema and figure asset data');
-    if (cardData.cards?.[1]?.userQuestion !== 'Why is stopgrad used in Eq. (6)?' || cardData.cards?.[1]?.originTurn !== 'turn-001') failures.push('promoted conversation cards should persist user question and origin turn metadata');
-    if ((html.match(/class="block"/g) || []).length !== 2) failures.push('session helper should render two blocks after second card');
-    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"']) {
+    if (cardData.cards?.[2]?.userQuestion !== 'Why is stopgrad used in Eq. (6)?' || cardData.cards?.[2]?.originTurn !== 'turn-001') failures.push('promoted conversation cards should persist user question and origin turn metadata');
+    if ((html.match(/class="block"/g) || []).length !== 3) failures.push('session helper should render three blocks after diagram plus equation card');
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"', 'data-index="3"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
     for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state', 'Block 01', 'Block 02', 'updated ']) {

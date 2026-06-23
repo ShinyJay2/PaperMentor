@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync } from 'node:fs';
-import { basename, dirname, extname, join, resolve } from 'node:path';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = process.cwd();
@@ -125,7 +125,7 @@ function inferPathKey(type) {
     'start-here': 'map',
     equation: 'equations', 'equation-card': 'equations', derivation: 'derivations', 'derivation-trace': 'derivations',
     dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies',
-    confusion: 'confusion', why: 'confusion', 'recursive-why': 'confusion', visualization: 'confusion', visualize: 'confusion',
+    confusion: 'confusion', why: 'confusion', 'recursive-why': 'confusion', visualization: 'confusion', visualize: 'confusion', diagram: 'confusion', 'concept-diagram': 'confusion',
     final: 'final', 'final-insight': 'final'
   };
   return map[type] || null;
@@ -176,6 +176,16 @@ function appendTurn(args) {
     createdAt: now()
   };
   appendFileSync(turnsPath(slug), `${JSON.stringify(turn)}\n`);
+  if (turn.role === 'user' && isVisualRepairRequest(turn.text)) {
+    const diagramChoices = [
+      `Generate conceptual diagram for ${state.currentSection || state.currentLocation || state.title}`,
+      'Map equation dependencies visually',
+      'Draw method / concept flow',
+      'Continue with text explanation only'
+    ];
+    state.nextChoices = unique([...(state.nextChoices || []), ...diagramChoices]).slice(0, 12);
+    state.currentFocus = 'Visual repair suggested from user confusion';
+  }
   state.updatedAt = now();
   writeJson(statePath(slug), state);
   console.log(`Logged ${turn.id} (${turn.role}, ${turn.promotion}) to .papermentor/sessions/${slug}/turns.jsonl`);
@@ -229,11 +239,16 @@ function prepareFigure(slug, cardId, args) {
     const absoluteSource = resolve(src);
     if (!existsSync(absoluteSource)) throw new Error(`figure file not found: ${src}`);
     mkdirSync(assetDir(slug), { recursive: true });
-    const extension = extname(absoluteSource) || '.png';
-    const safeBase = slugify(`${cardId}-${basename(absoluteSource, extension)}`) || slugify(cardId);
-    const fileName = `${safeBase}${extension.toLowerCase()}`;
-    copyFileSync(absoluteSource, join(assetDir(slug), fileName));
-    src = `assets/${fileName}`;
+    const absoluteAssetDir = resolve(assetDir(slug));
+    if (absoluteSource.startsWith(`${absoluteAssetDir}${sep}`)) {
+      src = `assets/${basename(absoluteSource)}`;
+    } else {
+      const extension = extname(absoluteSource) || '.png';
+      const safeBase = slugify(`${cardId}-${basename(absoluteSource, extension)}`) || slugify(cardId);
+      const fileName = `${safeBase}${extension.toLowerCase()}`;
+      copyFileSync(absoluteSource, join(assetDir(slug), fileName));
+      src = `assets/${fileName}`;
+    }
   }
 
   return {
@@ -367,6 +382,43 @@ function detectConcepts(text) {
   return unique(concepts.filter(([needle]) => lower.includes(needle.toLowerCase())).map(([, label]) => label)).slice(0, 8);
 }
 
+function isVisualRepairRequest(text) {
+  const value = String(text || '').toLowerCase();
+  return /(diagram|visuali[sz]e|draw|flow|pipeline|graph|map|landscape|structure|how.*connect|connect.*how|dependency|relationship|big picture|overall flow)/i.test(value)
+    || /(그림|다이어그램|시각화|구조|흐름|관계도|연결|큰\s*그림|전체\s*흐름|의존성|파이프라인)/.test(value);
+}
+
+function visualRepairActions(section, body) {
+  const title = String(section || 'this section');
+  const lowerTitle = title.toLowerCase();
+  const equations = detectEquationNumbers(body);
+  const citations = detectCitations(body);
+  const concepts = detectConcepts(body);
+  const actions = [];
+  if (/introduction/.test(lowerTitle) && concepts.length >= 2) {
+    actions.push(`Visualize problem → limitation → idea flow for ${title}`);
+  }
+  if (/related work/.test(lowerTitle) && citations.length >= 3) {
+    actions.push(`Draw related-work landscape for ${title}`);
+  }
+  if (/drifting models|method|generation|pushforward|field|implementation/.test(lowerTitle) || /Algorithm\s+\d+|training objective|pipeline|optimizer/i.test(body)) {
+    actions.push(`Draw method pipeline for ${title}`);
+  }
+  if (equations.length >= 2 || /Eq\.\s*\(\d+\).*Eq\.\s*\(\d+\)/is.test(body)) {
+    actions.push(`Map equation dependencies in ${title}`);
+  }
+  if ((concepts.length >= 3 || /definition|lemma|theorem|proposition|assumption/i.test(body)) && !/related work/i.test(lowerTitle)) {
+    actions.push(`Build concept prerequisite graph for ${title}`);
+  }
+  if (/proof|proposition|lemma|theorem/i.test(body)) {
+    actions.push(`Draw proof dependency graph for ${title}`);
+  }
+  if (/experiment|imagenet|toy|robot|fid|table|figure/i.test(lowerTitle) || /FID|ablation|Table\s+\d+|Figure\s+\d+/i.test(body)) {
+    actions.push(`Visualize experimental evidence flow for ${title}`);
+  }
+  return unique(actions).slice(0, 4);
+}
+
 function equationLabel(number, body) {
   const local = String(body || '').slice(Math.max(0, String(body || '').indexOf(`(${number})`) - 800), String(body || '').indexOf(`(${number})`) + 800);
   if (number === '1') return `Explain Eq. (${number}) pushforward symbol by symbol`;
@@ -399,6 +451,7 @@ function actionProfileForSection(section, body) {
     actions.push('Explain the Introduction as a promise-and-mechanism story');
     for (const concept of concepts.slice(0, 4)) actions.push(`Unpack "${concept}" from the Introduction`);
     actions.push('Compare training-time drifting with inference-time diffusion');
+    actions.push(...visualRepairActions(title, body));
   } else if (/related work/.test(lowerTitle)) {
     actions.push('Build a related-work map: what each family contributes and why PaperMentor cares');
     for (const family of ['Diffusion-/Flow-based Models', 'GANs', 'VAEs', 'Normalizing Flows', 'Moment Matching', 'Contrastive Learning']) {
@@ -407,22 +460,26 @@ function actionProfileForSection(section, body) {
       }
     }
     for (const citation of citations.slice(0, 4)) actions.push(`Follow citation: explain how ${citation} is used here`);
+    actions.push(...visualRepairActions(title, body));
   } else if (/drifting models|method|generation|pushforward|field/.test(lowerTitle)) {
     actions.push('Give a compact method overview for this section');
     for (const number of equations.slice(0, 8)) actions.push(equationLabel(number, body));
     if (/Proposition\s+3\.1/i.test(body)) actions.push('Explain Proposition 3.1 and why anti-symmetry gives zero drift');
     if (/stopgrad|stop-gradient/i.test(body)) actions.push('Explain why stopgrad is used and what would break without it');
     actions.push('Build the dependency chain for the method section');
+    actions.push(...visualRepairActions(title, body));
   } else if (/implementation/.test(lowerTitle)) {
     actions.push('Walk through the image-generation implementation step by step');
     if (/Algorithm\s+1/i.test(body)) actions.push('Explain Algorithm 1 as executable pseudocode');
     for (const concept of concepts.slice(0, 4)) actions.push(`Explain implementation detail: ${concept}`);
     actions.push('Connect implementation choices back to the drifting objective');
+    actions.push(...visualRepairActions(title, body));
   } else if (/experiment|imageNet|toy|robot/i.test(lowerTitle)) {
     actions.push('Explain what the experiments are trying to prove');
     if (/FID/i.test(body)) actions.push('Explain FID and why it matters for these results');
     if (/ImageNet/i.test(body)) actions.push('Interpret the ImageNet results without hype');
     if (/robot/i.test(body)) actions.push('Explain the robotic-control experiment setup');
+    actions.push(...visualRepairActions(title, body));
   } else if (/discussion|conclusion/.test(lowerTitle)) {
     actions.push('Extract the paper’s final insight from this section');
     actions.push('Identify limitations, assumptions, and open questions');
@@ -431,6 +488,7 @@ function actionProfileForSection(section, body) {
   if (!actions.length) {
     for (const concept of concepts.slice(0, 4)) actions.push(`Explain "${concept}" in this section`);
     for (const number of equations.slice(0, 5)) actions.push(equationLabel(number, body));
+    actions.push(...visualRepairActions(title, body));
     if (!actions.length) actions.push(`Explain the purpose of ${title}`);
   }
 
@@ -538,6 +596,197 @@ function setMode(args) {
   writeJson(statePath(slug), state);
   renderHtml(slug);
   printConsole(state);
+}
+
+function escapeXml(value) {
+  return String(value ?? '').replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&apos;' }[ch]));
+}
+
+function wrapLabel(value, max = 22) {
+  const words = String(value || '').replace(/\s+/g, ' ').trim().split(' ');
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (next.length > max && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = next;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.slice(0, 3);
+}
+
+function diagramKindFromAction(action, fallback = 'method-pipeline') {
+  const text = String(action || '').toLowerCase();
+  if (/related-work|related work|landscape|citation/.test(text)) return 'related-work-landscape';
+  if (/equation|eq\./.test(text)) return 'equation-dependency';
+  if (/prerequisite|concept/.test(text)) return 'concept-prerequisite';
+  if (/proof|theorem|lemma|proposition/.test(text)) return 'proof-structure';
+  if (/experiment|evidence|fid|result/.test(text)) return 'evidence-flow';
+  if (/paper flow|problem/.test(text)) return 'paper-flow';
+  return fallback;
+}
+
+function inferDiagramNodes(kind, state, args) {
+  const explicit = splitChoices(args.nodes || args.items);
+  if (explicit.length) return explicit.slice(0, 8);
+  const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
+  if (kind === 'equation-dependency' && insight.equations?.length) {
+    return insight.equations.slice(0, 6).map((number) => `Eq. (${number})`);
+  }
+  if (kind === 'related-work-landscape' && insight.citations?.length) {
+    return ['This paper', ...insight.citations.slice(0, 5)];
+  }
+  if (kind === 'concept-prerequisite' && insight.concepts?.length) {
+    return insight.concepts.slice(0, 6);
+  }
+  if (kind === 'paper-flow') {
+    return ['Problem', 'Limitation', 'Key idea', 'Mechanism', 'Final insight'];
+  }
+  if (kind === 'evidence-flow') {
+    return ['Experiment setup', 'Metric', 'Observed result', 'Claim supported', 'Limitation'];
+  }
+  if (kind === 'proof-structure') {
+    return ['Claim', 'Dependencies', 'Argument step', 'Conclusion'];
+  }
+  return ['Input object', 'Core transformation', 'Training signal', 'Updated model', 'Output behavior'];
+}
+
+function diagramTitle(kind) {
+  const titles = {
+    'paper-flow': 'Paper flow map',
+    'method-pipeline': 'Method pipeline',
+    'equation-dependency': 'Equation dependency map',
+    'concept-prerequisite': 'Concept prerequisite graph',
+    'related-work-landscape': 'Related-work landscape',
+    'proof-structure': 'Proof structure',
+    'evidence-flow': 'Experimental evidence flow'
+  };
+  return titles[kind] || 'Conceptual diagram';
+}
+
+function diagramBody({ question, concept, visualEncoding, observe, conclusion, limitation }) {
+  return `## Question
+
+${question}
+
+## Concept
+
+${concept}
+
+## Visual encoding
+
+${visualEncoding}
+
+## What to observe
+
+${observe}
+
+## Conclusion
+
+${conclusion}
+
+## Limitation
+
+${limitation}
+
+## Provenance
+
+Conceptual diagram generated by PaperMentor. Not a figure from the paper.`;
+}
+
+function generatedDiagramSvg({ title, kind, nodes }) {
+  const width = 1120;
+  const height = kind === 'related-work-landscape' ? 620 : 520;
+  const paper = '#fffef9';
+  const ink = '#1f1f1d';
+  const muted = '#7a7166';
+  const line = '#cfc5b4';
+  const soft = '#f4efe6';
+  const nodeW = kind === 'related-work-landscape' ? 210 : 185;
+  const nodeH = 82;
+  const safeNodes = nodes.slice(0, 8);
+  const isRadial = kind === 'related-work-landscape' || kind === 'concept-prerequisite';
+  let shapes = '';
+  let arrows = '';
+  const defs = `<defs><marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M 0 0 L 10 5 L 0 10 z" fill="${ink}"/></marker></defs>`;
+  const node = (x, y, label, index) => {
+    const lines = wrapLabel(label);
+    const text = lines.map((l, i) => `<text x="${x + nodeW / 2}" y="${y + 32 + i * 17}" text-anchor="middle" font-size="15" fill="${ink}" font-family="Satoshi, Pretendard, Arial">${escapeXml(l)}</text>`).join('');
+    return `<g><rect x="${x}" y="${y}" width="${nodeW}" height="${nodeH}" rx="3" fill="${index === 0 ? '#ffffff' : soft}" stroke="${ink}" stroke-width="${index === 0 ? 1.8 : 1.2}"/><text x="${x + 16}" y="${y + 18}" font-size="10" fill="${muted}" font-family="Satoshi, Pretendard, Arial" letter-spacing=".08em">${String(index + 1).padStart(2, '0')}</text>${text}</g>`;
+  };
+  if (isRadial) {
+    const cx = width / 2;
+    const cy = 315;
+    const centerLabel = safeNodes[0] || title;
+    shapes += node(cx - nodeW / 2, cy - nodeH / 2, centerLabel, 0);
+    const others = safeNodes.slice(1);
+    const radiusX = 370;
+    const radiusY = 180;
+    others.forEach((label, i) => {
+      const angle = (-Math.PI * 0.85) + (i * (Math.PI * 1.7 / Math.max(1, others.length - 1)));
+      const x = cx + Math.cos(angle) * radiusX - nodeW / 2;
+      const y = cy + Math.sin(angle) * radiusY - nodeH / 2;
+      arrows += `<path d="M ${cx} ${cy} L ${x + nodeW / 2} ${y + nodeH / 2}" stroke="${muted}" stroke-width="1.2" fill="none" marker-end="url(#arrow)" opacity=".72"/>`;
+      shapes += node(x, y, label, i + 1);
+    });
+  } else {
+    const y = 250;
+    const gap = (width - 140 - nodeW * safeNodes.length) / Math.max(1, safeNodes.length - 1);
+    safeNodes.forEach((label, i) => {
+      const x = 70 + i * (nodeW + gap);
+      if (i > 0) {
+        const px = 70 + (i - 1) * (nodeW + gap);
+        arrows += `<path d="M ${px + nodeW + 10} ${y + nodeH / 2} L ${x - 12} ${y + nodeH / 2}" stroke="${ink}" stroke-width="1.4" fill="none" marker-end="url(#arrow)"/>`;
+      }
+      shapes += node(x, y, label, i);
+    });
+  }
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="${width}" height="${height}" role="img" aria-label="${escapeXml(title)}">
+${defs}
+<rect width="${width}" height="${height}" fill="${paper}"/>
+<path d="M52 44 H${width - 52}" stroke="${ink}" stroke-width="1.4"/>
+<text x="56" y="88" font-size="31" font-weight="700" fill="${ink}" font-family="Satoshi, Pretendard, Arial">${escapeXml(title)}</text>
+<text x="56" y="118" font-size="13" fill="${muted}" font-family="Satoshi, Pretendard, Arial" letter-spacing=".08em">CONCEPTUAL DIAGRAM · GENERATED BY PAPERMENTOR · NOT A PAPER FIGURE</text>
+${arrows}
+${shapes}
+<path d="M52 ${height - 52} H${width - 52}" stroke="${line}" stroke-width="1"/>
+</svg>`;
+}
+
+function addDiagram(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('diagram requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const selected = args.action || state.selectedAction || state.currentFocus || '';
+  const kind = args.kind || diagramKindFromAction(selected);
+  const nodes = inferDiagramNodes(kind, state, args);
+  const title = args.title || `${diagramTitle(kind)} — ${state.currentSection || state.currentLocation || state.title}`;
+  const cardId = args.id || `concept-diagram-${String((readJson(cardsPath(slug), { cards: [] }).cards || []).length + 1).padStart(3, '0')}`;
+  mkdirSync(assetDir(slug), { recursive: true });
+  const fileName = `${slugify(cardId)}.svg`;
+  writeFileSync(join(assetDir(slug), fileName), generatedDiagramSvg({ title, kind, nodes }));
+  const question = args.question || `What structure in ${state.currentSection || 'this paper'} is hard to hold in working memory?`;
+  const concept = args.concept || diagramTitle(kind);
+  const visualEncoding = args['visual-encoding'] || `Mono-tone SVG: nodes represent paper objects; arrows represent dependency, sequence, or contrast.`;
+  const observe = args.observe || args['what-to-observe'] || `Follow the arrows and check which object must be understood before the next one.`;
+  const conclusion = args.conclusion || `The diagram is a visual repair aid: it shows the relationship structure before the detailed explanation is appended.`;
+  const limitation = args.limitation || `This is a generated conceptual diagram, not an exact figure from the paper and not a substitute for the paper's own figures.`;
+  addCard({
+    ...args,
+    session: slug,
+    type: 'concept-diagram',
+    title,
+    location: state.currentSection || state.currentLocation || 'Conceptual diagram',
+    body: diagramBody({ question, concept, visualEncoding, observe, conclusion, limitation }),
+    'figure-file': join(assetDir(slug), fileName),
+    'figure-caption': 'Conceptual diagram generated by PaperMentor. Not a figure from the paper.',
+    choices: args.choices || `Explain this diagram|Continue text explanation only|Ask anything about ${state.currentSection || 'this paper'}`
+  });
 }
 
 function addCard(args) {
@@ -1357,6 +1606,7 @@ function usage() {
   console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs analyze --session <slug> --paper-text-file paper.txt\n  node scripts/papermentor-session.mjs tui --session <slug>\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
   node scripts/papermentor-session.mjs section --session <slug> --index 2
   node scripts/papermentor-session.mjs mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
+  node scripts/papermentor-session.mjs diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
   node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]\n  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
 }
 
@@ -1392,6 +1642,8 @@ try {
     selectSection(args);
   } else if (command === 'mode') {
     setMode(args);
+  } else if (command === 'diagram') {
+    addDiagram(args);
   } else if (command === 'card') {
     addCard(args);
   } else if (command === 'turn') {
