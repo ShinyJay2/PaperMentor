@@ -265,6 +265,217 @@ function defaultModeItems(mode, section) {
   return map[mode] || [`Detect choices in ${scope}`, `Ask a question about ${scope}`];
 }
 
+function sectionKey(section) {
+  return slugify(section || 'current-section');
+}
+
+function unique(values) {
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+}
+
+function readPaperText(args) {
+  if (args['paper-text-file']) return readFileSync(resolve(args['paper-text-file']), 'utf8');
+  if (args['section-file']) return readFileSync(resolve(args['section-file']), 'utf8');
+  if (args['paper-text']) return String(args['paper-text']);
+  if (args['section-text']) return String(args['section-text']);
+  return readTextArg(args);
+}
+
+function cleanHeadingTitle(raw) {
+  return String(raw || '')
+    .replace(/\s{2,}.+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 120);
+}
+
+function extractSectionBlocks(text, preferredSections = []) {
+  const source = String(text || '').replace(/\r/g, '');
+  const lines = source.split('\n');
+  const found = [];
+  let offset = 0;
+  for (const line of lines) {
+    const match = line.match(/^\s*(\d+(?:\.\d+)*)\.\s+([A-Z][A-Za-z0-9,/:()\- ]{2,90})(?=\s{2,}|$)/);
+    if (match) {
+      const title = cleanHeadingTitle(`${match[1]}. ${match[2]}`);
+      if (!/\b(fid|resnet|simclr|nfe|task|setting|generated|retrieved)\b/i.test(title)) {
+        found.push({ title, index: offset });
+      }
+    }
+    offset += line.length + 1;
+  }
+  const headings = unique(found.map((item) => item.title))
+    .map((title) => found.find((item) => item.title === title))
+    .sort((a, b) => a.index - b.index);
+  const sections = headings.length ? headings : preferredSections.map((title) => ({ title, index: source.indexOf(title) })).filter((item) => item.index >= 0);
+  const blocks = sections.map((item, index) => {
+    const next = sections[index + 1]?.index ?? source.length;
+    return {
+      title: item.title,
+      body: source.slice(item.index, next).trim().slice(0, 24000)
+    };
+  });
+  return blocks.sort(compareSectionBlocks);
+}
+
+function sectionNumberParts(title) {
+  const match = String(title || '').match(/^(\d+(?:\.\d+)*)\./);
+  if (!match) return [];
+  return match[1].split('.').map((part) => Number(part));
+}
+
+function compareSectionBlocks(a, b) {
+  const left = sectionNumberParts(a.title);
+  const right = sectionNumberParts(b.title);
+  if (left.length && right.length) {
+    const max = Math.max(left.length, right.length);
+    for (let i = 0; i < max; i += 1) {
+      const diff = (left[i] ?? -1) - (right[i] ?? -1);
+      if (diff) return diff;
+    }
+  }
+  return 0;
+}
+
+function detectEquationNumbers(text) {
+  return unique([...String(text || '').matchAll(/\((\d{1,2})\)/g)].map((match) => match[1]))
+    .filter((value) => Number(value) > 0 && Number(value) < 80)
+    .slice(0, 12);
+}
+
+function detectCitations(text) {
+  return unique([...String(text || '').matchAll(/\b([A-Z][A-Za-z\-]+(?:\s*&\s*[A-Z][A-Za-z\-]+)?|[A-Z][A-Za-z\-]+\s+et\s+al\.)[,\s]+(?:19|20)\d{2}\b/g)].map((match) => match[0].replace(/\s+/g, ' ')))
+    .slice(0, 8);
+}
+
+function detectConcepts(text) {
+  const concepts = [
+    ['pushforward', 'pushforward distribution'],
+    ['drifting field', 'drifting field'],
+    ['stop-gradient', 'stop-gradient target'],
+    ['stopgrad', 'stop-gradient target'],
+    ['anti-symmetric', 'anti-symmetric drifting field'],
+    ['kernel', 'kernelized drift field'],
+    ['mean-shift', 'mean-shift attraction/repulsion'],
+    ['classifier-free guidance', 'classifier-free guidance'],
+    ['one-step', 'one-step inference'],
+    ['FID', 'FID evaluation'],
+    ['ImageNet', 'ImageNet experiment setup'],
+    ['robotic', 'robotic control experiment']
+  ];
+  const lower = String(text || '').toLowerCase();
+  return unique(concepts.filter(([needle]) => lower.includes(needle.toLowerCase())).map(([, label]) => label)).slice(0, 8);
+}
+
+function equationLabel(number, body) {
+  const local = String(body || '').slice(Math.max(0, String(body || '').indexOf(`(${number})`) - 800), String(body || '').indexOf(`(${number})`) + 800);
+  if (number === '1') return `Explain Eq. (${number}) pushforward symbol by symbol`;
+  if (number === '2') return `Explain Eq. (${number}) sample drifting update`;
+  if (number === '3') return `Explain Eq. (${number}) anti-symmetry condition`;
+  if (number === '4') return `Explain Eq. (${number}) equilibrium fixed point`;
+  if (number === '5') return `Trace Eq. (${number}) training-time fixed-point iteration`;
+  if (number === '6') return `Explain Eq. (${number}) training objective and stopgrad`;
+  if (number === '7') return `Explain Eq. (${number}) drifting field expectation`;
+  if (number === '8') return `Explain Eq. (${number}) attraction and repulsion fields`;
+  if (number === '9') return `Explain Eq. (${number}) normalization factors`;
+  if (number === '10') return `Explain Eq. (${number}) attraction minus repulsion`;
+  if (/pushforward/i.test(local)) return `Explain Eq. (${number}) pushforward symbol by symbol`;
+  if (/anti-symmetric/i.test(local)) return `Explain Eq. (${number}) anti-symmetry condition`;
+  if (/fixed-point|equilibrium/i.test(local)) return `Explain Eq. (${number}) equilibrium fixed point`;
+  if (/stopgrad|loss|objective/i.test(local)) return `Explain Eq. (${number}) training objective and stopgrad`;
+  if (number === '2' || /xi\+1|drift/i.test(local)) return `Explain Eq. (${number}) sample drifting update`;
+  return `Explain Eq. (${number}) symbol by symbol`;
+}
+
+function actionProfileForSection(section, body) {
+  const title = String(section || '');
+  const lowerTitle = title.toLowerCase();
+  const equations = detectEquationNumbers(body);
+  const citations = detectCitations(body);
+  const concepts = detectConcepts(body);
+  const actions = [];
+
+  if (/introduction/.test(lowerTitle)) {
+    actions.push('Explain the Introduction as a promise-and-mechanism story');
+    for (const concept of concepts.slice(0, 4)) actions.push(`Unpack "${concept}" from the Introduction`);
+    actions.push('Compare training-time drifting with inference-time diffusion');
+  } else if (/related work/.test(lowerTitle)) {
+    actions.push('Build a related-work map: what each family contributes and why PaperMentor cares');
+    for (const family of ['Diffusion-/Flow-based Models', 'GANs', 'VAEs', 'Normalizing Flows', 'Moment Matching', 'Contrastive Learning']) {
+      if (body.toLowerCase().includes(family.toLowerCase().replace('-/', '/').split(' ')[0].toLowerCase()) || body.includes(family.split(' ')[0])) {
+        actions.push(`Explain the contrast with ${family}`);
+      }
+    }
+    for (const citation of citations.slice(0, 4)) actions.push(`Follow citation: explain how ${citation} is used here`);
+  } else if (/drifting models|method|generation|pushforward|field/.test(lowerTitle)) {
+    actions.push('Give a compact method overview for this section');
+    for (const number of equations.slice(0, 8)) actions.push(equationLabel(number, body));
+    if (/Proposition\s+3\.1/i.test(body)) actions.push('Explain Proposition 3.1 and why anti-symmetry gives zero drift');
+    if (/stopgrad|stop-gradient/i.test(body)) actions.push('Explain why stopgrad is used and what would break without it');
+    actions.push('Build the dependency chain for the method section');
+  } else if (/implementation/.test(lowerTitle)) {
+    actions.push('Walk through the image-generation implementation step by step');
+    if (/Algorithm\s+1/i.test(body)) actions.push('Explain Algorithm 1 as executable pseudocode');
+    for (const concept of concepts.slice(0, 4)) actions.push(`Explain implementation detail: ${concept}`);
+    actions.push('Connect implementation choices back to the drifting objective');
+  } else if (/experiment|imageNet|toy|robot/i.test(lowerTitle)) {
+    actions.push('Explain what the experiments are trying to prove');
+    if (/FID/i.test(body)) actions.push('Explain FID and why it matters for these results');
+    if (/ImageNet/i.test(body)) actions.push('Interpret the ImageNet results without hype');
+    if (/robot/i.test(body)) actions.push('Explain the robotic-control experiment setup');
+  } else if (/discussion|conclusion/.test(lowerTitle)) {
+    actions.push('Extract the paper’s final insight from this section');
+    actions.push('Identify limitations, assumptions, and open questions');
+  }
+
+  if (!actions.length) {
+    for (const concept of concepts.slice(0, 4)) actions.push(`Explain "${concept}" in this section`);
+    for (const number of equations.slice(0, 5)) actions.push(equationLabel(number, body));
+    if (!actions.length) actions.push(`Explain the purpose of ${title}`);
+  }
+
+  actions.push(`Ask anything about ${title}`);
+  actions.push(`Chat about this section`);
+  return unique(actions).slice(0, 12);
+}
+
+function analyzePaper(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('analyze requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const text = readPaperText(args);
+  if (!text.trim()) throw new Error('analyze requires --paper-text-file, --paper-text, --section-file, or --section-text');
+  const blocks = extractSectionBlocks(text, state.paperSections || []);
+  if (!blocks.length) throw new Error('could not detect paper sections from text');
+  state.paperSections = blocks.map((block) => block.title);
+  state.sectionActions = {};
+  state.sectionInsights = {};
+  for (const block of blocks) {
+    const key = sectionKey(block.title);
+    const equations = detectEquationNumbers(block.body);
+    const citations = detectCitations(block.body);
+    const concepts = detectConcepts(block.body);
+    state.sectionActions[key] = actionProfileForSection(block.title, block.body);
+    state.sectionInsights[key] = {
+      equations,
+      citations,
+      concepts,
+      preview: block.body.replace(/\s+/g, ' ').slice(0, 500)
+    };
+  }
+  state.currentSection = '';
+  state.currentMode = '';
+  state.detectedItems = [];
+  state.nextChoices = state.paperSections;
+  state.currentLocation = 'Paper section navigator';
+  state.currentFocus = 'Arrow-key TUI ready. Choose a section; explanations render only in HTML.';
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  printConsole(state);
+}
+
 function setSections(args) {
   const slug = args.session || args.slug;
   if (!slug) throw new Error('sections requires --session <slug>');
@@ -294,7 +505,9 @@ function selectSection(args) {
   const index = Number(args.index || args.choice || 0);
   const section = raw || (index ? state.paperSections?.[index - 1] : '');
   if (!section) throw new Error('section requires --section <name> or --index <n>');
-  const actions = splitChoices(args.choices).length ? splitChoices(args.choices) : defaultSectionActions(section);
+  const actions = splitChoices(args.choices).length
+    ? splitChoices(args.choices)
+    : state.sectionActions?.[sectionKey(section)] || defaultSectionActions(section);
   state.currentSection = section;
   state.currentMode = '';
   state.detectedItems = [];
@@ -984,8 +1197,164 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
   console.log(`\nBlocks in HTML: ${(cards.cards || []).length} · Open ${state.renderedView}`);
 }
 
+const ansi = {
+  reset: '\x1b[0m',
+  bold: '\x1b[1m',
+  dim: '\x1b[2m',
+  cyan: '\x1b[36m',
+  blue: '\x1b[34m',
+  magenta: '\x1b[35m',
+  green: '\x1b[32m',
+  amber: '\x1b[33m',
+  inverse: '\x1b[7m',
+  clear: '\x1b[2J\x1b[H',
+  hideCursor: '\x1b[?25l',
+  showCursor: '\x1b[?25h',
+  altScreen: '\x1b[?1049h',
+  normalScreen: '\x1b[?1049l'
+};
+
+function stripAnsi(value) {
+  return String(value || '').replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+}
+
+function visibleLength(value) {
+  return stripAnsi(value).length;
+}
+
+function padVisible(value, width) {
+  const text = String(value || '');
+  const pad = Math.max(0, width - visibleLength(text));
+  return `${text}${' '.repeat(pad)}`;
+}
+
+function boxLine(content = '', width = 84, color = ansi.cyan) {
+  return `${color}│${ansi.reset} ${padVisible(content, width - 4)} ${color}│${ansi.reset}`;
+}
+
+function currentMenuLabel(state) {
+  if ((state.paperSections || []).length && !state.currentSection) return 'Paper sections';
+  if (state.currentSection && !state.currentMode) return 'Section actions';
+  return 'Choose next';
+}
+
+function currentMenuItems(state) {
+  if ((state.paperSections || []).length && !state.currentSection) return state.paperSections || [];
+  return state.nextChoices || [];
+}
+
+function renderTuiScreen(state, selected = 0) {
+  const cards = readJson(cardsPath(state.slug), { cards: [] });
+  const width = 86;
+  const items = currentMenuItems(state);
+  const label = currentMenuLabel(state);
+  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : 'choose a paper section';
+  const top = `${ansi.cyan}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.cyan}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const rows = [
+    top,
+    boxLine(`${ansi.bold}${ansi.magenta}PaperMentor Live${ansi.reset} ${ansi.dim}HTML-first research paper navigator${ansi.reset}`, width),
+    boxLine(`${ansi.bold}${trim(state.title, 68)}${ansi.reset}`, width),
+    boxLine(`${ansi.dim}View:${ansi.reset} ${ansi.green}${state.renderedView}${ansi.reset}`, width),
+    boxLine(`${ansi.dim}Focus:${ansi.reset} ${trim(focus, 68)}`, width),
+    boxLine(`${ansi.dim}Blocks in HTML:${ansi.reset} ${cards.cards?.length || 0}  ${ansi.dim}Mode:${ansi.reset} explanations never print in CLI`, width),
+    `${ansi.cyan}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}${label}${ansi.reset} ${ansi.dim}(↑/↓ select · Enter choose · / ask anything · q quit)${ansi.reset}`, width)
+  ];
+  const visibleItems = items.length ? items : ['No dynamic choices yet. Run analyze with paper text or ask a paper question.'];
+  visibleItems.slice(0, 14).forEach((item, index) => {
+    const active = index === selected;
+    const pointer = active ? `${ansi.inverse}${ansi.bold}  ${String(index + 1).padStart(2, '0')}  ${ansi.reset}` : `${ansi.dim}  ${String(index + 1).padStart(2, '0')}  ${ansi.reset}`;
+    const text = active ? `${ansi.bold}${item}${ansi.reset}` : item;
+    rows.push(boxLine(`${pointer} ${trim(text, 68)}`, width, active ? ansi.magenta : ansi.cyan));
+  });
+  rows.push(`${ansi.cyan}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+  rows.push(boxLine(`${ansi.amber}Ask/chat are first-class choices.${ansi.reset} The chosen item becomes the next HTML block plan.`, width));
+  rows.push(bottom);
+  return rows.join('\n');
+}
+
+function applyTuiChoice(state, selected) {
+  const items = currentMenuItems(state);
+  const choice = items[selected];
+  if (!choice) return state;
+  if ((state.paperSections || []).length && !state.currentSection) {
+    state.currentSection = choice;
+    state.currentMode = '';
+    state.detectedItems = [];
+    state.currentLocation = choice;
+    state.currentFocus = `Section selected: ${choice}`;
+    state.nextChoices = state.sectionActions?.[sectionKey(choice)] || defaultSectionActions(choice);
+  } else {
+    state.currentFocus = choice;
+    state.selectedAction = choice;
+    if (/equation|eq\./i.test(choice)) state.currentMode = 'equations';
+    else if (/derivation|trace/i.test(choice)) state.currentMode = 'derivations';
+    else if (/dependenc|citation|related-work|contrast/i.test(choice)) state.currentMode = 'dependencies';
+    else if (/ask anything|chat about/i.test(choice)) state.currentMode = 'chat';
+  }
+  state.updatedAt = now();
+  writeJson(statePath(state.slug), state);
+  renderHtml(state.slug);
+  return state;
+}
+
+function runTui(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('tui requires --session <slug>');
+  let state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  let selected = Math.min(Number(args.cursor || 0), Math.max(0, currentMenuItems(state).length - 1));
+  if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log(renderTuiScreen(state, selected));
+    return;
+  }
+
+  const draw = () => {
+    process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}`);
+  };
+  const cleanup = () => {
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
+  };
+
+  process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  draw();
+  const handleKey = (key) => {
+    const items = currentMenuItems(state);
+    if (key === '\u0003' || key === 'q') {
+      cleanup();
+      process.exit(0);
+    } else if (key === '\u001b[A' || key === 'k') {
+      selected = (selected - 1 + items.length) % Math.max(1, items.length);
+      draw();
+    } else if (key === '\u001b[B' || key === 'j') {
+      selected = (selected + 1) % Math.max(1, items.length);
+      draw();
+    } else if (key === '\r' || key === '\n') {
+      state = applyTuiChoice(state, selected);
+      selected = 0;
+      draw();
+    } else if (key === '/') {
+      state.currentMode = 'chat';
+      state.currentFocus = `Ask anything about ${state.currentSection || state.title}`;
+      state.nextChoices = [`Ask anything about ${state.currentSection || state.title}`, `Chat about this section`, 'Return to section choices'];
+      writeJson(statePath(state.slug), state);
+      draw();
+    }
+  };
+  process.stdin.on('data', (chunk) => {
+    const keys = String(chunk).match(/\x1b\[[AB]|[\s\S]/g) || [];
+    for (const key of keys) handleKey(key);
+  });
+}
+
 function usage() {
-  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
+  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs analyze --session <slug> --paper-text-file paper.txt\n  node scripts/papermentor-session.mjs tui --session <slug>\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
   node scripts/papermentor-session.mjs section --session <slug> --index 2
   node scripts/papermentor-session.mjs mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
   node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]\n  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
@@ -1015,6 +1384,10 @@ try {
     }
   } else if (command === 'sections') {
     setSections(args);
+  } else if (command === 'analyze') {
+    analyzePaper(args);
+  } else if (command === 'tui') {
+    runTui(args);
   } else if (command === 'section') {
     selectSection(args);
   } else if (command === 'mode') {

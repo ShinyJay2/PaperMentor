@@ -128,29 +128,25 @@ PaperMentor is guided but interruptible. For each paper, it renders the HTML rea
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the paper does, the actual representative method figure image when the paper has one, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the paper does, the actual representative method figure image when the paper has one, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
 
 ```text
-Paper sections
-  [1] 1. Introduction
-  [2] 2. Related Work
-  [3] 3. Drifting Models for Generation
-
-Selected section: 3. Drifting Models for Generation
-
-Section actions
-  [1] Decode key equations
-  [2] Trace derivations
-  [3] Connect dependencies
-  [4] Resolve confusion
-
-Choose next:
-  [1] Explain Training objective — Eq. (6) symbol by symbol
-  [2] Trace Drift update — Eq. (4) → Training objective — Eq. (6)
-  [3] Explain why stopgrad is used
-  [4] Explain what V_{p,q} means visually
-  [5] I’m confused — ask me diagnostic questions
+╭──────────────────────────── PaperMentor Live ─────────────────────────────╮
+│ View: .papermentor/sessions/<paper>/index.html                             │
+│ Focus: 3. Drifting Models for Generation                                    │
+├─────────────────────────────────────────────────────────────────────────────┤
+│ Section actions (↑/↓ select · Enter choose · / ask anything · q quit)       │
+│  01  Give a compact method overview for this section                        │
+│  02  Explain Eq. (1) pushforward symbol by symbol                           │
+│  03  Trace Eq. (4) → Eq. (6) fixed-point objective                          │
+│  04  Explain why stopgrad is used and what would break without it           │
+│  05  Build the dependency chain for the method section                      │
+│  06  Ask anything about 3. Drifting Models for Generation                   │
+│  07  Chat about this section                                                │
+╰─────────────────────────────────────────────────────────────────────────────╯
 ```
+
+The action list is not hard-coded. PaperMentor inspects the selected section first: Introduction menus come from motivation and core concepts, Related Work menus can follow citations and compare method families, Method menus expose equations/propositions/algorithms, and Experiment menus focus on metrics, figures, and supported claims.
 
 Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally. Use semantic equation block titles such as `Training objective — Eq. (6)` so the block is readable and still traceable to the paper.
 

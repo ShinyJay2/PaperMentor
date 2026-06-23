@@ -46,12 +46,18 @@ On paper start:
 1. Detect the paper title, sections/table of contents, major equations, and representative method/system/algorithm figure.
 2. Render a first `Start Here` block in `index.html` containing one sentence about what the paper does, the actual representative figure crop, and detailed preliminaries.
 3. Print only the HTML path and section choices in CLI.
+4. Launch or offer the arrow-key TUI when the terminal supports it.
 
 Branching navigator behavior:
 
 - First menu: detected paper sections.
-- Section menu: `Decode key equations`, `Trace derivations`, `Connect dependencies`, `Resolve confusion`, and section-specific questions.
-- Mode menu: dynamically detected objects inside the selected section, e.g. `Explain Eq. (1) pushforward symbol by symbol`, `Trace Eq. (4) → Eq. (6)`, or `Build dependency chain for Proposition 3.1`.
+- Section menu: dynamically generated from the selected section text, not a fixed global checklist.
+  - Introduction: concepts, framing claims, motivation, and “why this paper exists.”
+  - Related Work: cited methods/papers, family comparisons, and citation-following actions.
+  - Method sections: equations, propositions, assumptions, algorithms, figures, derivation transitions, and compact method overview.
+  - Experiment sections: metrics, tables/figures, claims supported by results, and limitations.
+- Every section menu must include `Ask anything about <section>` and `Chat about this section`.
+- Mode/item menu: dynamically detected objects inside the selected section, e.g. `Explain Eq. (1) pushforward symbol by symbol`, `Trace Eq. (4) → Eq. (6)`, or `Build dependency chain for Proposition 3.1`.
 - Result: chosen explanations are appended to the same `index.html` as blocks. CLI output stays short and navigational.
 
 
@@ -88,6 +94,46 @@ node scripts/papermentor-session.mjs start \
   --sections "1. Introduction|2. Background|3. Methods|4. Experiments" \
   --body-file start-here.md \
   --figure-file figure-1-method-crop.png
+```
+
+## `/papermentor analyze`
+
+Purpose: inspect extracted paper text and generate section-specific navigator actions.
+
+Required behavior:
+
+- read the paper text, table of contents, references, and section bodies;
+- populate `state.json.paperSections`, `sectionActions`, and `sectionInsights`;
+- generate actions from actual section content:
+  - concepts and framing in Introduction;
+  - citation-following and method-family comparisons in Related Work;
+  - equations, propositions, algorithms, and assumptions in Method sections;
+  - metrics, tables, and claims in Experiments;
+- include `Ask anything about <section>` and `Chat about this section`;
+- do not write explanations to CLI or HTML during analysis.
+
+Helper:
+
+```bash
+node scripts/papermentor-session.mjs analyze --session <slug> --paper-text-file paper.txt
+```
+
+## `/papermentor tui`
+
+Purpose: run the interactive arrow-key navigator.
+
+Required behavior:
+
+- use ↑/↓ to move, Enter to choose, `/` for ask-anything/chat, and `q` to quit;
+- render a polished terminal surface that feels like PaperMentor is actively running;
+- keep CLI content navigational only;
+- after section selection, show dynamic actions from `state.json.sectionActions`;
+- after action selection, set `state.json.selectedAction` so the next explanation can be appended to `index.html`.
+
+Helper:
+
+```bash
+node scripts/papermentor-session.mjs tui --session <slug>
 ```
 
 ## `/papermentor scan`

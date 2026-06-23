@@ -106,7 +106,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'sections', 'section', 'mode', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -156,11 +156,13 @@ function validateSessionHelper() {
     const figurePath = join(temp, 'exact-pdf-crop-fixture.svg');
     const mapPath = join(temp, 'map.md');
     const equationPath = join(temp, 'equation.md');
+    const paperTextPath = join(temp, 'paper.txt');
     // This is a test fixture for attachment/copy/render behavior only. Product guidance rejects
     // Mermaid/redrawn schematics for real papers; real sessions must pass an actual PDF crop.
     writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280"><rect width="720" height="280" fill="#fbfaf6"/><rect x="26" y="24" width="668" height="210" rx="2" fill="#fff" stroke="#d8d0c3"/><text x="50" y="58" font-family="Times New Roman, serif" font-size="18" fill="#1f2937">Exact PDF crop fixture — replace with actual paper figure in real sessions</text><path d="M68 190 C150 88, 260 92, 338 170 S520 226, 626 112" fill="none" stroke="#222" stroke-width="2.5"/><circle cx="68" cy="190" r="4" fill="#222"/><circle cx="338" cy="170" r="4" fill="#222"/><circle cx="626" cy="112" r="4" fill="#222"/><line x1="68" y1="216" x2="626" y2="216" stroke="#222"/><line x1="68" y1="86" x2="68" y2="216" stroke="#222"/><text x="330" y="254" font-family="Times New Roman, serif" font-size="14" fill="#374151">Figure 1: fixture crop region</text></svg>');
     writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(paperTextPath, '1. Introduction\nGenerative modeling learns a mapping f such that the pushforward distribution matches the data distribution. The paper proposes Drifting Models, a training-time drifting field, one-step inference, and a contrast with diffusion/flow models.\n\n2. Related Work\nDiffusion-/Flow-based Models. Sohl-Dickstein et al., 2015 and Lipman et al., 2022 formulate iterative mappings. Generative Adversarial Networks. Goodfellow et al., 2014 train a generator adversarially. Variational Autoencoders. Kingma & Welling, 2013 optimize ELBO.\n\n3. Drifting Models for Generation\nWe denote the pushforward distribution as q = f# p epsilon. (1) A sample drifts as xi+1 = xi + Vp,q(xi). (2) Proposition 3.1 uses an anti-symmetric drifting field. The training objective uses stopgrad. (6)\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
@@ -170,6 +172,15 @@ function validateSessionHelper() {
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (1) pushforward symbol by symbol|Explain Eq. (6) training objective symbol by symbol'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.currentMode !== 'equations' || navState.detectedItems?.length !== 2 || !navState.nextChoices?.[0]?.includes('Eq. (1)')) failures.push('mode command should store dynamic section-local equation choices');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (!navState.sectionActions?.['1-introduction']?.some((choice) => choice.includes('pushforward distribution'))) failures.push('analyze should generate Introduction actions from section concepts');
+    if (!navState.sectionActions?.['2-related-work']?.some((choice) => choice.includes('Sohl-Dickstein et al., 2015'))) failures.push('analyze should generate Related Work actions from citations');
+    if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Eq. (6) training objective'))) failures.push('analyze should generate method equation actions from section equations');
+    const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    for (const phrase of ['PaperMentor Live', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
+      if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
+    }
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'turns.jsonl', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);

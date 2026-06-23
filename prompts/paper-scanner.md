@@ -33,5 +33,9 @@ HTML-first rules:
 - Write the substantive paper start into `index.html` as a `Start Here` block before giving explanations in CLI.
 - The CLI should show only the HTML path and detected section choices.
 - Detect paper sections and section-local objects so the user can branch like an interactive reading novel.
-- When a section is selected, generate dynamic choices from that section's actual equations, definitions, claims, algorithms, proof steps, and figures.
+- When a section is selected, generate dynamic choices from that section's actual equations, definitions, claims, algorithms, proof steps, figures, framing concepts, and citations.
+- Introduction choices should come from motivation, conceptual blockers, and key framing sentences.
+- Related Work choices should follow cited papers/references and compare the method families named in the section.
+- Method choices should expose equations, propositions, assumptions, derivation transitions, and algorithm steps.
+- Always include `Ask anything about <section>` and `Chat about this section`.
 - Never put long explanations in CLI; append them to HTML blocks.
