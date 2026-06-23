@@ -29,7 +29,11 @@ Rendered reading reports must use bundled local fonts: Satoshi for English text 
 
 ### Report structure rule
 
-The persistent report is `index.html`, backed by `cards.json`, `state.json`, and `notes.md`. Each appended block must keep a semantic title, location, type, timestamp, optional LaTeX, optional exact figure crop, and explanation body. Figure explanation sections must be rendered directly under the image and removed from the body, so the report reads as a structured paper annotation rather than duplicated notes.
+The persistent report is `index.html`, backed by `cards.json`, `state.json`, `turns.jsonl`, and `notes.md`. Each appended block must keep a semantic title, location, type, timestamp, optional LaTeX, optional exact figure crop, optional user question, and explanation body. Figure explanation sections must be rendered directly under the image and removed from the body, so the report reads as a structured paper annotation rather than duplicated notes.
+
+### Conversation promotion policy
+
+Do not ask after every turn whether to save the conversation. Log meaningful session turns to `turns.jsonl`, then promote only paper-understanding turns into `cards.json` and `index.html`. Auto-promote a turn when it explains an equation, traces a derivation, resolves confusion, identifies a missing dependency, explains a definition/lemma/theorem/assumption, explains a method step or representative figure, changes the reader's final insight, or answers a why-question about the paper. Do not promote install/setup/meta/tooling chatter, file-path questions, casual chat, duplicates, or shallow acknowledgements unless the user says `save this`, `pin this`, or `add this to the report`. If the user says `don't save this` or `문서에는 넣지 마`, log only when needed for session continuity and do not create an HTML block. Promoted conversation blocks must include `User question`, `Paused location` when relevant, `Missing dependency` when relevant, the answer, a paper reconnection, and a resume point.
 
 ### HTML block title rule
 
@@ -43,7 +47,7 @@ When starting a paper:
 
 1. Create or update one session folder at `.papermentor/sessions/<paper-slug>/`.
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
-3. Store live data in `state.json`, `cards.json`, and `notes.md`.
+3. Store live data in `state.json`, `cards.json`, `turns.jsonl`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
 5. Start with `Map the paper`, including the actual representative method/system/algorithm figure image when present. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 

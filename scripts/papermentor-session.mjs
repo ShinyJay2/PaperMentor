@@ -47,6 +47,7 @@ function sessionDir(slug) { return join(baseDir, slug); }
 function statePath(slug) { return join(sessionDir(slug), 'state.json'); }
 function cardsPath(slug) { return join(sessionDir(slug), 'cards.json'); }
 function notesPath(slug) { return join(sessionDir(slug), 'notes.md'); }
+function turnsPath(slug) { return join(sessionDir(slug), 'turns.jsonl'); }
 function indexPath(slug) { return join(sessionDir(slug), 'index.html'); }
 function assetDir(slug) { return join(sessionDir(slug), 'assets'); }
 
@@ -96,6 +97,9 @@ function ensureSession({ title, source, slug }) {
   if (!existsSync(notesPath(slug))) {
     writeFileSync(notesPath(slug), `# PaperMentor session: ${state.title}\n\nSource: ${state.source || 'not provided'}\n\n`);
   }
+  if (!existsSync(turnsPath(slug))) {
+    writeFileSync(turnsPath(slug), '');
+  }
   renderHtml(slug);
   return { state, cards };
 }
@@ -123,6 +127,56 @@ function readBody(args) {
   if (args['body-file']) return readFileSync(resolve(args['body-file']), 'utf8');
   if (args.body) return args.body;
   return '';
+}
+
+function readTextArg(args) {
+  if (args['text-file']) return readFileSync(resolve(args['text-file']), 'utf8');
+  if (args.text) return String(args.text);
+  if (args.body) return String(args.body);
+  if (args['body-file']) return readFileSync(resolve(args['body-file']), 'utf8');
+  return '';
+}
+
+function turnId(index) {
+  return `turn-${String(index).padStart(3, '0')}`;
+}
+
+function readTurns(slug) {
+  if (!existsSync(turnsPath(slug))) return [];
+  return readFileSync(turnsPath(slug), 'utf8')
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
+}
+
+function appendTurn(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('turn requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const turns = readTurns(slug);
+  const promotion = args.promote ? 'promote' : args['no-promote'] ? 'log-only' : (args.promotion || 'auto');
+  const turn = {
+    id: args.id || turnId(turns.length + 1),
+    role: args.role || 'user',
+    text: readTextArg(args),
+    location: args.location || state.currentLocation,
+    promotion,
+    reason: args.reason || '',
+    savedAs: args['saved-as'] || args.savedAs || '',
+    createdAt: now()
+  };
+  appendFileSync(turnsPath(slug), `${JSON.stringify(turn)}\n`);
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  console.log(`Logged ${turn.id} (${turn.role}, ${turn.promotion}) to .papermentor/sessions/${slug}/turns.jsonl`);
+}
+
+function hasForbiddenDiagramSubstitute(markdown) {
+  return /```\s*mermaid\b/i.test(markdown)
+    || /^\s*(graph|flowchart)\s+(TD|TB|BT|RL|LR)\b/im.test(markdown)
+    || /<div[^>]+class=["'][^"']*mermaid/i.test(markdown);
 }
 
 function splitChoices(value) {
@@ -188,6 +242,10 @@ function addCard(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const cards = readJson(cardsPath(slug), { schema: 'papermentor.cards.v1', cards: [] });
   const type = args.type || 'note';
+  const body = readBody(args);
+  if (hasForbiddenDiagramSubstitute(body)) {
+    throw new Error('report body contains a Mermaid/flowchart diagram substitute; attach an actual paper figure crop or write prose instead');
+  }
   const cardId = args.id || `${type}-${String(cards.cards.length + 1).padStart(3, '0')}`;
   const card = {
     id: cardId,
@@ -196,7 +254,10 @@ function addCard(args) {
     location: args.location || state.currentLocation,
     latex: args.latex || '',
     figure: prepareFigure(slug, cardId, args),
-    body: readBody(args),
+    userQuestion: args['user-question'] || args.question || '',
+    promotionReason: args['promotion-reason'] || args.reason || '',
+    originTurn: args['origin-turn'] || args.originTurn || '',
+    body,
     choices: splitChoices(args.choices),
     createdAt: now()
   };
@@ -218,7 +279,7 @@ function addCard(args) {
 
 Location: ${card.location}
 
-${card.latex ? `$$
+${card.userQuestion ? `### User question\n\n${card.userQuestion}\n\n` : ''}${card.latex ? `$$
 ${card.latex}
 $$
 
@@ -244,7 +305,7 @@ function documentLanguage(state, cards) {
   const text = [
     state?.title,
     state?.source,
-    ...(cards?.cards || []).flatMap((card) => [card.title, card.location, card.body, card.figure?.caption])
+    ...(cards?.cards || []).flatMap((card) => [card.title, card.location, card.userQuestion, card.body, card.figure?.caption])
   ].join('\n');
   return containsKorean(text) ? 'ko' : 'en';
 }
@@ -425,6 +486,29 @@ body {
 .paper-figure figcaption p { margin:6px 0; }
 .paper-figure figcaption strong { color:var(--ink); font-weight:720; }
 
+.user-question {
+  position:relative;
+  z-index:1;
+  max-width:760px;
+  margin:0 auto 22px;
+  padding:14px 16px;
+  border-left:3px solid var(--accent);
+  background:#f4f0e8;
+}
+.user-question-label {
+  margin-bottom:5px;
+  color:var(--accent);
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+}
+.user-question-text {
+  color:#1f1c18;
+  font-size:15px;
+  line-height:1.55;
+}
 .latex {
   position:relative;
   z-index:1;
@@ -509,7 +593,7 @@ body {
     <div class="paper-meta">${(cards.cards || []).length} block${(cards.cards || []).length === 1 ? '' : 's'} · updated ${escapeHtml(state.updatedAt || '')}</div>
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
+    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
 $$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div class="body">${markdownToHtml(htmlExplanationOnly(bodyWithoutFigureExplanation(card.body || '')))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
@@ -519,6 +603,12 @@ $$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div
   writeFileSync(indexPath(slug), html);
 }
 
+
+function renderUserQuestion(card) {
+  const question = String(card?.userQuestion || '').trim();
+  if (!question) return '';
+  return `<aside class="user-question"><div class="user-question-label">User question</div><div class="user-question-text">${formatInline(escapeHtml(question))}</div></aside>`;
+}
 
 function renderFigure(figure, explanation = '') {
   if (!figure || !figure.src) return '';
@@ -597,7 +687,8 @@ function figureExplanationMarkdown(card) {
   if (!card?.figure) return '';
   const section = splitFigureExplanationSection(card.body || '').figure;
   const facts = labeledFigureFacts(section);
-  const semanticCaption = String(card.figure.caption || '').trim();
+  const rawSemanticCaption = String(card.figure.caption || '').trim();
+  const semanticCaption = isProvenanceOnlyCaption(rawSemanticCaption) ? '' : rawSemanticCaption;
   const korean = containsKorean(section || card.body || card.title);
   const identity = semanticCaption
     || facts['figure / location']
@@ -697,14 +788,34 @@ function markdownToHtml(markdown) {
     html += '</table>';
     tableRows = [];
   };
-  for (const line of lines) {
-    if (isTableRow(line)) {
+  const closeBlocks = () => { closeList(); closeTable(); };
+  const displayMathBlock = (delimiter, endDelimiter, index) => {
+    const collected = [lines[index]];
+    let cursor = index;
+    if (lines[index].trim() !== endDelimiter) {
+      cursor += 1;
+      while (cursor < lines.length) {
+        collected.push(lines[cursor]);
+        if (lines[cursor].trim() === endDelimiter || (endDelimiter === '$$' && lines[cursor].trim().endsWith('$$') && cursor !== index)) break;
+        cursor += 1;
+      }
+    }
+    closeBlocks();
+    html += `<div class="latex">${collected.join('\n')}</div>`;
+    return cursor;
+  };
+  for (let i = 0; i < lines.length; i += 1) {
+    const line = lines[i];
+    const trimmed = line.trim();
+    if (trimmed === '\\[') { i = displayMathBlock('\\[', '\\]', i); }
+    else if (trimmed === '$$' || (trimmed.startsWith('$$') && !trimmed.endsWith('$$'))) { i = displayMathBlock('$$', '$$', i); }
+    else if (isTableRow(line)) {
       closeList();
       if (!isTableSeparator(line)) tableRows.push(tableCells(line));
     }
-    else if (/^###\s+/.test(line)) { closeList(); closeTable(); html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
-    else if (/^##\s+/.test(line)) { closeList(); closeTable(); html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
-    else if (/^#\s+/.test(line)) { closeList(); closeTable(); html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
+    else if (/^###\s+/.test(line)) { closeBlocks(); html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
+    else if (/^##\s+/.test(line)) { closeBlocks(); html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
+    else if (/^#\s+/.test(line)) { closeBlocks(); html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
     else if (/^-\s+/.test(line)) {
       closeTable();
       if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
@@ -715,11 +826,10 @@ function markdownToHtml(markdown) {
       if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
       html += `<li>${formatInline(line.replace(/^\d+\.\s+/, ''))}</li>`;
     }
-    else if (line.trim() === '') { closeList(); closeTable(); }
-    else { closeList(); closeTable(); html += `<p>${formatInline(line)}</p>`; }
+    else if (trimmed === '') { closeBlocks(); }
+    else { closeBlocks(); html += `<p>${formatInline(line)}</p>`; }
   }
-  closeList();
-  closeTable();
+  closeBlocks();
   return html;
 }
 
@@ -753,7 +863,7 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
 }
 
 function usage() {
-  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>]\n  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
+  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>]\n  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]\n  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -767,6 +877,10 @@ try {
     printConsole(state, cards);
   } else if (command === 'card') {
     addCard(args);
+  } else if (command === 'turn') {
+    appendTurn(args);
+  } else if (command === 'promote') {
+    addCard({ ...args, type: args.type || 'confusion' });
   } else if (command === 'status') {
     const slug = args.session || args.slug;
     if (!slug) throw new Error('status requires --session <slug>');

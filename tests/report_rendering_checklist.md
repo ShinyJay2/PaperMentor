@@ -10,3 +10,6 @@
 - [ ] `notes.md` remains a portable Markdown mirror of the report without CLI-only blockers.
 - [ ] Installer copies root `assets/` into the installed skill directory.
 - [ ] Session renderer copies bundled fonts into `.papermentor/sessions/<slug>/assets/fonts/`.
+- [ ] `turns.jsonl` records user/assistant conversation turns separately from the polished report.
+- [ ] Promoted conversation-derived blocks include a visible `User question` section without dumping raw chat logs.
+- [ ] Mermaid/flowchart substitutes are rejected in report bodies; representative paper figures must be actual crops/screenshots when present.

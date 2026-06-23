@@ -1,5 +1,7 @@
 # Confusion Response
 
+User question: `<verbatim user question>`
+
 Paused location: `<exact location>`
 
 ## Direct answer

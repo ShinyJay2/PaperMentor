@@ -123,7 +123,8 @@ PaperMentor is guided but interruptible. For each paper, it keeps one local HTML
 .papermentor/sessions/<paper-slug>/
   index.html      # rendered paper blocks, appended one section at a time
   state.json      # current location, Reading Path, choices
-  cards.json      # paper map, equation, derivation, dependency cards
+  cards.json      # promoted study blocks
+  turns.jsonl     # raw-ish conversation history
   notes.md        # portable Markdown notes
 ```
 
@@ -147,6 +148,8 @@ Choose next:
 ```
 
 Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally. Use semantic equation block titles such as `Training objective — Eq. (6)` so the block is readable and still traceable to the paper.
+
+Paper-related interruptions are not dumped into the report as chat logs. PaperMentor logs turns in `turns.jsonl`, then automatically promotes useful understanding repairs into polished blocks with a visible **User question**, missing dependency, answer, paper reconnection, and resume point. Meta/tooling chatter stays out of HTML unless you explicitly say `save this` or `add this to report`; `don't save this` keeps it out.
 
 Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies these font files into the skill, and each generated session copies them into `.papermentor/sessions/<paper-slug>/assets/fonts/`, so the report typography works after installing the skill without remote font CSS.
 

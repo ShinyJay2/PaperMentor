@@ -12,3 +12,10 @@ Protocol:
 7. Resume from the exact location.
 
 If the user remains confused, switch to recursive why.
+
+
+Conversation recording:
+- Treat user interruptions about paper meaning as auto-promoted study events.
+- Log the raw user question and answer to `turns.jsonl` when the session helper is available.
+- Add the cleaned explanation to the report as a `confusion` or `recursive-why` card with `--user-question`.
+- Do not promote meta/tooling chatter unless the user explicitly says to save it.

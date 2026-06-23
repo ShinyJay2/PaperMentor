@@ -10,7 +10,8 @@ PaperMentor uses one local append-only reading document per paper session:
 .papermentor/sessions/<paper-slug>/
   index.html      # single browser-rendered block document
   state.json      # current location, Reading Path, choices
-  cards.json      # active cards
+  cards.json      # promoted study blocks
+  turns.jsonl     # raw-ish user/assistant turn log
   notes.md        # portable Markdown notes
 ```
 
@@ -35,6 +36,17 @@ Reading Path:
 Status marks: `[✓]` complete, `[›]` recommended current step, `[ ]` pending, `[!]` blocked, `[↺]` revisit.
 
 Always offer numbered choices. Accept either the number or a natural-language interruption.
+
+## Conversation promotion
+
+Codex decides whether a turn belongs in the polished HTML report. Do not ask after every conversation. Use this policy:
+
+- Always preserve useful reading context in `turns.jsonl` with `/papermentor turn`.
+- Auto-promote to `cards.json`/`index.html` when the answer repairs paper understanding: equations, derivations, dependencies, proofs, methods, representative figures, assumptions, recursive why, or final insight.
+- Do not promote setup/meta/tooling chatter, casual chat, file-path questions, duplicates, or shallow confirmations.
+- Honor explicit overrides: `save this`, `pin this`, `add this to report`, `이 답변 저장해` promote; `don't save this`, `off the record`, `문서에는 넣지 마` do not promote.
+- Promoted conversation blocks must include the user question, paper location, missing dependency when applicable, answer, paper reconnection, and resume point.
+
 
 ## `/papermentor start`
 
@@ -207,6 +219,29 @@ Required output:
 - what to observe;
 - conclusion;
 - limitation of the visualization.
+
+
+## `/papermentor turn`
+
+Purpose: record one user or assistant conversation turn without necessarily adding it to the HTML report.
+
+Required behavior:
+
+- append JSONL to `.papermentor/sessions/<paper-slug>/turns.jsonl`;
+- include role, text, location, promotion decision, reason, optional `savedAs`, and timestamp;
+- use `--promote` when the turn should be converted into a study block;
+- use `--no-promote` for meta/tooling/casual turns.
+
+## `/papermentor promote`
+
+Purpose: convert a useful conversation turn into a study block.
+
+Required behavior:
+
+- create a normal card with `--origin-turn` and `--user-question`;
+- keep raw transcript in `turns.jsonl`;
+- write only the cleaned learning explanation into `cards.json` and `index.html`;
+- never dump the whole chat transcript into the report.
 
 ## `/papermentor choose`
 

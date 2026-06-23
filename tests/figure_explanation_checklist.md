@@ -10,3 +10,6 @@
 - [ ] Visual confusion is repaired with a minimal example when needed.
 
 - [ ] Korean figure-explanation headings such as `그림 설명` are moved directly under the image, not left as body sections.
+
+- [ ] Mermaid/flowchart substitutes are rejected; no generated diagram may occupy the representative figure slot.
+- [ ] If the actual paper figure cannot be cropped, the blocker stays in CLI/state rather than appearing as a fake HTML figure.

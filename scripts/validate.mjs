@@ -106,7 +106,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'choose', 'render', 'state', 'pause', 'resume']) {
+for (const command of ['start', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -164,7 +164,7 @@ function validateSessionHelper() {
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
-    for (const rel of ['index.html', 'state.json', 'cards.json', 'notes.md']) {
+    for (const rel of ['index.html', 'state.json', 'cards.json', 'turns.jsonl', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
     }
     const htmlFilesAfterFirst = readdirSync(dir).filter((name) => name.endsWith('.html'));
@@ -193,23 +193,43 @@ function validateSessionHelper() {
     }
     if (!cardData.cards?.[0]?.figure?.src?.startsWith('assets/')) failures.push('session card should persist copied figure asset metadata');
     if (!existsSync(join(dir, cardData.cards?.[0]?.figure?.src || 'missing'))) failures.push('session helper should copy figure file into session assets');
+    cardData.cards[0].figure.caption = 'Exact crop of Figure 1 from the paper: legacy caption.';
+    writeFileSync(join(dir, 'cards.json'), `${JSON.stringify(cardData, null, 2)}\n`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'status', '--session', 'generative-modeling-via-drifting'], { cwd: temp, stdio: 'pipe' });
+    html = readFileSync(join(dir, 'index.html'), 'utf8');
+    if (html.includes('Exact crop of Figure 1 from the paper: legacy caption.')) failures.push('session renderer should suppress provenance-only captions already stored in legacy cards.json');
     const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
     if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
     if (notes.includes('## Figure explanation under image')) failures.push('session notes should move the figure explanation under the image and remove the heading');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    const badDiagramPath = join(temp, 'bad-mermaid.md');
+    writeFileSync(badDiagramPath, `${'```'}${'mermaid'}\n${'flowchart'} ${'TD'}\nA-->B\n${'```'}\n`);
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Bad diagram substitute', '--body-file', badDiagramPath], { cwd: temp, stdio: 'pipe' });
+      failures.push('session helper should reject Mermaid/flowchart diagram substitutes in report bodies');
+    } catch {
+      // expected: representative figures must be actual crops/screenshots or prose, not Mermaid substitutes.
+    }
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'turn', '--session', 'generative-modeling-via-drifting', '--role', 'user', '--text', 'Why is stopgrad used in Eq. (6)?', '--promote', '--reason', 'paper equation confusion'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'turn', '--session', 'generative-modeling-via-drifting', '--role', 'assistant', '--text', 'It freezes the drift target branch so the generator output moves toward a fixed target.', '--promote', '--saved-as', 'confusion-003'], { cwd: temp, stdio: 'pipe' });
+    const turns = readFileSync(join(dir, 'turns.jsonl'), 'utf8').trim().split(/\r?\n/).filter(Boolean).map((line) => JSON.parse(line));
+    if (turns.length !== 2 || turns[0].promotion !== 'promote' || turns[1].savedAs !== 'confusion-003') failures.push('turns.jsonl should record promoted user/assistant turns with metadata');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\mathcal{L}=\mathbb{E}\|x-\operatorname{stopgrad}(x+V_{p,q}(x))\|^2', '--user-question', 'Why is stopgrad used in Eq. (6)?', '--origin-turn', 'turn-001', '--promotion-reason', 'paper equation confusion', '--body-file', equationPath, '--choices', 'Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should keep exactly one HTML file, got ${htmlFiles.join(',')}`);
     html = readFileSync(join(dir, 'index.html'), 'utf8');
     cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((cardData.cards || []).length !== 2) failures.push('session helper should persist two cards after second card');
-    for (const requiredField of ['id', 'type', 'title', 'location', 'body', 'choices', 'createdAt']) {
+    for (const requiredField of ['id', 'type', 'title', 'location', 'userQuestion', 'originTurn', 'promotionReason', 'body', 'choices', 'createdAt']) {
       if (!(requiredField in (cardData.cards?.[0] || {}))) failures.push(`session card should keep structured report field: ${requiredField}`);
     }
     if (!cardData.schema || !cardData.cards?.[0]?.figure?.src) failures.push('session cards.json should keep schema and figure asset data');
+    if (cardData.cards?.[1]?.userQuestion !== 'Why is stopgrad used in Eq. (6)?' || cardData.cards?.[1]?.originTurn !== 'turn-001') failures.push('promoted conversation cards should persist user question and origin turn metadata');
     if ((html.match(/class="block"/g) || []).length !== 2) failures.push('session helper should render two blocks after second card');
-    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"']) {
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
     for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state']) {
@@ -282,7 +302,7 @@ function validateAllBlockTypes() {
       ['derivation', 'Derivation trace — Drift target to Eq. (6)', bodies.derivation, []],
       ['dependency', 'Dependency trace — Eq. (6)', bodies.dependency, []],
       ['proof', 'Proof walkthrough — Zero drift claim', bodies.proof, []],
-      ['confusion', 'Confusion repair — stopgrad', bodies.confusion, []],
+      ['confusion', 'Confusion repair — stopgrad', bodies.confusion, ['--user-question', 'Why is stopgrad used here?', '--origin-turn', 'turn-009']],
       ['recursive-why', 'Recursive why — stopgrad', bodies['recursive-why'], []],
       ['visualization', 'Visualization card — Drift field', bodies.visualization, []],
       ['final-insight', 'Final insight', bodies['final-insight'], []]
@@ -304,7 +324,7 @@ function validateAllBlockTypes() {
     for (const phrase of ['Prerequisite ladder', 'Method dissection', 'Training objective', 'Derivation trace', 'Dependency trace', 'Proof walkthrough', 'Confusion repair', 'Recursive why', 'Visualization card', 'Final insight']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing stage phrase: ${phrase}`);
     }
-    for (const phrase of ['MathJax', '<ol>', '<table>', '<th>Line</th>', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
+    for (const phrase of ['MathJax', '<ol>', '<table>', '<th>Line</th>', 'User question', 'Why is stopgrad used here?', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing structural phrase: ${phrase}`);
     }
     if (html.includes('학습' + ' ' + '목적' + '식')) failures.push('all-block HTML should not contain awkward Korean technical phrasing');
