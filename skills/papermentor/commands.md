@@ -227,6 +227,7 @@ Required behavior:
 - regenerate `.papermentor/sessions/<paper-slug>/index.html`;
 - keep LaTeX display math in card data so MathJax can render it in the block document;
 - print the block document path.
+- keep blockers, diagnostic prompts, and next actions out of `index.html`; those belong in the CLI Reading Console and session state.
 
 ## `/papermentor state`
 

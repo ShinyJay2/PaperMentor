@@ -171,7 +171,6 @@ function statusClass(status) {
 function renderHtml(slug) {
   const state = readJson(statePath(slug), {});
   const cards = readJson(cardsPath(slug), { cards: [] });
-  const data = JSON.stringify({ state, cards }, null, 2).replace(/<\//g, '<\\/');
   const html = `<!doctype html>
 <html lang="en">
 <head>
@@ -185,13 +184,14 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 <style>
 :root {
   color-scheme: light;
-  --field:#f4f1e8;
-  --paper:#fffdf8;
-  --ink:#191919;
-  --muted:#6f6a60;
-  --line:#c9bfae;
-  --rule:#222;
-  --accent:#2f54b8;
+  --field:#f3efe4;
+  --paper:#fffef9;
+  --ink:#191715;
+  --muted:#726b60;
+  --line:#d6ccba;
+  --rule:#2a2723;
+  --accent:#405f9f;
+  --accent-soft:#eef2f8;
   --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --serif: "Times New Roman", Times, Charter, Georgia, serif;
 }
@@ -202,45 +202,72 @@ body {
   color:var(--ink);
   font-family:var(--serif);
   background:
-    linear-gradient(90deg, rgba(47,84,184,.04) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(47,84,184,.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(79,60,32,.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(79,60,32,.035) 1px, transparent 1px),
+    radial-gradient(circle at 50% -10%, rgba(255,255,255,.7), transparent 34%),
     var(--field);
-  background-size:28px 28px;
+  background-size:28px 28px, 28px 28px, auto, auto;
 }
 .page {
-  width:min(920px, calc(100% - 40px));
+  width:min(900px, calc(100% - 44px));
   margin:0 auto;
-  padding:44px 0 80px;
+  padding:42px 0 84px;
 }
-.blocks { display:grid; gap:26px; }
+.paper-title {
+  max-width:820px;
+  margin:0 auto 34px;
+  padding:22px 24px 24px;
+  text-align:center;
+  background:rgba(255,254,249,.72);
+  border-top:3px double var(--rule);
+  border-bottom:1px solid var(--line);
+}
+.paper-title h1 {
+  margin:0;
+  color:var(--ink);
+  font-family:var(--serif);
+  font-size:clamp(32px, 5vw, 52px);
+  line-height:1.04;
+  font-weight:700;
+  letter-spacing:-.025em;
+}
+.paper-source,
+.paper-meta {
+  margin-top:10px;
+  color:var(--muted);
+  font-family:var(--mono);
+  font-size:10px;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  overflow-wrap:anywhere;
+}
+.paper-meta { margin-top:7px; }
+.blocks { display:grid; gap:30px; }
 .block {
   position:relative;
   background:var(--paper);
   border:1px solid var(--line);
-  padding:42px 56px 50px;
-  box-shadow:0 1px 0 rgba(0,0,0,.04);
+  border-radius:2px;
+  padding:40px 56px 50px;
+  box-shadow:0 16px 38px rgba(65,48,26,.075);
 }
-.block:before {
-  content:attr(data-index);
+.block:after {
+  content:'';
   position:absolute;
-  left:-1px;
-  top:-1px;
-  width:38px;
-  height:34px;
-  display:grid;
-  place-items:center;
-  border-right:1px solid var(--line);
-  border-bottom:1px solid var(--line);
-  background:#f1eadf;
-  color:var(--accent);
-  font-family:var(--mono);
-  font-size:13px;
-  font-weight:700;
+  inset:10px;
+  border:1px solid rgba(214,204,186,.42);
+  pointer-events:none;
 }
 .block-head {
+  position:relative;
+  z-index:1;
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:18px;
+  align-items:start;
   border-bottom:1px solid var(--rule);
-  padding-bottom:12px;
-  margin-bottom:22px;
+  padding-bottom:13px;
+  margin-bottom:23px;
 }
 .block h1,
 .block h2,
@@ -255,6 +282,19 @@ body {
   margin:0;
   font-size:31px;
 }
+.folio {
+  align-self:start;
+  border:1px solid var(--line);
+  background:var(--accent-soft);
+  color:var(--accent);
+  padding:5px 8px;
+  font-family:var(--mono);
+  font-size:10px;
+  font-weight:700;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  white-space:nowrap;
+}
 .location {
   margin-top:7px;
   color:var(--muted);
@@ -264,6 +304,8 @@ body {
   text-transform:uppercase;
 }
 .latex {
+  position:relative;
+  z-index:1;
   margin:18px 0 24px;
   padding:18px 20px;
   overflow-x:auto;
@@ -272,6 +314,8 @@ body {
   font-size:16px;
 }
 .body {
+  position:relative;
+  z-index:1;
   max-width:760px;
   margin:0 auto;
   color:#1d1d1d;
@@ -299,8 +343,11 @@ body {
   text-align:center;
 }
 @media (max-width: 640px) {
-  .page { width:min(100% - 24px, 920px); padding:24px 0 52px; }
-  .block { padding:54px 24px 32px; }
+  .page { width:min(100% - 24px, 900px); padding:24px 0 52px; }
+  .paper-title { padding:18px 14px 20px; margin-bottom:22px; }
+  .block { padding:30px 24px 34px; }
+  .block:after { inset:7px; }
+  .block-head { grid-template-columns:1fr; gap:10px; }
   .block-title { font-size:26px; }
   .body { font-size:16px; }
 }
@@ -308,16 +355,37 @@ body {
 </head>
 <body>
 <main class="page">
+  <header class="paper-title">
+    <h1>${escapeHtml(state.title || 'Paper reading session')}</h1>
+    ${state.source ? `<div class="paper-source">${escapeHtml(state.source)}</div>` : ''}
+    <div class="paper-meta">${(cards.cards || []).length} block${(cards.cards || []).length === 1 ? '' : 's'} · updated ${escapeHtml(state.updatedAt || '')}</div>
+  </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><h2 class="block-title">${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></header>${card.latex ? `<div class="latex">$$
+    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(card.title)}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
-$$</div>` : ''}<div class="body">${markdownToHtml(card.body || '')}</div></article>`).join('\n') || '<article class="block empty" data-index="0">No paper blocks yet.</article>'}
+$$</div>` : ''}<div class="body">${markdownToHtml(htmlExplanationOnly(card.body || ''))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
-<script id="papermentor-data" type="application/json">${data}</script>
 </body>
 </html>`;
   writeFileSync(indexPath(slug), html);
+}
+
+
+function htmlExplanationOnly(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const kept = [];
+  let skipping = false;
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading) {
+      const title = heading[2].trim().toLowerCase().replace(/[:.!?]+$/g, '');
+      skipping = /^(likely\s+blockers?|blockers?|recommended\s+next|next\s+actions?|choose\s+next|diagnostic\s+questions?)$/.test(title);
+      if (skipping) continue;
+    }
+    if (!skipping) kept.push(line);
+  }
+  return kept.join('\n').trim();
 }
 
 function markdownToHtml(markdown) {

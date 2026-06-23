@@ -20,4 +20,4 @@ node scripts/papermentor-session.mjs card --session paper-title --type equation 
 node scripts/papermentor-session.mjs status --session paper-title
 ```
 
-The generated HTML should contain only the accumulated paper blocks. Do not render a left sidebar, product masthead, or dashboard chrome inside `index.html`.
+The generated HTML should contain a quiet paper title sheet followed by the accumulated explanation blocks. Do not render a left sidebar, product masthead, dashboard chrome, likely-blocker lists, diagnostic prompts, or next-action menus inside `index.html`.

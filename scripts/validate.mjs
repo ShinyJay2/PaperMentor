@@ -133,7 +133,7 @@ function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
     const bodyPath = join(temp, 'card.md');
-    writeFileSync(bodyPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n');
+    writeFileSync(bodyPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'equation', '--title', 'Equation (6)', '--latex', '\\mathcal{L}=\\mathbb{E}\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\|^2', '--body-file', bodyPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
@@ -143,10 +143,10 @@ function validateSessionHelper() {
     const htmlFiles = readdirSync(dir).filter((name) => name.endsWith('.html'));
     if (htmlFiles.length !== 1 || htmlFiles[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFiles.join(',')}`);
     const html = readFileSync(join(dir, 'index.html'), 'utf8');
-    for (const phrase of ['MathJax', 'Equation (6)', 'class="block"', 'data-index="1"']) {
+    for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation (6)', 'class="paper-title"', 'class="block"', 'data-index="1"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
-    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head']) {
+    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'Likely blockers', 'This should stay in CLI/state']) {
       if (html.includes(phrase)) failures.push(`session block document should not render dashboard chrome: ${phrase}`);
     }
   } catch (error) {
