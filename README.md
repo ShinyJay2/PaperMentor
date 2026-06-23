@@ -115,9 +115,9 @@ Claude Code: ~/.claude/skills/papermentor
 ---
 
 
-## Append-only reading document
+## HTML-first reading room
 
-PaperMentor is guided but interruptible. For each paper, it keeps one local HTML document that grows block by block instead of creating a dashboard or a pile of separate HTML files:
+PaperMentor is guided but interruptible. For each paper, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
 
 ```text
 .papermentor/sessions/<paper-slug>/
@@ -128,16 +128,21 @@ PaperMentor is guided but interruptible. For each paper, it keeps one local HTML
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first paper-map block should include the actual representative method figure image when the paper has one. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the paper does, the actual representative method figure image when the paper has one, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal stays lightweight and choice-driven:
 
 ```text
-Reading Path
-  [✓] Map the paper
-  [›] Decode key equations
-  [ ] Trace derivations
-  [ ] Connect dependencies
-  [ ] Resolve confusion
-  [ ] Extract final insight
+Paper sections
+  [1] 1. Introduction
+  [2] 2. Related Work
+  [3] 3. Drifting Models for Generation
+
+Selected section: 3. Drifting Models for Generation
+
+Section actions
+  [1] Decode key equations
+  [2] Trace derivations
+  [3] Connect dependencies
+  [4] Resolve confusion
 
 Choose next:
   [1] Explain Training objective — Eq. (6) symbol by symbol

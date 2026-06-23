@@ -60,7 +60,7 @@ function writeJson(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
-function defaultState({ title, source, slug }) {
+function defaultState({ title, source, slug, sections = [] }) {
   return {
     schema: 'papermentor.session.v1',
     title,
@@ -69,28 +69,35 @@ function defaultState({ title, source, slug }) {
     createdAt: now(),
     updatedAt: now(),
     currentLocation: 'Paper map',
-    currentFocus: 'Start with the paper map, then choose the next blocker.',
+    currentFocus: 'Open the HTML reading room first, then choose a paper section.',
     readingPath: pathItems.map(([key, label], index) => ({ key, label, status: index === 0 ? 'current' : 'pending' })),
-    nextChoices: [
-      'Decode key equations',
-      'Trace the first important derivation',
-      'Build a dependency chain',
-      'Ask me what feels confusing'
+    paperSections: sections,
+    currentSection: '',
+    currentMode: '',
+    detectedItems: [],
+    nextChoices: sections.length ? sections : [
+      'Open the HTML reading room',
+      'Detect paper sections',
+      'Ask a paper question'
     ],
     renderedView: `.papermentor/sessions/${slug}/index.html`
   };
 }
 
-function ensureSession({ title, source, slug }) {
+function ensureSession({ title, source, slug, sections = [] }) {
   const dir = sessionDir(slug);
   mkdirSync(dir, { recursive: true });
   const state = existsSync(statePath(slug))
     ? readJson(statePath(slug), {})
-    : defaultState({ title, source, slug });
+    : defaultState({ title, source, slug, sections });
   state.updatedAt = now();
   state.title = title || state.title;
   state.source = source || state.source;
   state.renderedView = `.papermentor/sessions/${slug}/index.html`;
+  if (sections.length) {
+    state.paperSections = sections;
+    if (!state.currentSection) state.nextChoices = sections;
+  }
   const cards = readJson(cardsPath(slug), { schema: 'papermentor.cards.v1', cards: [] });
   writeJson(statePath(slug), state);
   writeJson(cardsPath(slug), cards);
@@ -115,6 +122,7 @@ function setPathStatus(state, key, status) {
 function inferPathKey(type) {
   const map = {
     'paper-map': 'map', scan: 'map', prerequisite: 'map', prerequisites: 'map', 'prerequisite-ladder': 'map', method: 'map',
+    'start-here': 'map',
     equation: 'equations', 'equation-card': 'equations', derivation: 'derivations', 'derivation-trace': 'derivations',
     dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies',
     confusion: 'confusion', why: 'confusion', 'recursive-why': 'confusion', visualization: 'confusion', visualize: 'confusion',
@@ -233,6 +241,90 @@ function prepareFigure(slug, cardId, args) {
     alt: args['figure-alt'] || args.alt || `${args.title || 'Paper'} figure`,
     caption: figureCaption(args)
   };
+}
+
+function defaultSectionActions(section) {
+  return [
+    `Decode key equations in ${section}`,
+    `Trace derivations in ${section}`,
+    `Connect dependencies in ${section}`,
+    `Resolve confusion in ${section}`,
+    `Ask a question about ${section}`
+  ];
+}
+
+function defaultModeItems(mode, section) {
+  const scope = section || 'this section';
+  const map = {
+    equations: [`Detect equations in ${scope}`, `Explain the first key equation symbol by symbol`, `Choose an equation by number`],
+    derivations: [`Detect derivation transitions in ${scope}`, `Trace the most important transition`, `Choose a transition by number`],
+    dependencies: [`Map definitions and claims in ${scope}`, `Build backward dependencies`, `Build forward dependencies`],
+    confusion: [`Ask a diagnostic question about ${scope}`, `Repair my current confusion`, `Resume the exact paused location`],
+    method: [`Explain the method pipeline in ${scope}`, `Connect method steps to equations`, `Find assumptions and failure modes`]
+  };
+  return map[mode] || [`Detect choices in ${scope}`, `Ask a question about ${scope}`];
+}
+
+function setSections(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('sections requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const sections = splitChoices(args.sections || readTextArg(args));
+  if (!sections.length) throw new Error('sections requires --sections "A|B|C" or --text-file');
+  state.paperSections = sections;
+  state.currentLocation = 'Paper section navigator';
+  state.currentFocus = 'Choose a paper section; explanations render only in HTML.';
+  state.currentSection = '';
+  state.currentMode = '';
+  state.detectedItems = [];
+  state.nextChoices = sections;
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  printConsole(state);
+}
+
+function selectSection(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('section requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const raw = args.section || args.name || args.title || '';
+  const index = Number(args.index || args.choice || 0);
+  const section = raw || (index ? state.paperSections?.[index - 1] : '');
+  if (!section) throw new Error('section requires --section <name> or --index <n>');
+  const actions = splitChoices(args.choices).length ? splitChoices(args.choices) : defaultSectionActions(section);
+  state.currentSection = section;
+  state.currentMode = '';
+  state.detectedItems = [];
+  state.currentLocation = section;
+  state.currentFocus = `Section selected: ${section}`;
+  state.nextChoices = actions;
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  printConsole(state);
+}
+
+function setMode(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('mode requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const mode = args.mode || args.type || 'equations';
+  const items = splitChoices(args.items || args.choices || readTextArg(args));
+  const section = args.section || state.currentSection || 'current section';
+  state.currentSection = section;
+  state.currentMode = mode;
+  state.currentLocation = section;
+  state.currentFocus = `${mode} menu for ${section}`;
+  state.detectedItems = items;
+  state.nextChoices = items.length ? items : defaultModeItems(mode, section);
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  printConsole(state);
 }
 
 function addCard(args) {
@@ -577,9 +669,7 @@ body {
     ${state.source ? `<div class="paper-source">${escapeHtml(state.source)}</div>` : ''}
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
-${escapeHtml(card.latex)}
-$$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div class="body">${markdownToHtml(htmlExplanationOnly(bodyWithoutFigureExplanation(card.body || '')))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
+    ${(cards.cards || []).map((card, index) => renderCardArticle(card, index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
 </body>
@@ -587,6 +677,19 @@ $$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div
   writeFileSync(indexPath(slug), html);
 }
 
+
+function renderCardArticle(card, index) {
+  const baseBody = htmlExplanationOnly(bodyWithoutFigureExplanation(card.body || ''));
+  const figure = renderFigure(card.figure, figureExplanationMarkdown(card));
+  const head = `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
+${escapeHtml(card.latex)}
+$$</div>` : ''}`;
+  if (card.type === 'start-here' && figure) {
+    const { lead, rest } = splitStartHereLead(baseBody);
+    return `${head}${lead ? `<div class="body">${markdownToHtml(lead)}</div>` : ''}${figure}${rest ? `<div class="body">${markdownToHtml(rest)}</div>` : ''}</article>`;
+  }
+  return `${head}${figure}<div class="body">${markdownToHtml(baseBody)}</div></article>`;
+}
 
 function renderUserQuestion(card) {
   const question = String(card?.userQuestion || '').trim();
@@ -640,6 +743,36 @@ function splitFigureExplanationSection(markdown) {
 
 function bodyWithoutFigureExplanation(markdown) {
   return splitFigureExplanationSection(markdown).body;
+}
+
+function isStartHereLeadHeading(title) {
+  const normalized = normalizeHeading(title);
+  return /^(one[-\s]?sentence\s+paper\s+model|one[-\s]?sentence\s+summary|what\s+this\s+paper\s+does|paper\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
+    || /^(한\s*문장\s*(논문\s*)?(요약|모델)|이\s*논문이\s*하는\s*일)$/.test(normalized);
+}
+
+function splitStartHereLead(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  const lead = [];
+  const rest = [];
+  let inLead = false;
+  let consumedLead = false;
+  for (const line of lines) {
+    const heading = line.match(/^(#{1,6})\s+(.+)$/);
+    if (heading && isStartHereLeadHeading(heading[2]) && !consumedLead) {
+      inLead = true;
+      consumedLead = true;
+      lead.push(line);
+      continue;
+    }
+    if (heading && inLead) inLead = false;
+    if (inLead) lead.push(line);
+    else rest.push(line);
+  }
+  return {
+    lead: lead.join('\n').trim(),
+    rest: rest.join('\n').trim()
+  };
 }
 
 function stripBulletLabel(line) {
@@ -830,24 +963,32 @@ function trim(value, width = 62) {
 }
 function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: [] })) {
   const width = 74;
-  console.log(`╭─ PaperMentor Reading Console ${line(width - 29)}╮`);
+  console.log(`╭─ PaperMentor Navigator ${line(width - 23)}╮`);
   console.log(`│ Paper: ${trim(state.title, width - 10).padEnd(width - 8)} │`);
-  console.log(`│ Location: ${trim(state.currentLocation, width - 13).padEnd(width - 11)} │`);
-  console.log(`│ Focus: ${trim(state.currentFocus, width - 10).padEnd(width - 8)} │`);
   console.log(`│ View: ${trim(state.renderedView, width - 9).padEnd(width - 7)} │`);
+  if (state.currentSection) console.log(`│ Section: ${trim(state.currentSection, width - 12).padEnd(width - 10)} │`);
+  if (state.currentMode) console.log(`│ Mode: ${trim(state.currentMode, width - 9).padEnd(width - 7)} │`);
   console.log(`╰${line(width)}╯`);
-  console.log('\nReading Path');
-  for (const item of state.readingPath || []) {
-    const mark = item.status === 'done' ? '✓' : item.status === 'current' ? '›' : item.status === 'blocked' ? '!' : ' ';
-    console.log(`  [${mark}] ${item.label}`);
+  console.log('\nHTML first: explanations are written to index.html. The CLI is only for navigation, choices, and questions.');
+  if ((state.paperSections || []).length && !state.currentSection) {
+    console.log('\nPaper sections');
+    (state.paperSections || []).forEach((section, index) => console.log(`  [${index + 1}] ${section}`));
+  } else if (state.currentSection && !state.currentMode) {
+    console.log(`\nSelected section: ${state.currentSection}`);
+    console.log('\nSection actions');
+    (state.nextChoices || []).forEach((choice, index) => console.log(`  [${index + 1}] ${choice}`));
+  } else {
+    console.log('\nChoose next');
+    (state.nextChoices || []).forEach((choice, index) => console.log(`  [${index + 1}] ${choice}`));
   }
-  console.log('\nChoose next:');
-  (state.nextChoices || []).forEach((choice, index) => console.log(`  [${index + 1}] ${choice}`));
-  console.log(`\nCards: ${(cards.cards || []).length} · Open ${state.renderedView}`);
+  console.log(`\nBlocks in HTML: ${(cards.cards || []).length} · Open ${state.renderedView}`);
 }
 
 function usage() {
-  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>]\n  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]\n  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
+  console.log(`PaperMentor session helper\n\nUsage:\n  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]\n  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
+  node scripts/papermentor-session.mjs section --session <slug> --index 2
+  node scripts/papermentor-session.mjs mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
+  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]\n  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]\n  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>\n  node scripts/papermentor-session.mjs status --session <slug>\n`);
 }
 
 const args = parseArgs(process.argv.slice(2));
@@ -857,8 +998,27 @@ try {
     const title = args.title || 'Paper reading session';
     const slug = args.slug || slugify(title);
     const source = args.source || '';
-    const { state, cards } = ensureSession({ title, source, slug });
-    printConsole(state, cards);
+    const sections = splitChoices(args.sections || '');
+    const { state, cards } = ensureSession({ title, source, slug, sections });
+    const hasStartHereBody = Boolean(args.body || args['body-file'] || args['figure-file'] || args['figure-url'] || args.figure || args['image-file'] || args.image || args.latex);
+    if (hasStartHereBody) {
+      addCard({
+        ...args,
+        session: slug,
+        type: args.type || 'start-here',
+        title: args['card-title'] || args.cardTitle || 'Start Here',
+        location: args.location || 'Start Here',
+        choices: args.choices || sections.join('|')
+      });
+    } else {
+      printConsole(state, cards);
+    }
+  } else if (command === 'sections') {
+    setSections(args);
+  } else if (command === 'section') {
+    selectSection(args);
+  } else if (command === 'mode') {
+    setMode(args);
   } else if (command === 'card') {
     addCard(args);
   } else if (command === 'turn') {

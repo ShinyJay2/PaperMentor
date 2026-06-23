@@ -18,7 +18,7 @@ PaperMentor uses one local append-only reading document per paper session:
 Use `scripts/papermentor-session.mjs` when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
 
 ```bash
-node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf"
+node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
 node scripts/papermentor-session.mjs status --session paper-title
 ```
 
@@ -36,6 +36,25 @@ Reading Path:
 Status marks: `[✓]` complete, `[›]` recommended current step, `[ ]` pending, `[!]` blocked, `[↺]` revisit.
 
 Always offer numbered choices. Accept either the number or a natural-language interruption.
+
+## HTML-first navigator contract
+
+Do not explain the paper in the CLI. The CLI is a controller; `index.html` is the reading surface.
+
+On paper start:
+
+1. Detect the paper title, sections/table of contents, major equations, and representative method/system/algorithm figure.
+2. Render a first `Start Here` block in `index.html` containing one sentence about what the paper does, the actual representative figure crop, and detailed preliminaries.
+3. Print only the HTML path and section choices in CLI.
+
+Branching navigator behavior:
+
+- First menu: detected paper sections.
+- Section menu: `Decode key equations`, `Trace derivations`, `Connect dependencies`, `Resolve confusion`, and section-specific questions.
+- Mode menu: dynamically detected objects inside the selected section, e.g. `Explain Eq. (1) pushforward symbol by symbol`, `Trace Eq. (4) → Eq. (6)`, or `Build dependency chain for Proposition 3.1`.
+- Result: chosen explanations are appended to the same `index.html` as blocks. CLI output stays short and navigational.
+
+
 
 ## Conversation promotion
 
@@ -57,8 +76,19 @@ Required behavior:
 - identify the paper title/source;
 - create `.papermentor/sessions/<paper-slug>/index.html`;
 - create `state.json`, `cards.json`, and `notes.md`;
-- run a first paper map when enough text is available;
-- print the Reading Console and next choices.
+- render a first `Start Here` HTML block immediately when `--body-file`/`--body` is provided; use `--figure-file` for the exact representative paper figure crop when present;
+- print the HTML path and detected section choices, not an explanation.
+
+Recommended helper call after scanning the PDF:
+
+```bash
+node scripts/papermentor-session.mjs start \
+  --title "<paper title>" \
+  --source "<pdf path or URL>" \
+  --sections "1. Introduction|2. Background|3. Methods|4. Experiments" \
+  --body-file start-here.md \
+  --figure-file figure-1-method-crop.png
+```
 
 ## `/papermentor scan`
 
@@ -220,6 +250,38 @@ Required output:
 - conclusion;
 - limitation of the visualization.
 
+
+## `/papermentor sections`
+
+Purpose: populate or refresh the detected paper section navigator.
+
+Required behavior:
+
+- detect section titles from the PDF/table of contents/body headings;
+- store them in `state.json.paperSections`;
+- print numbered section choices only;
+- do not add explanatory HTML blocks.
+
+## `/papermentor section`
+
+Purpose: select one paper section.
+
+Required behavior:
+
+- update `state.json.currentSection`;
+- show section-local actions: decode equations, trace derivations, connect dependencies, resolve confusion, ask a question;
+- do not explain the section in CLI.
+
+## `/papermentor mode`
+
+Purpose: show dynamic choices inside the selected section.
+
+Required behavior:
+
+- detect equations, definitions, claims, lemmas, algorithms, proof steps, or figures inside the selected section;
+- store those items in `state.json.detectedItems`;
+- show numbered choices such as `Explain Eq. (1) pushforward symbol by symbol`;
+- append explanation to HTML only after the user chooses an item.
 
 ## `/papermentor turn`
 

@@ -19,6 +19,12 @@ Debug the user's understanding of a research paper. Do not provide a high-level 
 
 
 
+### HTML-first reading room rule
+
+On paper start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the paper is doing, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections. The CLI must not contain the explanation body; it only shows the HTML path, detected paper sections, numbered choices, and a place for user questions.
+
+The CLI interaction is a branching section navigator. First detect the paper table of contents or section structure. Show sections as choices. When a section is selected, show section-local actions such as `Decode key equations`, `Trace derivations`, `Connect dependencies`, and `Resolve confusion`. When an action is selected, detect equations/claims/definitions inside that section and show dynamic choices such as `Explain Eq. (1) pushforward symbol by symbol`. The chosen explanation is written to HTML as a new block, never as a long CLI answer.
+
 ### Representative figure rule
 
 In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the representative figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …”; use a semantic caption like `Figure 1. Drifting Model` only when helpful, then explain the components, flow, what to observe, and supported equations/claims directly under the image in the body.
@@ -49,7 +55,7 @@ When starting a paper:
 2. Keep exactly one rendered HTML block document per paper: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, `turns.jsonl`, and `notes.md`.
 4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start with `Map the paper`, including the actual representative method/system/algorithm figure image when present. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then offer numbered next actions. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+5. Start by rendering the `Start Here` HTML block, including one-sentence paper model, actual representative method/system/algorithm figure image when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful paper content. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Then show detected paper sections in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 
@@ -62,7 +68,7 @@ Use this Reading Path unless the user explicitly asks for a different route:
 
 The path is not a rigid wizard. If the user interrupts, pause the current location, repair the missing dependency, mark confusion as active or complete, then offer a resume choice.
 
-Every major response should end with a concise choice menu. Accept either a number (`1`, `2`, `3`) or natural language.
+Every major response should update or point to `index.html`, then end with a concise CLI choice menu. Accept either a number (`1`, `2`, `3`) or natural language.
 
 Status marks:
 

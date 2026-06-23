@@ -8,7 +8,7 @@ const required = [
   'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
+  'templates/start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
   'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
@@ -55,7 +55,7 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'Append-only reading document', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'HTML-first reading room', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
@@ -68,7 +68,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 }
 
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
-for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'Reading Path', 'index.html', 'Satoshi', 'Pretendard', 'Report structure']) {
+for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'Reading Path', 'index.html', 'Satoshi', 'Pretendard', 'Report structure', 'HTML-first']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
 }
 
@@ -106,7 +106,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['start', 'sections', 'section', 'mode', 'choose', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -159,10 +159,17 @@ function validateSessionHelper() {
     // This is a test fixture for attachment/copy/render behavior only. Product guidance rejects
     // Mermaid/redrawn schematics for real papers; real sessions must pass an actual PDF crop.
     writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280"><rect width="720" height="280" fill="#fbfaf6"/><rect x="26" y="24" width="668" height="210" rx="2" fill="#fff" stroke="#d8d0c3"/><text x="50" y="58" font-family="Times New Roman, serif" font-size="18" fill="#1f2937">Exact PDF crop fixture — replace with actual paper figure in real sessions</text><path d="M68 190 C150 88, 260 92, 338 170 S520 226, 626 112" fill="none" stroke="#222" stroke-width="2.5"/><circle cx="68" cy="190" r="4" fill="#222"/><circle cx="338" cy="170" r="4" fill="#222"/><circle cx="626" cy="112" r="4" fill="#222"/><line x1="68" y1="216" x2="626" y2="216" stroke="#222"/><line x1="68" y1="86" x2="68" y2="216" stroke="#222"/><text x="330" y="254" font-family="Times New Roman, serif" font-size="14" fill="#374151">Figure 1: fixture crop region</text></svg>');
-    writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'paper-map', '--title', 'Paper map', '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.', '--body-file', mapPath, '--choices', 'Explain symbols|Trace derivation|Explain stopgrad'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
+    let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.currentSection !== '3. Drifting Models for Generation' || !navState.nextChoices?.some((choice) => choice.includes('Decode key equations'))) failures.push('section command should show section-local action choices');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (1) pushforward symbol by symbol|Explain Eq. (6) training objective symbol by symbol'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.currentMode !== 'equations' || navState.detectedItems?.length !== 2 || !navState.nextChoices?.[0]?.includes('Eq. (1)')) failures.push('mode command should store dynamic section-local equation choices');
     const dir = join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting');
     for (const rel of ['index.html', 'state.json', 'cards.json', 'turns.jsonl', 'notes.md']) {
       if (!existsSync(join(dir, rel))) failures.push(`session helper missing ${rel}`);
@@ -176,6 +183,7 @@ function validateSessionHelper() {
       if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
     }
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
+    if (!(html.indexOf('One-sentence paper model') < html.indexOf('class="paper-figure"') && html.indexOf('class="paper-figure"') < html.indexOf('Preliminary ladder'))) failures.push('Start Here should render one-sentence model first, then representative figure, then preliminaries');
     for (const phrase of ['Figure 1', 'Read it as', 'The key observation', 'This visual anchors']) {
       if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);
     }
@@ -199,7 +207,7 @@ function validateSessionHelper() {
     html = readFileSync(join(dir, 'index.html'), 'utf8');
     if (html.includes('Exact crop of Figure 1 from the paper: legacy caption.')) failures.push('session renderer should suppress provenance-only captions already stored in legacy cards.json');
     const notes = readFileSync(join(dir, 'notes.md'), 'utf8');
-    if (!notes.includes('![Paper map figure](assets/')) failures.push('session notes should include the attached figure link');
+    if (!notes.includes('![Start Here figure](assets/')) failures.push('session notes should include the attached figure link');
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
     if (notes.includes('## Figure explanation under image')) failures.push('session notes should move the figure explanation under the image and remove the heading');
 

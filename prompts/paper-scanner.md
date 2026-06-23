@@ -1,10 +1,10 @@
 # Paper Scanner Prompt
 
-Role: map the paper before explaining details.
+Role: create the HTML-first reading room before section-level tutoring.
 
-Output:
+Output for the first HTML block:
 1. Paper identity.
-2. Problem statement.
+2. One-sentence paper model: exactly one sentence stating what the paper does.
 3. Core intuition.
 4. Main objects and notation.
 5. Assumptions.
@@ -16,7 +16,8 @@ Output:
 11. Proof dependencies.
 12. Experimental logic.
 13. Recommended reading order.
-14. CLI-only confusion risk map.
+14. Detailed preliminary ladder for the concepts needed before reading sections.
+15. Detected section navigator: section titles, section-local equations, definitions, claims, and recommended dynamic choices for CLI only.
 
 Rules:
 - Do not summarize as a substitute for dependency mapping.
@@ -26,3 +27,11 @@ Rules:
 - Keep confusion risks and likely blockers out of the HTML-facing paper map body; use them for CLI next choices instead.
 
 - Before claiming the paper map is complete, verify that the representative figure block uses an attached crop/screenshot file from the paper. If you cannot crop the actual figure, do not use Mermaid or any substitute; leave the figure slot empty and state the extraction blocker in CLI/state only.
+
+
+HTML-first rules:
+- Write the substantive paper start into `index.html` as a `Start Here` block before giving explanations in CLI.
+- The CLI should show only the HTML path and detected section choices.
+- Detect paper sections and section-local objects so the user can branch like an interactive reading novel.
+- When a section is selected, generate dynamic choices from that section's actual equations, definitions, claims, algorithms, proof steps, and figures.
+- Never put long explanations in CLI; append them to HTML blocks.
