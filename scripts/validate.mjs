@@ -78,7 +78,7 @@ for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'p
 
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md', 'tests/figure_explanation_checklist.md']) {
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
-  for (const phrase of ['exact', 'crop', 'figure', 'method', 'algorithm', 'what to observe']) {
+  for (const phrase of ['exact', 'crop', 'figure', 'method', 'algorithm', 'what to observe', 'mermaid']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
   }
 }
@@ -150,10 +150,12 @@ function validateInstalledArtifact() {
 function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
-    const figurePath = join(temp, 'main-method-figure.svg');
+    const figurePath = join(temp, 'exact-pdf-crop-fixture.svg');
     const mapPath = join(temp, 'map.md');
     const equationPath = join(temp, 'equation.md');
-    writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 220"><rect width="640" height="220" fill="#fbf7ef"/><rect x="42" y="78" width="120" height="64" fill="#eef2f8" stroke="#405f9f"/><rect x="260" y="78" width="120" height="64" fill="#fff" stroke="#405f9f"/><rect x="478" y="78" width="120" height="64" fill="#eef2f8" stroke="#405f9f"/><path d="M172 110h76M390 110h76" stroke="#405f9f" stroke-width="4" marker-end="url(#a)"/><defs><marker id="a" markerWidth="10" markerHeight="10" refX="8" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#405f9f"/></marker></defs><text x="102" y="116" text-anchor="middle" font-family="Arial" font-size="18">Noise</text><text x="320" y="116" text-anchor="middle" font-family="Arial" font-size="18">Generator</text><text x="538" y="116" text-anchor="middle" font-family="Arial" font-size="18">Drift target</text></svg>');
+    // This is a test fixture for attachment/copy/render behavior only. Product guidance rejects
+    // Mermaid/redrawn schematics for real papers; real sessions must pass an actual PDF crop.
+    writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280"><rect width="720" height="280" fill="#fbfaf6"/><rect x="26" y="24" width="668" height="210" rx="2" fill="#fff" stroke="#d8d0c3"/><text x="50" y="58" font-family="Times New Roman, serif" font-size="18" fill="#1f2937">Exact PDF crop fixture — replace with actual paper figure in real sessions</text><path d="M68 190 C150 88, 260 92, 338 170 S520 226, 626 112" fill="none" stroke="#222" stroke-width="2.5"/><circle cx="68" cy="190" r="4" fill="#222"/><circle cx="338" cy="170" r="4" fill="#222"/><circle cx="626" cy="112" r="4" fill="#222"/><line x1="68" y1="216" x2="626" y2="216" stroke="#222"/><line x1="68" y1="86" x2="68" y2="216" stroke="#222"/><text x="330" y="254" font-family="Times New Roman, serif" font-size="14" fill="#374151">Figure 1: fixture crop region</text></svg>');
     writeFileSync(mapPath, '## What this paper is doing\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Main method figure\n\n- Figure / location: Figure 1.\n- Why this is the main method figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf'], { cwd: temp, stdio: 'pipe' });

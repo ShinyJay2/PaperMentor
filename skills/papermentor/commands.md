@@ -61,7 +61,7 @@ Required output:
 - major definitions;
 - lemmas/theorems/claims;
 - major equations;
-- exact screenshot/crop of the representative main method/system/algorithm/architecture figure from the PDF/page, attached with `--figure-file` or `--figure-url`; do not redraw it;
+- exact screenshot/crop of the representative main method/system/algorithm/architecture figure from the PDF/page, attached with `--figure-file` or `--figure-url`; do not redraw it and do not substitute Mermaid/ASCII/SVG schematics;
 - explanation under the figure: components, flow/sequence, what to observe, and supported equations/claims;
 - method pipeline;
 - experiment logic if present;
