@@ -6,7 +6,7 @@ Classify the uploaded material before tutoring. PaperMentor supports exactly thr
 2. `lecture-note` — long-form instructional notes, chapters, monographs, tutorials, or arXiv notes written to teach a topic.
 3. `slide-deck` — presentation slides, PPT/PDF decks, lecture slides, workshop decks, or visual bullet-based material.
 
-Do not create or advertise a separate course mode. A course webpage is a source index; ask the user to choose a paper, note, or slide deck from it.
+Do not create or advertise a separate course mode. A course webpage is a source index; in auto mode, stop and ask the user to choose a concrete paper, note, or slide deck from it. Do not attach unrelated local diagrams as slide evidence.
 
 ## Detection cues
 

@@ -204,6 +204,7 @@ node scripts/papermentor-session.mjs tui --session my-source
 ```
 
 - `scan` — produce the source map before details, including the exact cropped/screenshot representative method/system/algorithm figure when present, with explanation underneath. Never substitute Mermaid or a redrawn schematic for the paper figure.
+- `prerequisites` — build a bottom-up ladder from primitive vocabulary and notation to the exact paragraph/equation; do not stop at broad topic labels.
 - `equation` — explain every symbol and operator after showing the equation.
 - `derivation` — trace each transition without skipped algebra.
 - `dependency` — reveal what a claim depends on and what depends on it.

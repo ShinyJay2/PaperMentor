@@ -77,7 +77,7 @@ Codex decides whether a turn belongs in the polished HTML report. Do not ask aft
 
 ## Source modes
 
-Use `--mode auto` unless the user explicitly chooses a mode. Supported modes are `paper`, `lecture-note`, and `slide-deck`. A syllabus or lecture index is a source directory; select a concrete paper, note, or slide deck from it before starting the reading room.
+Use `--mode auto` unless the user explicitly chooses a mode. Supported modes are `paper`, `lecture-note`, and `slide-deck`. A syllabus or lecture index is a source directory; in auto mode, stop and select a concrete paper, note, or slide deck from it before starting the reading room. Never attach unrelated local diagrams as evidence for that source.
 
 ```bash
 node scripts/papermentor-session.mjs start --title "Source title" --source source.pdf --mode auto

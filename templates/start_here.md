@@ -6,10 +6,11 @@ Write exactly one sentence explaining what the paper is doing.
 
 ## Preliminary ladder
 
-Explain the concepts the reader needs before entering the sections. Include definitions, why each prerequisite matters, and where it appears in the paper.
+Build the concepts the reader needs before entering the sections. Do not stop at broad labels. If the paper uses basic-but-loaded objects like bits, binary strings, vectors, maps, expectations, norms, inner products, estimators, or worst-case analysis, define them from first principles with examples before using them.
 
-| Prerequisite | Minimal explanation | Used in |
-| --- | --- | --- |
+| Order | Tier | Prerequisite | Minimal explanation + example | Used in |
+| --- | --- | --- | --- | --- |
+| 1 | primitive vocabulary |  |  |  |
 
 ## Figure explanation under image
 

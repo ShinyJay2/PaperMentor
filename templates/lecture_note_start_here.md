@@ -13,9 +13,11 @@ State what the note teaches and what capability the reader should gain.
 
 ## Concept ladder
 
-| Order | Concept | Minimal explanation | Used in |
-| --- | --- | --- | --- |
-| 1 |  |  |  |
+Start as low as needed. For a beginner-facing note, include primitive vocabulary, notation decoding, core concepts, metric/probability assumptions, and the source-specific reconstruction.
+
+| Order | Tier | Concept | Minimal explanation + example | Used in |
+| --- | --- | --- | --- | --- |
+| 1 | primitive vocabulary |  |  |  |
 
 ## Reading path
 

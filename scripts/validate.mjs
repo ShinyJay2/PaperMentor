@@ -9,8 +9,8 @@ const required = [
   'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/lecture-note-scanner.md','prompts/slide-deck-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/start_here.md','templates/lecture_note_start_here.md','templates/slide_deck_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
-  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md',
-  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/lecture_note_mode_checklist.md','tests/slide_deck_mode_checklist.md',
+  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md',
+  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/lecture_note_mode_checklist.md','tests/slide_deck_mode_checklist.md','tests/prerequisite_depth_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
 
@@ -65,6 +65,24 @@ for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-fa
 }
 for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css']) {
   if (sessionScript.includes(phrase)) failures.push(`session renderer should not rely on remote font CSS: ${phrase}`);
+}
+
+
+const prerequisitePrompt = readFileSync(join(root, 'prompts/prerequisite-analyzer.md'), 'utf8');
+for (const phrase of ['Primitive vocabulary', 'Notation decoding', 'concrete example', 'one-sentence reconstruction', 'bit', 'binary string', 'unbiased estimator']) {
+  if (!prerequisitePrompt.toLowerCase().includes(phrase.toLowerCase())) failures.push(`prerequisite analyzer missing depth phrase: ${phrase}`);
+}
+
+const turboExample = readFileSync(join(root, 'examples/turboquant_prerequisite_ladder_example.md'), 'utf8');
+for (const phrase of ['bit', 'binary string', '$\\mathbb{R}^d$', '$\\{0,1\\}^B$', '$Q^{-1}', '$\\mathbb{E}_Q', 'unbiased', 'One-sentence reconstruction']) {
+  if (!turboExample.includes(phrase)) failures.push(`TurboQuant ladder example missing phrase: ${phrase}`);
+}
+
+const publicDocs = ['README.md', 'SKILL.md', 'skills/papermentor/SKILL.md', 'templates/prerequisite_ladder.md', 'templates/concept_ladder.md', 'templates/start_here.md']
+  .map((rel) => readFileSync(join(root, rel), 'utf8'))
+  .join('\n');
+for (const phrase of ['primitive vocabulary', 'concrete example', 'diagnostic check']) {
+  if (!publicDocs.toLowerCase().includes(phrase)) failures.push(`public ladder docs missing phrase: ${phrase}`);
 }
 
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
@@ -315,6 +333,7 @@ function validateSourceModes() {
     const lectureText = join(temp, 'lecture-note.txt');
     const slideText = join(temp, 'deck.txt');
     const paperText = join(temp, 'paper.txt');
+    const sourceIndexText = join(temp, 'eth-source-index.txt');
     writeFileSync(lectureText, `A Brief Introduction to Causal Inference in Machine Learning
 
 This lecture note is aimed at students without prior exposure to causal inference.
@@ -355,6 +374,22 @@ The pushforward distribution is q=f#p. (1) The training objective uses stopgrad.
 
 3. Experiments
 FID and ablations evaluate sample quality.`);
+    writeFileSync(sourceIndexText, `Course Title: Robot Learning: From Fundamentals to Foundation Models
+Semester: Spring 2026
+Lecture Tentative Schedule
+Week 1 Introduction to Robot Learning Slides Recording
+Week 2 Robot Control & MDPs Slides Recording
+Week 7 Sequence Modeling and Transformers Slides Recording
+Course Objectives: understand robot learning fundamentals.`);
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'ETH Robot Learning Page', '--source', 'https://cvg.ethz.ch/lectures/Robot-Learning/', '--slug', 'eth-index', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'eth-index', '--mode', 'auto', '--paper-text-file', sourceIndexText], { cwd: temp, stdio: 'pipe' });
+      failures.push('source index pages should be rejected in auto mode instead of becoming a course mode');
+    } catch (error) {
+      const message = String(error.stderr || error.message || '');
+      if (!message.includes('source index detected') || !message.includes('no course mode')) failures.push('source index rejection should explain concrete source selection and no course mode');
+    }
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Causal Inference Notes', '--source', 'https://arxiv.org/abs/2405.08793', '--slug', 'causal-note', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'causal-note', '--mode', 'auto', '--paper-text-file', lectureText], { cwd: temp, stdio: 'pipe' });

@@ -26,7 +26,7 @@ PaperMentor supports three source modes:
 - `lecture-note`: instructional notes and technical chapters. Prioritize concept ladders, definitions, worked examples, exercises, proofs, derivations, and readiness checks.
 - `slide-deck`: PDF/PPT slide decks. Treat slides as navigable sections, reconstruct missing lecturer narration, explain visual labels/arrows, connect adjacent slides, and extract equations/notation on the slide.
 
-A syllabus or lecture landing page is only a source index. Ask the user to pick a concrete paper, note, or slide deck from it, then start the appropriate mode. Do not invent another mode.
+A syllabus or lecture landing page is only a source index. In auto mode, stop and ask the user to pick a concrete paper, note, or slide deck from it, then start the appropriate mode. Do not invent another mode and do not attach unrelated local diagrams as evidence for the source.
 If a selected slide deck is protected or text extraction fails, keep `slide-deck` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
 
 ## Workflow
@@ -100,6 +100,20 @@ Status marks:
 - `[ ]` pending
 - `[!]` blocked by unresolved confusion
 - `[↺]` revisit recommended
+
+### Preliminary ladder depth rule
+
+When the user asks for prerequisites or says a paragraph is completely opaque, build a bottom-up ladder rather than a topic list. Start at the user's actual missing level. If the target uses primitive objects such as bits, binary strings, real vectors, maps, norms, inner products, expectations, randomization, or unbiasedness, explain those primitives first with tiny examples before using paper notation.
+
+For a dense mathematical paragraph, use this ordering when needed:
+
+1. primitive vocabulary — e.g. bit, binary string, real number, vector, coordinate, function/map;
+2. notation decoding — e.g. $\mathbb{R}^d$, $\{0,1\}^B$, $Q:\mathbb{R}^d\to\{0,1\}^B$, $Q^{-1}$, $\|\cdot\|_2$, $\langle x,y\rangle$, $\mathbb{E}_Q[\cdot]$;
+3. core concept — e.g. quantization, dequantization, lossy compression, distortion, randomized quantizer;
+4. metric / assumption layer — e.g. MSE, inner-product error, worst-case analysis, unbiased estimator, computational efficiency;
+5. source-specific reconstruction — rewrite the target paragraph/equation in one precise sentence.
+
+Every ladder row must include why the concept is needed here, a minimal explanation, a concrete example, the notation it unlocks, and a diagnostic check. Do not stop at labels like “linear algebra” or “probability”; name the exact object the reader must understand.
 
 ## Mathematical policy
 

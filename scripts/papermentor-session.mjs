@@ -371,6 +371,18 @@ function detectSourceMode(text, args = {}, state = {}) {
   return 'paper';
 }
 
+function isSourceIndex(text) {
+  const value = String(text || '').toLowerCase();
+  const weekRows = (value.match(/week\s+\d+[^\n]{0,160}\bslides\b/g) || []).length;
+  return (/course\s+title|lecture\s+tentative\s+schedule|course\s+objectives|teaching\s+assistants|semester:/.test(value) && weekRows >= 2)
+    || (/syllabus|lecture\s+schedule/.test(value) && weekRows >= 3);
+}
+
+function hasExplicitConcreteMode(args = {}) {
+  const mode = args.mode || args['source-mode'] || args.sourceMode;
+  return Boolean(mode && String(mode).toLowerCase() !== 'auto');
+}
+
 function cleanHeadingTitle(raw) {
   return String(raw || '')
     .replace(/\s{2,}.+$/g, '')
@@ -674,6 +686,9 @@ function analyzePaper(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const text = readPaperText(args);
   if (!text.trim()) throw new Error('analyze requires --paper-text-file, --paper-text, --section-file, or --section-text');
+  if (isSourceIndex(text) && !hasExplicitConcreteMode(args)) {
+    throw new Error('source index detected: choose a concrete paper, lecture note, or slide deck from this page before starting PaperMentor; no course mode is created');
+  }
   const sourceMode = detectSourceMode(text, args, state);
   state.sourceMode = sourceMode;
   state.readingPath = readingPathForMode(sourceMode).map(([key, label], index) => {
@@ -1548,7 +1563,10 @@ function markdownToHtml(markdown) {
   const displayMathBlock = (delimiter, endDelimiter, index) => {
     const collected = [lines[index]];
     let cursor = index;
-    if (lines[index].trim() !== endDelimiter) {
+    const sameLineClosed = delimiter === endDelimiter
+      ? (lines[index].trim().startsWith(delimiter) && lines[index].trim().endsWith(endDelimiter) && lines[index].trim().length > delimiter.length * 2)
+      : lines[index].trim() === endDelimiter;
+    if (!sameLineClosed) {
       cursor += 1;
       while (cursor < lines.length) {
         collected.push(lines[cursor]);
