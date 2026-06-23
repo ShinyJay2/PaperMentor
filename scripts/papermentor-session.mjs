@@ -130,10 +130,11 @@ function argsModeFromSource(source) {
   return 'paper';
 }
 
-function defaultState({ title, source, slug, sections = [], sourceMode = 'paper' }) {
+function defaultState({ title, authors = '', source, slug, sections = [], sourceMode = 'paper' }) {
   return {
     schema: 'papermentor.session.v1',
     title,
+    authors,
     source,
     slug,
     sourceMode: normalizeSourceMode(sourceMode),
@@ -155,15 +156,16 @@ function defaultState({ title, source, slug, sections = [], sourceMode = 'paper'
   };
 }
 
-function ensureSession({ title, source, slug, sections = [], sourceMode }) {
+function ensureSession({ title, authors = '', source, slug, sections = [], sourceMode }) {
   const dir = sessionDir(slug);
   mkdirSync(dir, { recursive: true });
   const state = existsSync(statePath(slug))
     ? readJson(statePath(slug), {})
-    : defaultState({ title, source, slug, sections, sourceMode: sourceMode || argsModeFromSource(source) });
+    : defaultState({ title, authors, source, slug, sections, sourceMode: sourceMode || argsModeFromSource(source) });
   state.updatedAt = now();
   state.title = title || state.title;
   state.source = source || state.source;
+  if (authors !== undefined) state.authors = authors || state.authors || '';
   state.sourceMode = normalizeSourceMode(sourceMode || argsModeFromSource(source) || state.sourceMode, state.sourceMode || 'paper');
   state.renderedView = `.papermentor/sessions/${slug}/index.html`;
   if (sections.length) {
@@ -1358,6 +1360,7 @@ function containsKorean(value) {
 function documentLanguage(state, cards) {
   const text = [
     state?.title,
+    state?.authors,
     state?.source,
     ...(cards?.cards || []).flatMap((card) => [card.title, card.location, card.userQuestion, card.body, card.figure?.caption])
   ].join('\n');
@@ -1443,13 +1446,13 @@ body {
   font-weight:760;
   letter-spacing:-.045em;
 }
-.paper-source {
+.paper-authors {
   margin-top:10px;
   color:var(--muted);
-  font-family:var(--mono);
-  font-size:10px;
-  letter-spacing:.04em;
-  text-transform:uppercase;
+  font-size:14px;
+  line-height:1.55;
+  font-weight:500;
+  letter-spacing:-.01em;
   overflow-wrap:anywhere;
 }
 .blocks { display:grid; gap:30px; }
@@ -1647,7 +1650,7 @@ body {
 <main class="page">
   <header class="paper-title">
     <h1>${escapeHtml(state.title || 'Paper reading session')}</h1>
-    ${state.source ? `<div class="paper-source">${escapeHtml(state.source)}</div>` : ''}
+    ${state.authors ? `<div class="paper-authors">${escapeHtml(state.authors)}</div>` : ''}
   </header>
   <section class="blocks">
     ${(cards.cards || []).map((card, index) => renderCardArticle(card, index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
@@ -2373,7 +2376,7 @@ function usage() {
   console.log(`PaperMentor session helper
 
 Usage:
-  node scripts/papermentor-session.mjs start --title <title> [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
+  node scripts/papermentor-session.mjs start --title <title> [--authors <names>] [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
   node scripts/papermentor-session.mjs analyze --session <slug> --mode auto --paper-text-file source.txt
   node scripts/papermentor-session.mjs tui --session <slug>
   node scripts/papermentor-session.mjs run --session <slug> --index <n>
@@ -2402,12 +2405,13 @@ if (args.help || args.h || command === 'help' || command === '--help' || command
 try {
   if (command === 'start') {
     const title = args.title || 'Paper reading session';
+    const authors = args.authors || args.author || '';
     const slug = args.slug || slugify(title);
     const source = args.source || '';
     const sections = splitChoices(args.sections || '');
     const modeHint = argsModeFromSource(`${source} ${title}`);
     const sourceMode = normalizeSourceMode(args.mode || args['source-mode'] || args.sourceMode || modeHint, modeHint);
-    const { state, cards } = ensureSession({ title, source, slug, sections, sourceMode });
+    const { state, cards } = ensureSession({ title, authors, source, slug, sections, sourceMode });
     const hasStartHereBody = Boolean(args.body || args['body-file'] || args['figure-file'] || args['figure-url'] || args.figure || args['image-file'] || args.image || args.latex);
     if (hasStartHereBody) {
       addCard({

@@ -200,7 +200,7 @@ function validateSessionHelper() {
     writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     writeFileSync(paperTextPath, '1. Introduction\nGenerative modeling learns a mapping f such that the pushforward distribution matches the data distribution. The paper proposes Drifting Models, a training-time drifting field, one-step inference, and a contrast with diffusion/flow models.\n\n2. Related Work\nDiffusion-/Flow-based Models. Sohl-Dickstein et al., 2015 and Lipman et al., 2022 formulate iterative mappings. Generative Adversarial Networks. Goodfellow et al., 2014 train a generator adversarially. Variational Autoencoders. Kingma & Welling, 2013 optimize ELBO.\n\n3. Drifting Models for Generation\nWe denote the pushforward distribution as q = f# p epsilon. (1) A sample drifts as xi+1 = xi + Vp,q(xi). (2) Proposition 3.1 uses an anti-symmetric drifting field. The training objective uses stopgrad. (6)\n');
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
@@ -240,6 +240,8 @@ function validateSessionHelper() {
     if (htmlFilesAfterFirst.length !== 1 || htmlFilesAfterFirst[0] !== 'index.html') failures.push(`session helper should create exactly one HTML file, got ${htmlFilesAfterFirst.join(',')}`);
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
+    if (!html.includes('Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He')) failures.push('session title header should show paper authors');
+    if (html.includes('paper.pdf') || html.includes('paper-source')) failures.push('session title header should not expose source file paths under the title');
     if ((html.match(/class="block"/g) || []).length < 1) failures.push('session helper should render at least one block after first card');
     if (!html.includes('assets/mathjax/tex-svg.js') || html.includes('cdn.jsdelivr.net/npm/mathjax')) failures.push('session HTML should use local bundled MathJax, not CDN');
     if (!existsSync(join(dir, 'assets', 'mathjax', 'tex-svg.js'))) failures.push('session should copy local MathJax bundle into report assets');
@@ -597,6 +599,53 @@ prs.save(${JSON.stringify(pptxPath)})
     if (!html.includes('Slide 1 — Full method pipeline')) failures.push('pptx extraction HTML should include the slide explanation title');
     if (!html.includes('assets/mathjax/tex-svg.js')) failures.push('pptx extraction report should use local MathJax');
     if (data.cards?.length !== 1 || data.cards?.[0]?.type !== 'slide-explanation') failures.push('pptx extraction should persist a slide-explanation card for slide-deck mode');
+
+    execFileSync('soffice', ['--headless', '--convert-to', 'ppt', '--outdir', temp, pptxPath], { cwd: temp, stdio: 'pipe' });
+    const pptPath = join(temp, 'papermentor-smoke.ppt');
+    if (!existsSync(pptPath)) failures.push('legacy .ppt fixture conversion should create a .ppt file');
+    else {
+      execFileSync('node', [
+        join(root, 'scripts', 'papermentor-session.mjs'),
+        'start',
+        '--title',
+        'Legacy PPT Smoke Deck',
+        '--slug',
+        'legacy-ppt-smoke',
+        '--source',
+        pptPath,
+        '--mode',
+        'slide-deck'
+      ], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [
+        join(root, 'scripts', 'papermentor-session.mjs'),
+        'extract-figure',
+        '--session',
+        'legacy-ppt-smoke',
+        '--source',
+        pptPath,
+        '--page',
+        '1',
+        '--title',
+        'Legacy PPT slide',
+        '--caption',
+        'Slide 1. Legacy PPT smoke.',
+        '--body',
+        '## Slide explanation\n\n- **Question:** Does legacy PPT extraction work?\n- **Concept:** LibreOffice converts PPT to PDF, then PaperMentor renders a slide image.\n- **What to observe:** the full slide is preserved.\n- **Conclusion:** PPT works through the same extraction path.'
+      ], { cwd: temp, stdio: 'pipe' });
+      const legacySessionDir = join(temp, '.papermentor', 'sessions', 'legacy-ppt-smoke');
+      const legacyHtml = readFileSync(join(legacySessionDir, 'index.html'), 'utf8');
+      const legacyCards = readJson(join(legacySessionDir, 'cards.json'), { cards: [] });
+      const legacyPngs = readdirSync(join(legacySessionDir, 'assets')).filter((name) => name.endsWith('.png'));
+      if (legacyPngs.length !== 1) failures.push(`legacy .ppt extraction should create one PNG asset, got ${legacyPngs.length}`);
+      if (legacyPngs.length === 1) {
+        const fileOutput = execFileSync('file', [join(legacySessionDir, 'assets', legacyPngs[0])], { encoding: 'utf8' });
+        const dims = fileOutput.match(/PNG image data,\s*(\d+)\s*x\s*(\d+)/);
+        if (!fileOutput.includes('PNG image data')) failures.push('legacy .ppt extraction asset should be a PNG image');
+        else if (dims && (Number(dims[1]) < 1600 || Number(dims[2]) < 900)) failures.push(`legacy .ppt extraction PNG unexpectedly small: ${dims[1]}x${dims[2]}`);
+      }
+      if (!legacyHtml.includes('Legacy PPT slide') || !legacyHtml.includes('class="paper-figure"')) failures.push('legacy .ppt extraction should render a slide figure block');
+      if (legacyCards.cards?.length !== 1 || legacyCards.cards?.[0]?.type !== 'slide-explanation') failures.push('legacy .ppt extraction should persist a slide-explanation card');
+    }
   } catch (error) {
     failures.push(`pptx extraction smoke failed: ${error.message}`);
   } finally {
