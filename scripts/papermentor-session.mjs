@@ -389,8 +389,7 @@ body {
   font-weight:760;
   letter-spacing:-.045em;
 }
-.paper-source,
-.paper-meta {
+.paper-source {
   margin-top:10px;
   color:var(--muted);
   font-family:var(--mono);
@@ -399,7 +398,6 @@ body {
   text-transform:uppercase;
   overflow-wrap:anywhere;
 }
-.paper-meta { margin-top:7px; }
 .blocks { display:grid; gap:30px; }
 .block {
   position:relative;
@@ -420,8 +418,8 @@ body {
   position:relative;
   z-index:1;
   display:grid;
-  grid-template-columns:1fr auto;
-  gap:18px;
+  grid-template-columns:1fr;
+  gap:10px;
   align-items:start;
   border-bottom:1px solid var(--rule);
   padding-bottom:13px;
@@ -439,19 +437,6 @@ body {
 .block-title {
   margin:0;
   font-size:31px;
-}
-.folio {
-  align-self:start;
-  border:1px solid var(--line);
-  background:var(--accent-soft);
-  color:var(--accent);
-  padding:5px 8px;
-  font-family:var(--mono);
-  font-size:10px;
-  font-weight:700;
-  letter-spacing:.06em;
-  text-transform:uppercase;
-  white-space:nowrap;
 }
 .location {
   margin-top:7px;
@@ -590,10 +575,9 @@ body {
   <header class="paper-title">
     <h1>${escapeHtml(state.title || 'Paper reading session')}</h1>
     ${state.source ? `<div class="paper-source">${escapeHtml(state.source)}</div>` : ''}
-    <div class="paper-meta">${(cards.cards || []).length} block${(cards.cards || []).length === 1 ? '' : 's'} · updated ${escapeHtml(state.updatedAt || '')}</div>
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)} · ${escapeHtml(card.type)} · ${escapeHtml(card.createdAt || '')}</div></div><span class="folio">Block ${String(index + 1).padStart(2, '0')}</span></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
+    ${(cards.cards || []).map((card, index) => `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
 $$</div>` : ''}${renderFigure(card.figure, figureExplanationMarkdown(card))}<div class="body">${markdownToHtml(htmlExplanationOnly(bodyWithoutFigureExplanation(card.body || '')))}</div></article>`).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>

@@ -232,9 +232,10 @@ function validateSessionHelper() {
     for (const phrase of ['MathJax', 'Generative Modeling via Drifting', 'Equation block — Eq. (6)', 'User question', 'Why is stopgrad used in Eq. (6)?', 'class="user-question"', 'class="paper-title"', 'class="block"', 'class="paper-figure"', 'data-index="1"', 'data-index="2"']) {
       if (!html.includes(phrase)) failures.push(`session block document missing ${phrase}`);
     }
-    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state']) {
-      if (html.includes(phrase)) failures.push(`session block document should not render CLI-only content or dashboard chrome: ${phrase}`);
+    for (const phrase of ['Reading Path', 'Choose next', 'class="sidebar"', 'class="topbar"', 'session-head', 'CLI-only likely confusion points', 'Likely blockers', 'This should stay in CLI/state', 'This should also stay in CLI/state', 'Block 01', 'Block 02', 'updated ']) {
+      if (html.includes(phrase)) failures.push(`session block document should not render CLI-only content, timestamps, block badges, or dashboard chrome: ${phrase}`);
     }
+    if (/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(html)) failures.push('session block document should not display ISO timestamps');
 
     const koreanMapPath = join(temp, 'korean-map.md');
     const koreanEquationPath = join(temp, 'korean-equation.md');
@@ -328,6 +329,7 @@ function validateAllBlockTypes() {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing structural phrase: ${phrase}`);
     }
     if (html.includes('학습' + ' ' + '목적' + '식')) failures.push('all-block HTML should not contain awkward Korean technical phrasing');
+    if (html.includes('Block 01') || /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/.test(html)) failures.push('all-block HTML should not display block badges or ISO timestamps');
   } catch (error) {
     failures.push(`all-block report smoke failed: ${error.message}`);
   } finally {

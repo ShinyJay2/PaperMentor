@@ -41,7 +41,7 @@ Rendered reading reports must use bundled local fonts: Satoshi for English text 
 
 ### Report structure rule
 
-The persistent report is `index.html`, backed by `cards.json`, `state.json`, `turns.jsonl`, and `notes.md`. Each appended block must keep a semantic title, location, type, timestamp, optional LaTeX, optional exact figure crop, optional user question, and explanation body. Figure explanation sections must be rendered directly under the image and removed from the body, so the report reads as a structured paper annotation rather than duplicated notes.
+The persistent report is `index.html`, backed by `cards.json`, `state.json`, `turns.jsonl`, and `notes.md`. Each appended block must keep a semantic title, location, type, timestamp, optional LaTeX, optional exact figure crop, optional user question, and explanation body in JSON, but the HTML report must not display ISO timestamps or block-number badges. Figure explanation sections must be rendered directly under the image and removed from the body, so the report reads as a structured paper annotation rather than duplicated notes.
 
 ### Conversation promotion policy
 
