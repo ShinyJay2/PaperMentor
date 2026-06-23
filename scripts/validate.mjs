@@ -134,7 +134,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -274,6 +274,19 @@ function validateSessionHelper() {
     if (!notes.includes('![Start Here figure](assets/')) failures.push('session notes should include the attached figure link');
     if (notes.includes('Exact crop of Figure 1 from the paper.')) failures.push('session notes should suppress provenance-only figure captions');
     if (notes.includes('## Figure explanation under image')) failures.push('session notes should move the figure explanation under the image and remove the heading');
+    const renderOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'render', '--session', 'generative-modeling-via-drifting'], { cwd: temp, encoding: 'utf8' });
+    if (!renderOutput.includes('.papermentor/sessions/generative-modeling-via-drifting/index.html')) failures.push('render command should print the refreshed block document path');
+    const stateOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'state', '--session', 'generative-modeling-via-drifting'], { cwd: temp, encoding: 'utf8' });
+    for (const phrase of ['PaperMentor state', 'Location', 'Blocks in HTML', 'Source mode:']) {
+      if (!stateOutput.includes(phrase)) failures.push(`state command should print Reading Console phrase: ${phrase}`);
+    }
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'pause', '--session', 'generative-modeling-via-drifting', '--question', 'Why does Eq. (6) freeze the target branch?'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    const pausePrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'), 'utf8');
+    if (!navState.pausedReading?.location || !pausePrompt.includes('Answer interruption: Why does Eq. (6) freeze the target branch?')) failures.push('pause command should preserve reading location and write a pending interruption prompt');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'resume', '--session', 'generative-modeling-via-drifting', '--repaired', 'stop-gradient target branch'], { cwd: temp, stdio: 'pipe' });
+    navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
+    if (navState.pausedReading || existsSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md')) || !navState.currentFocus?.includes('Resumed from')) failures.push('resume command should restore the paused location and clear pending interruption state');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'diagram', '--session', 'generative-modeling-via-drifting', '--kind', 'equation-dependency', '--nodes', 'Eq. (1) pushforward|Eq. (2) drift update|Eq. (6) training objective'], { cwd: temp, stdio: 'pipe' });
@@ -455,6 +468,142 @@ FID and ablations evaluate sample quality.`);
   }
 }
 
+function commandAvailable(name) {
+  try {
+    execFileSync(process.platform === 'win32' ? 'where' : 'which', [name], { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pythonPackageAvailable(packageName) {
+  try {
+    execFileSync('python3', ['-c', `import ${packageName}`], { stdio: 'pipe' });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function validatePptxExtractionWhenAvailable() {
+  if (!commandAvailable('soffice') || !pythonPackageAvailable('pptx')) return;
+
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-pptx-'));
+  try {
+    const pptxPath = join(temp, 'papermentor-smoke.pptx');
+    const makeDeckPath = join(temp, 'make_deck.py');
+    writeFileSync(makeDeckPath, `from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.dml.color import RGBColor
+
+prs = Presentation()
+prs.slide_width = Inches(13.333)
+prs.slide_height = Inches(7.5)
+slide = prs.slides.add_slide(prs.slide_layouts[6])
+
+bg = slide.background
+fill = bg.fill
+fill.solid()
+fill.fore_color.rgb = RGBColor(251, 250, 246)
+
+title = slide.shapes.add_textbox(Inches(0.6), Inches(0.4), Inches(12.0), Inches(0.7))
+tf = title.text_frame
+tf.text = "PaperMentor PPTX Smoke: Method Slide"
+p = tf.paragraphs[0]
+p.font.size = Pt(30)
+p.font.bold = True
+p.font.color.rgb = RGBColor(34, 34, 34)
+
+items = [
+    ("Upload paper / deck", 0.8),
+    ("Detect section / slide", 3.7),
+    ("Choose action in TUI", 6.6),
+    ("Append HTML block", 9.5),
+]
+for text, left in items:
+    box = slide.shapes.add_shape(1, Inches(left), Inches(2.35), Inches(2.35), Inches(1.25))
+    box.fill.solid()
+    box.fill.fore_color.rgb = RGBColor(255, 255, 255)
+    box.line.color.rgb = RGBColor(64, 64, 64)
+    frame = box.text_frame
+    frame.text = text
+    frame.paragraphs[0].font.size = Pt(16)
+    frame.paragraphs[0].font.bold = True
+    frame.paragraphs[0].font.color.rgb = RGBColor(31, 31, 31)
+
+for left in [3.25, 6.15, 9.05]:
+    arrow = slide.shapes.add_shape(33, Inches(left), Inches(2.72), Inches(0.35), Inches(0.4))
+    arrow.fill.solid()
+    arrow.fill.fore_color.rgb = RGBColor(74, 74, 74)
+    arrow.line.color.rgb = RGBColor(74, 74, 74)
+
+footer = slide.shapes.add_textbox(Inches(0.85), Inches(5.3), Inches(11.6), Inches(0.7))
+footer.text_frame.text = "This slide verifies real PPTX → PDF → PNG extraction through LibreOffice soffice."
+footer.text_frame.paragraphs[0].font.size = Pt(16)
+footer.text_frame.paragraphs[0].font.color.rgb = RGBColor(80, 80, 80)
+
+prs.save(${JSON.stringify(pptxPath)})
+`);
+    execFileSync('python3', [makeDeckPath], { cwd: temp, stdio: 'pipe' });
+
+    execFileSync('node', [
+      join(root, 'scripts', 'papermentor-session.mjs'),
+      'start',
+      '--title',
+      'PPTX Smoke Deck',
+      '--slug',
+      'pptx-smoke',
+      '--source',
+      pptxPath,
+      '--mode',
+      'slide-deck'
+    ], { cwd: temp, stdio: 'pipe' });
+
+    execFileSync('node', [
+      join(root, 'scripts', 'papermentor-session.mjs'),
+      'extract-figure',
+      '--session',
+      'pptx-smoke',
+      '--source',
+      pptxPath,
+      '--page',
+      '1',
+      '--title',
+      'Slide 1 — Full method pipeline',
+      '--caption',
+      'Slide 1. Full method pipeline.',
+      '--body',
+      '## Slide explanation\n\n- **Question:** What does this slide verify?\n- **Concept:** PPTX-to-reading-room extraction.\n- **What to observe:** the entire slide is preserved without clipping.\n- **Conclusion:** slide-deck sessions can attach real converted visuals.'
+    ], { cwd: temp, stdio: 'pipe' });
+
+    const sessionDir = join(temp, '.papermentor', 'sessions', 'pptx-smoke');
+    const htmlPath = join(sessionDir, 'index.html');
+    const cardsPath = join(sessionDir, 'cards.json');
+    const assetsDir = join(sessionDir, 'assets');
+    const html = readFileSync(htmlPath, 'utf8');
+    const data = readJson(cardsPath, { cards: [] });
+    const pngs = readdirSync(assetsDir).filter((name) => name.endsWith('.png'));
+    if (pngs.length !== 1) failures.push(`pptx extraction should create one PNG asset, got ${pngs.length}`);
+    if (pngs.length === 1) {
+      const pngPath = join(assetsDir, pngs[0]);
+      const fileOutput = execFileSync('file', [pngPath], { encoding: 'utf8' });
+      if (!fileOutput.includes('PNG image data')) failures.push('pptx extraction asset should be a PNG image');
+      const dims = fileOutput.match(/PNG image data,\s*(\d+)\s*x\s*(\d+)/);
+      if (!dims) failures.push(`pptx extraction should expose PNG dimensions: ${fileOutput.trim()}`);
+      else if (Number(dims[1]) < 1600 || Number(dims[2]) < 900) failures.push(`pptx extraction PNG unexpectedly small: ${dims[1]}x${dims[2]}`);
+    }
+    if (!html.includes('class="paper-figure"')) failures.push('pptx extraction should render the converted slide as a paper figure');
+    if (!html.includes('Slide 1 — Full method pipeline')) failures.push('pptx extraction HTML should include the slide explanation title');
+    if (!html.includes('assets/mathjax/tex-svg.js')) failures.push('pptx extraction report should use local MathJax');
+    if (data.cards?.length !== 1 || data.cards?.[0]?.type !== 'slide-explanation') failures.push('pptx extraction should persist a slide-explanation card for slide-deck mode');
+  } catch (error) {
+    failures.push(`pptx extraction smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 function validateAllBlockTypes() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-all-blocks-'));
   try {
@@ -520,6 +669,7 @@ function validateAllBlockTypes() {
 validateInstalledArtifact();
 validateSessionHelper();
 validateSourceModes();
+validatePptxExtractionWhenAvailable();
 validateAllBlockTypes();
 
 if (failures.length) {

@@ -2246,6 +2246,129 @@ function runTui(args) {
   });
 }
 
+function renderSession(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('render requires --session <slug>');
+  if (!readJson(statePath(slug), null)) throw new Error(`session not found: ${slug}`);
+  renderHtml(slug);
+  console.log(`Rendered .papermentor/sessions/${slug}/index.html`);
+}
+
+function showState(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('state requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  renderHtml(slug);
+  console.log(`PaperMentor state
+Source mode: ${sourceModeLabel(state.sourceMode)}
+Location: ${state.currentLocation || state.currentSection || 'not selected'}
+Focus: ${state.currentFocus || 'not set'}
+HTML: .papermentor/sessions/${slug}/index.html
+`);
+  printConsole(state);
+}
+
+function pauseBody({ location, question, answer, missingDependency, minimalExample, reconnect }) {
+  const lines = [
+    '## Paused location',
+    '',
+    location || 'Current reading location.',
+    '',
+    '## User interruption',
+    '',
+    question || 'User asked for help at this point.',
+    '',
+    '## Direct answer',
+    '',
+    answer || 'Pending: answer this interruption in the next HTML block.',
+    '',
+    '## Missing dependency',
+    '',
+    missingDependency || 'Pending: identify the missing prerequisite, definition, equation, or assumption.',
+    '',
+    '## Minimal example',
+    '',
+    minimalExample || 'Pending: give the smallest concrete example that repairs the dependency.',
+    '',
+    '## Reconnect to source',
+    '',
+    reconnect || 'Pending: reconnect the answer to the exact equation, sentence, figure, or slide and resume.'
+  ];
+  return lines.join('\n');
+}
+
+function pauseReading(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('pause requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const question = args.question || readTextArg(args) || 'User interruption';
+  const location = args.location || state.currentSection || state.currentLocation || state.title;
+  const missingDependency = args['missing-dependency'] || args.dependency || '';
+  const minimalExample = args.example || args['minimal-example'] || '';
+  const reconnect = args.reconnect || args.resume || '';
+  const answer = args.answer || '';
+  state.pausedReading = {
+    location,
+    question,
+    missingDependency,
+    minimalExample,
+    reconnect,
+    createdAt: now()
+  };
+  state.currentLocation = location;
+  state.currentMode = 'chat';
+  state.currentFocus = `Paused at ${location}; repair the interruption in HTML, then resume.`;
+  state.nextChoices = [
+    `Answer interruption: ${question}`,
+    missingDependency ? `Repair missing dependency: ${missingDependency}` : 'Identify the missing dependency',
+    minimalExample ? 'Use the minimal example in the explanation' : 'Create a minimal example',
+    `Resume from ${location}`
+  ];
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  if (answer || missingDependency || minimalExample || reconnect) {
+    addCard({
+      ...args,
+      session: slug,
+      type: args.type || 'confusion',
+      title: args.title || `Interruption — ${trim(question, 70)}`,
+      location,
+      userQuestion: question,
+      body: pauseBody({ location, question, answer, missingDependency, minimalExample, reconnect }),
+      choices: args.choices || state.nextChoices.join('|')
+    });
+  } else {
+    writePendingActionPrompt(state, `Answer interruption: ${question}`);
+    writeJson(statePath(slug), state);
+    renderHtml(slug);
+    printConsole(state);
+  }
+}
+
+function resumeReading(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('resume requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const paused = state.pausedReading || {};
+  const location = args.location || paused.location || state.currentSection || state.currentLocation || state.title;
+  const repaired = args.repaired || args.dependency || paused.missingDependency || 'interruption dependency';
+  state.currentLocation = location;
+  state.currentFocus = `Resumed from ${location}; repaired ${repaired}.`;
+  state.currentMode = '';
+  state.nextChoices = splitChoices(args.choices).length
+    ? splitChoices(args.choices)
+    : state.sectionActions?.[sectionKey(state.currentSection || location)] || defaultSectionActions(state.currentSection || location);
+  delete state.pausedReading;
+  clearPendingPrompt(state);
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  printConsole(state);
+}
+
 function usage() {
   console.log(`PaperMentor session helper
 
@@ -2262,6 +2385,10 @@ Usage:
   node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]
   node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]
   node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>
+  node scripts/papermentor-session.mjs pause --session <slug> --question <text> [--answer <text>] [--missing-dependency <text>]
+  node scripts/papermentor-session.mjs resume --session <slug> [--repaired <text>]
+  node scripts/papermentor-session.mjs render --session <slug>
+  node scripts/papermentor-session.mjs state --session <slug>
   node scripts/papermentor-session.mjs status --session <slug>
 `);
 }
@@ -2316,6 +2443,14 @@ try {
     appendTurn(args);
   } else if (command === 'promote') {
     addCard({ ...args, type: args.type || 'confusion' });
+  } else if (command === 'pause') {
+    pauseReading(args);
+  } else if (command === 'resume') {
+    resumeReading(args);
+  } else if (command === 'render') {
+    renderSession(args);
+  } else if (command === 'state') {
+    showState(args);
   } else if (command === 'status') {
     const slug = args.session || args.slug;
     if (!slug) throw new Error('status requires --session <slug>');
