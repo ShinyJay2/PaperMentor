@@ -6,6 +6,7 @@
 - [ ] Korean prose uses `Pretendard` and the document language is `ko` when Korean text is present.
 - [ ] `index.html` remains a single append-only report with ordered blocks.
 - [ ] `cards.json` keeps structured card data for every block.
+- [ ] All PaperMentor block types render as append-only blocks: paper map, prerequisite ladder, method dissection, equation card, derivation trace, dependency trace, proof walkthrough, confusion repair, recursive why, visualization card, and final insight.
 - [ ] `notes.md` remains a portable Markdown mirror of the report without CLI-only blockers.
 - [ ] Installer copies root `assets/` into the installed skill directory.
 - [ ] Session renderer copies bundled fonts into `.papermentor/sessions/<slug>/assets/fonts/`.

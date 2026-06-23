@@ -110,9 +110,11 @@ function setPathStatus(state, key, status) {
 
 function inferPathKey(type) {
   const map = {
-    'paper-map': 'map', scan: 'map', equation: 'equations', 'equation-card': 'equations', derivation: 'derivations',
-    dependency: 'dependencies', dependencies: 'dependencies', confusion: 'confusion', why: 'confusion', final: 'final',
-    'final-insight': 'final'
+    'paper-map': 'map', scan: 'map', prerequisite: 'map', prerequisites: 'map', 'prerequisite-ladder': 'map', method: 'map',
+    equation: 'equations', 'equation-card': 'equations', derivation: 'derivations', 'derivation-trace': 'derivations',
+    dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies',
+    confusion: 'confusion', why: 'confusion', 'recursive-why': 'confusion', visualization: 'confusion', visualize: 'confusion',
+    final: 'final', 'final-insight': 'final'
   };
   return map[type] || null;
 }
@@ -449,6 +451,25 @@ body {
 .body ul { margin:12px 0; padding-left:24px; }
 .body li { margin:7px 0; }
 .body ol { margin:12px 0; padding-left:24px; }
+.body table {
+  width:100%;
+  margin:18px 0;
+  border-collapse:collapse;
+  border:1px solid var(--line);
+  background:#fffbf3;
+  font-size:14px;
+}
+.body th,
+.body td {
+  border:1px solid var(--line);
+  padding:9px 10px;
+  text-align:left;
+  vertical-align:top;
+}
+.body th {
+  background:#f0eadf;
+  font-weight:740;
+}
 .body code {
   background:#f0eadf;
   border:1px solid #d4cab8;
@@ -649,27 +670,56 @@ function markdownToHtml(markdown) {
   const lines = escaped.split(/\r?\n/);
   let html = '';
   let listType = '';
+  let tableRows = [];
   const closeList = () => {
     if (!listType) return;
     html += `</${listType}>`;
     listType = '';
   };
+  const isTableRow = (line) => /^\s*\|.+\|\s*$/.test(line);
+  const isTableSeparator = (line) => /^\s*\|?(\s*:?-{3,}:?\s*\|)+\s*$/.test(line);
+  const tableCells = (line) => line.trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map((cell) => cell.trim());
+  const closeTable = () => {
+    if (!tableRows.length) return;
+    const [head, ...body] = tableRows;
+    html += '<table><thead><tr>';
+    for (const cell of head) html += `<th>${formatInline(cell)}</th>`;
+    html += '</tr></thead>';
+    if (body.length) {
+      html += '<tbody>';
+      for (const row of body) {
+        html += '<tr>';
+        for (const cell of row) html += `<td>${formatInline(cell)}</td>`;
+        html += '</tr>';
+      }
+      html += '</tbody>';
+    }
+    html += '</table>';
+    tableRows = [];
+  };
   for (const line of lines) {
-    if (/^###\s+/.test(line)) { closeList(); html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
-    else if (/^##\s+/.test(line)) { closeList(); html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
-    else if (/^#\s+/.test(line)) { closeList(); html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
+    if (isTableRow(line)) {
+      closeList();
+      if (!isTableSeparator(line)) tableRows.push(tableCells(line));
+    }
+    else if (/^###\s+/.test(line)) { closeList(); closeTable(); html += `<h3>${line.replace(/^###\s+/, '')}</h3>`; }
+    else if (/^##\s+/.test(line)) { closeList(); closeTable(); html += `<h2>${line.replace(/^##\s+/, '')}</h2>`; }
+    else if (/^#\s+/.test(line)) { closeList(); closeTable(); html += `<h1>${line.replace(/^#\s+/, '')}</h1>`; }
     else if (/^-\s+/.test(line)) {
+      closeTable();
       if (listType !== 'ul') { closeList(); html += '<ul>'; listType = 'ul'; }
       html += `<li>${formatInline(line.replace(/^-\s+/, ''))}</li>`;
     }
     else if (/^\d+\.\s+/.test(line)) {
+      closeTable();
       if (listType !== 'ol') { closeList(); html += '<ol>'; listType = 'ol'; }
       html += `<li>${formatInline(line.replace(/^\d+\.\s+/, ''))}</li>`;
     }
-    else if (line.trim() === '') { closeList(); }
-    else { closeList(); html += `<p>${formatInline(line)}</p>`; }
+    else if (line.trim() === '') { closeList(); closeTable(); }
+    else { closeList(); closeTable(); html += `<p>${formatInline(line)}</p>`; }
   }
   closeList();
+  closeTable();
   return html;
 }
 

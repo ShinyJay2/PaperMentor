@@ -13,9 +13,9 @@ The excerpt asks how to choose a predictor when the true data distribution is un
 - $\ell:\mathcal{Y}\times\mathcal{Y}\to\mathbb{R}_{\ge 0}$ — nonnegative loss.
 - $S=\{(x_i,y_i)\}_{i=1}^n$ — observed sample.
 
-## Main method figure
+## Representative figure
 
-No method figure is present in the excerpt. If the full paper included a method or system diagram, PaperMentor would attach the actual extracted figure image here, then explain its components, flow, what to observe, and which equations or claims it supports.
+No representative method/system figure is present in the excerpt. If the full paper included a method or system diagram, PaperMentor would attach the actual extracted figure image here, then explain its components, flow, what to observe, and which equations or claims it supports.
 
 ## Core equations
 

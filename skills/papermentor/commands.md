@@ -61,7 +61,7 @@ Required output:
 - major definitions;
 - lemmas/theorems/claims;
 - major equations;
-- exact screenshot/crop of the representative main method/system/algorithm/architecture figure from the PDF/page, attached with `--figure-file` or `--figure-url`; do not redraw it and do not substitute Mermaid/ASCII/SVG schematics;
+- exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page, attached with `--figure-file` or `--figure-url`; do not redraw it and do not substitute Mermaid/ASCII/SVG schematics;
 - semantic figure caption only if helpful, not provenance text such as “Exact crop of …”;
 - explanation under the figure: components, flow/sequence, what to observe, and supported equations/claims;
 - method pipeline;

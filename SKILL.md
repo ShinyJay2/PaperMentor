@@ -133,7 +133,7 @@ Use visualization only as a support tool for conceptual confusion. Use it for ge
 
 ## Language policy
 
-Support Korean and English. If the user asks in Korean, explain in Korean while preserving equations and notation in LaTeX.
+Support Korean and English. If the user asks in Korean, explain in Korean while preserving equations and notation in LaTeX. Use natural Korean prose, but keep widely used technical terms in English when that is the standard reading in research contexts: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms. Avoid awkward literal translations of common research vocabulary; prefer `training objective` or `objective function` depending on the paper wording.
 
 ## Resources
 

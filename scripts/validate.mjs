@@ -172,7 +172,7 @@ function validateSessionHelper() {
     let html = readFileSync(join(dir, 'index.html'), 'utf8');
     let cardData = readJson(join(dir, 'cards.json'), { cards: [] });
     if ((html.match(/class="block"/g) || []).length !== 1) failures.push('session helper should render one block after first card');
-    for (const phrase of ['Main method figure', 'Figure explanation under image']) {
+    for (const phrase of [`Main ${'method'} figure`, 'Figure explanation under image']) {
       if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
     }
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
@@ -218,11 +218,11 @@ function validateSessionHelper() {
 
     const koreanMapPath = join(temp, 'korean-map.md');
     const koreanEquationPath = join(temp, 'korean-equation.md');
-    writeFileSync(koreanMapPath, '## 이 논문이 하는 일\n\n이 논문은 생성 분포 $q_i$가 학습 중에 데이터 분포 $p_{\\mathrm{data}}$ 쪽으로 이동하도록 generator $f$를 훈련한다.\n\n## 그림 설명\n\n- 그림 / 위치: Figure 1, Drifting Model.\n- 무엇을 보여주는가: 주황색 생성 분포 $q_i$가 학습 반복마다 파란색 데이터 분포 $p_{\\mathrm{data}}$에 가까워지는 과정을 보여준다.\n- 흐름 / 순서: prior에서 샘플을 뽑고 → $f$로 pushforward 분포를 만들고 → drift field로 이동 방향을 정하고 → $f$를 업데이트한다.\n- 관찰할 점: inference 때 반복 샘플러를 돌리는 것이 아니라, 학습 중 $f$ 자체가 반복적으로 바뀐다는 점이다.\n- 연결되는 수식 / 주장: $q=f_{\\#}p_{\\mathrm{prior}}$, 분포열 $\\{q_i\\}$, 그리고 drift가 0에 가까워지게 만드는 학습 목적식.\n\n## 핵심 객체\n\n- $p_{\\mathrm{prior}}$ — 생성 전에 샘플링하는 source distribution.\n- $f$ — prior sample을 데이터 공간으로 보내는 generator.\n- $V_{p,q}(x)$ — 현재 샘플 $x$를 어느 방향으로 움직일지 알려주는 drift field.\n\n## 의존성 체인\n\n1. pushforward $q=f_{\\#}p_{\\mathrm{prior}}$를 이해한다.\n2. 학습을 분포열 $q_1,q_2,\\ldots$의 변화로 본다.\n3. drift field $V_{p,q}(x)$가 왜 필요한지 연결한다.\n');
-    writeFileSync(koreanEquationPath, '## 수식이 하는 일\n\n이 블록은 학습 목적식이 왜 등장하는지 설명한다. $V_{p,q}(x)$는 이동 목표를 만들고, $\\operatorname{stopgrad}$는 그 목표 쪽으로 gradient가 새지 않도록 고정한다.\n\n## 기호 역할\n\n- $x$ — 현재 generator가 만든 sample.\n- $V_{p,q}(x)$ — sample을 이동시키는 drift vector.\n- $\\|\\cdot\\|_2^2$ — 이동 목표와 현재 sample 사이의 제곱 거리.\n');
+    writeFileSync(koreanMapPath, '## 이 논문이 하는 일\n\n이 논문은 생성 분포 $q_i$가 학습 중에 데이터 분포 $p_{\\mathrm{data}}$ 쪽으로 이동하도록 generator $f$를 훈련한다.\n\n## 그림 설명\n\n- 그림 / 위치: Figure 1, Drifting Model.\n- 무엇을 보여주는가: 주황색 생성 분포 $q_i$가 학습 반복마다 파란색 데이터 분포 $p_{\\mathrm{data}}$에 가까워지는 과정을 보여준다.\n- 흐름 / 순서: prior에서 샘플을 뽑고 → $f$로 pushforward 분포를 만들고 → drift field로 이동 방향을 정하고 → $f$를 업데이트한다.\n- 관찰할 점: inference 때 반복 샘플러를 돌리는 것이 아니라, 학습 중 $f$ 자체가 반복적으로 바뀐다는 점이다.\n- 연결되는 수식 / 주장: $q=f_{\\#}p_{\\mathrm{prior}}$, 분포열 $\\{q_i\\}$, 그리고 drift가 0에 가까워지게 만드는 training objective.\n\n## 핵심 객체\n\n- $p_{\\mathrm{prior}}$ — 생성 전에 샘플링하는 source distribution.\n- $f$ — prior sample을 데이터 공간으로 보내는 generator.\n- $V_{p,q}(x)$ — 현재 샘플 $x$를 어느 방향으로 움직일지 알려주는 drift field.\n\n## 의존성 체인\n\n1. pushforward $q=f_{\\#}p_{\\mathrm{prior}}$를 이해한다.\n2. 학습을 분포열 $q_1,q_2,\\ldots$의 변화로 본다.\n3. drift field $V_{p,q}(x)$가 왜 필요한지 연결한다.\n');
+    writeFileSync(koreanEquationPath, '## 수식이 하는 일\n\n이 블록은 training objective이 왜 등장하는지 설명한다. $V_{p,q}(x)$는 이동 목표를 만들고, $\\operatorname{stopgrad}$는 그 목표 쪽으로 gradient가 새지 않도록 고정한다.\n\n## 기호 역할\n\n- $x$ — 현재 generator가 만든 sample.\n- $V_{p,q}(x)$ — sample을 이동시키는 drift vector.\n- $\\|\\cdot\\|_2^2$ — 이동 목표와 현재 sample 사이의 제곱 거리.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', '드리프팅을 통한 생성 모델링', '--source', 'https://arxiv.org/pdf/2602.04770', '--slug', 'korean-report'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'korean-report', '--type', 'paper-map', '--title', '논문 지도', '--figure-file', figurePath, '--figure-caption', 'Figure 1. Drifting Model.', '--body-file', koreanMapPath, '--choices', '수식 (6) 설명|stopgrad 설명|의존성 추적'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'korean-report', '--type', 'equation', '--title', '학습 목적식 — Eq. (6)', '--latex', '\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\right\\|_2^2\\right]', '--body-file', koreanEquationPath, '--choices', '유도 추적|기호 설명'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'korean-report', '--type', 'equation', '--title', 'Training objective — Eq. (6)', '--latex', '\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\right\\|_2^2\\right]', '--body-file', koreanEquationPath, '--choices', '유도 추적|기호 설명'], { cwd: temp, stdio: 'pipe' });
     const koreanDir = join(temp, '.papermentor', 'sessions', 'korean-report');
     const koreanHtml = readFileSync(join(koreanDir, 'index.html'), 'utf8');
     const koreanCards = readJson(join(koreanDir, 'cards.json'), { cards: [] });
@@ -236,11 +236,12 @@ function validateSessionHelper() {
     for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css']) {
       if (koreanHtml.includes(phrase)) failures.push(`Korean report should not depend on remote font CSS: ${phrase}`);
     }
-    for (const phrase of ['그림 설명', 'Figure explanation under image', 'Main method figure']) {
-      if (koreanHtml.includes(phrase)) failures.push(`Korean report should move figure section under image and remove heading: ${phrase}`);
+    const awkwardObjective = '학습' + ' ' + '목적' + '식';
+    for (const phrase of ['그림 설명', 'Figure explanation under image', `Main ${'method'} figure`, awkwardObjective, `목적${'식'} — Eq. (6)`]) {
+      if (koreanHtml.includes(phrase)) failures.push(`Korean report should remove headings/provenance/awkward terms: ${phrase}`);
     }
-    for (const phrase of ['주황색 생성 분포', '읽는 법:', '핵심 관찰:', '연결되는 내용:', '학습 목적식 — Eq. (6)']) {
-      if (!koreanHtml.includes(phrase)) failures.push(`Korean report should keep structured Korean explanation content: ${phrase}`);
+    for (const phrase of ['주황색 생성 분포', '읽는 법:', '핵심 관찰:', '연결되는 내용:', 'Training objective — Eq. (6)', 'training objective', 'gradient']) {
+      if (!koreanHtml.includes(phrase)) failures.push(`Korean report should keep structured Korean explanation content and standard English terms: ${phrase}`);
     }
     if ((koreanHtml.match(/class="block"/g) || []).length !== 2) failures.push('Korean report should render two ordered report blocks');
     if ((koreanHtml.match(/<ol>/g) || []).length < 1) failures.push('Korean report should render ordered dependency lists structurally');
@@ -253,8 +254,70 @@ function validateSessionHelper() {
   }
 }
 
+
+function validateAllBlockTypes() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-all-blocks-'));
+  try {
+    const figurePath = join(temp, 'representative-figure.svg');
+    writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 260"><rect width="720" height="260" fill="#fffef9"/><rect x="50" y="52" width="150" height="74" fill="#eef2f8" stroke="#405f9f"/><rect x="286" y="52" width="150" height="74" fill="#fff" stroke="#405f9f"/><rect x="520" y="52" width="150" height="74" fill="#eef2f8" stroke="#405f9f"/><path d="M214 89h58M450 89h58" stroke="#405f9f" stroke-width="4"/><text x="125" y="95" text-anchor="middle" font-family="Arial" font-size="18">prior</text><text x="361" y="95" text-anchor="middle" font-family="Arial" font-size="18">generator</text><text x="595" y="95" text-anchor="middle" font-family="Arial" font-size="18">data</text><text x="54" y="210" font-family="Times New Roman" font-size="16">Figure 1: representative method fixture</text></svg>');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Block Coverage Report', '--source', 'fixture-paper.pdf', '--slug', 'block-coverage-report'], { cwd: temp, stdio: 'pipe' });
+    const bodies = {
+      'paper-map': '## What this paper is doing\n\nThe paper trains a generator by moving samples toward a target distribution.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the method flow rather than experiment results.\n- What it shows: prior samples pass through a generator and approach the data distribution.\n- Flow or sequence: prior sample → generator → pushforward distribution → data target.\n- What to observe: training changes the generator, not an inference-time sampler.\n- Equations or claims it supports: Eq. (6).',
+      prerequisite: '## Target concept\n\nDrift field $V_{p,q}(x)$.\n\n## Ladder\n\n1. Understand a distribution $q$.\n2. Understand pushforward $q=f_{\\#}p_{\\mathrm{prior}}$.\n3. Understand vector field $V_{p,q}(x)$.\n\n## Readiness check\n\nYou should be able to say what object moves and what defines the direction.',
+      method: '## Method mechanism\n\n1. Sample $z\\sim p_{\\mathrm{prior}}$.\n2. Produce $x=f(z)$.\n3. Estimate $V_{p,q}(x)$.\n4. Update $f$ against the training objective.\n\n## Method-level final insight\n\nThe method learns a one-pass generator by turning distribution matching into a drift target.',
+      equation: '## Equation role\n\nThis training objective makes the generator output imitate a stop-gradient drift target.\n\n## Symbol roles\n\n- $x$ — generated sample.\n- $V_{p,q}(x)$ — drift vector.\n- $\\operatorname{stopgrad}$ — fixed target operator.',
+      derivation: '## Transition\n\n### Previous equation\n\n$$x^{+}=x+V_{p,q}(x)$$\n\n### Next equation\n\n$$\\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x^{+})\\right\\|_2^2\\right]$$\n\n- Operation: substitute $x^{+}$.\n- Property used: definition of the drift target.\n- Assumption invoked: target is fixed by $\\operatorname{stopgrad}$.\n- Why valid: the target branch should not receive gradient.',
+      dependency: '## Backward dependencies\n\n- Definition of pushforward.\n- Definition of drift field.\n- Stop-gradient training target.\n\n## Forward dependencies\n\n- Training objective.\n- Equilibrium claim.\n\n## Missing dependency check\n\nThe reader must know why $q=p_{\\mathrm{data}}$ implies near-zero drift.',
+      proof: '## Proof strategy\n\nShow that when the generated distribution equals the data distribution, the expected drift vanishes.\n\n## Line-by-line proof table\n\n| Line | Claim | Dependency |\n| --- | --- | --- |\n| 1 | $q=p_{\\mathrm{data}}$ | equilibrium assumption |\n| 2 | $V_{p,q}(x)\\approx 0$ | drift definition |\n| 3 | objective is minimized | squared norm nonnegativity |',
+      confusion: '## Paused location\n\nEq. (6), inside $\\operatorname{stopgrad}(x+V_{p,q}(x))$.\n\n## Missing dependency\n\nThe user is missing why the target branch is frozen.\n\n## Minimal example\n\nIf both prediction and target move together, the loss can collapse without learning the intended direction.\n\n## Resume point\n\nReturn to Eq. (6) and trace which side receives gradient.',
+      'recursive-why': '## Recursive why\n\n| Layer | Why question | Answer | Missing dependency | Stop? |\n| --- | --- | --- | --- | --- |\n| 1 | Why stopgrad? | Freeze target. | gradient flow | no |\n| 2 | Why freeze target? | Avoid chasing a moving target. | optimization objective | yes |\n\n## Root dependency\n\nUnderstand which computational graph branch receives gradient.',
+      visualization: '## Visualization card\n\n- Question: Why does drift move samples toward data?\n- Concept: vector field on generated samples.\n- Visual encoding: arrows from generated points to nearby data structure.\n- What to observe: arrows shrink as distributions match.\n- Conclusion: the field is a conceptual guide for training.\n- Limitation: this does not prove convergence.',
+      'final-insight': '## One-sentence final insight\n\nThe paper trains a one-pass generator by converting distribution mismatch into a stop-gradient drift target.\n\n## Equation map\n\n- $q=f_{\\#}p_{\\mathrm{prior}}$ defines generated distribution.\n- Eq. (6) trains against the drift target.\n\n## Dependency chain\n\nPushforward → drift field → stop-gradient target → training objective → final generator.'
+    };
+    const cards = [
+      ['paper-map', 'Paper map', bodies['paper-map'], ['--figure-file', figurePath, '--figure-caption', 'Figure 1. Method flow.']],
+      ['prerequisite', 'Prerequisite ladder — Drift field', bodies.prerequisite, []],
+      ['method', 'Method dissection — Drifting Model', bodies.method, []],
+      ['equation', 'Training objective — Eq. (6)', bodies.equation, ['--latex', '\\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x+V_{p,q}(x))\\right\\|_2^2\\right]']],
+      ['derivation', 'Derivation trace — Drift target to Eq. (6)', bodies.derivation, []],
+      ['dependency', 'Dependency trace — Eq. (6)', bodies.dependency, []],
+      ['proof', 'Proof walkthrough — Zero drift claim', bodies.proof, []],
+      ['confusion', 'Confusion repair — stopgrad', bodies.confusion, []],
+      ['recursive-why', 'Recursive why — stopgrad', bodies['recursive-why'], []],
+      ['visualization', 'Visualization card — Drift field', bodies.visualization, []],
+      ['final-insight', 'Final insight', bodies['final-insight'], []]
+    ];
+    for (const [type, title, body, extra] of cards) {
+      const bodyPath = join(temp, `${type}.md`);
+      writeFileSync(bodyPath, body);
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'block-coverage-report', '--type', type, '--title', title, '--body-file', bodyPath, '--choices', 'Continue|Ask confusion', ...extra], { cwd: temp, stdio: 'pipe' });
+    }
+    const dir = join(temp, '.papermentor', 'sessions', 'block-coverage-report');
+    const html = readFileSync(join(dir, 'index.html'), 'utf8');
+    const data = readJson(join(dir, 'cards.json'), { cards: [] });
+    if ((html.match(/class="block"/g) || []).length !== cards.length) failures.push(`all-block report should render ${cards.length} blocks`);
+    if (data.cards?.length !== cards.length) failures.push(`all-block cards.json should persist ${cards.length} cards`);
+    for (const [type, title] of cards) {
+      if (!data.cards?.some((card) => card.type === type && card.title === title)) failures.push(`all-block cards.json missing ${type}: ${title}`);
+      if (!html.includes(title)) failures.push(`all-block HTML missing title: ${title}`);
+    }
+    for (const phrase of ['Prerequisite ladder', 'Method dissection', 'Training objective', 'Derivation trace', 'Dependency trace', 'Proof walkthrough', 'Confusion repair', 'Recursive why', 'Visualization card', 'Final insight']) {
+      if (!html.includes(phrase)) failures.push(`all-block HTML missing stage phrase: ${phrase}`);
+    }
+    for (const phrase of ['MathJax', '<ol>', '<table>', '<th>Line</th>', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
+      if (!html.includes(phrase)) failures.push(`all-block HTML missing structural phrase: ${phrase}`);
+    }
+    if (html.includes('학습' + ' ' + '목적' + '식')) failures.push('all-block HTML should not contain awkward Korean technical phrasing');
+  } catch (error) {
+    failures.push(`all-block report smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 validateInstalledArtifact();
 validateSessionHelper();
+validateAllBlockTypes();
 
 if (failures.length) {
   console.error('PaperMentor validation failed:');

@@ -75,7 +75,7 @@ Status marks:
 - Do not skip derivation transitions.
 - Do not hide assumptions.
 - Do not treat examples as proofs.
-- If responding in Korean, preserve equations, symbols, and notation exactly.
+- If responding in Korean, preserve equations, symbols, notation, and standard English technical terms exactly. Keep common research terms in English when that is the natural academic usage: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms.
 
 ## Select a mode
 
