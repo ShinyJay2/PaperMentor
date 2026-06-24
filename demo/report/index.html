@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>PaperMentor Demo Report</title>
+<link rel="preload" href="../../assets/fonts/satoshi/Satoshi-700.woff2" as="font" type="font/woff2" crossorigin>
+<style>
+@font-face{font-family:Satoshi;src:url("../../assets/fonts/satoshi/Satoshi-400.woff2") format("woff2");font-weight:400;font-display:swap}
+@font-face{font-family:Satoshi;src:url("../../assets/fonts/satoshi/Satoshi-700.woff2") format("woff2");font-weight:700;font-display:swap}
+body{margin:0;background:linear-gradient(90deg,rgba(79,60,32,.035) 1px,transparent 1px),linear-gradient(180deg,rgba(79,60,32,.035) 1px,transparent 1px),#f3efe4;background-size:28px 28px;color:#191715;font-family:Satoshi,Inter,system-ui,sans-serif}
+.page{width:min(900px,calc(100% - 44px));margin:0 auto;padding:42px 0 84px}.title{text-align:center;background:#fffef9cc;border-top:3px double #2a2723;border-bottom:1px solid #d6ccba;padding:24px}.title h1{font-size:48px;line-height:1.02;margin:0;letter-spacing:-.05em}.title p{margin:12px 0 0;color:#726b60}.block{margin-top:34px;background:#fffef9;border:1px solid #d6ccba;padding:42px 56px;box-shadow:0 16px 38px rgba(65,48,26,.075)}.block h2{font-size:30px;letter-spacing:-.035em;margin:0 0 8px}.meta{font-size:10px;text-transform:uppercase;letter-spacing:.06em;color:#726b60;border-bottom:1px solid #2a2723;padding-bottom:12px;margin-bottom:24px}.figure{border:1px solid #d8cebd;background:#fbf7ef;padding:12px}.figure img{display:block;width:100%;height:auto}.figure figcaption{font-size:13px;margin-top:10px}.body{font-size:16px;line-height:1.7}.body li{margin:8px 0}code{background:#f8f2e8;border:1px solid #ded4c4;padding:2px 5px}
+</style>
+</head>
+<body><main class="page">
+<header class="title"><h1>Generative Modeling via Drifting</h1><p>Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He</p></header>
+<article class="block"><h2>Start Here</h2><div class="meta">PaperMentor demo report</div>
+<figure class="figure"><img src="assets/drifting-method-demo.svg" alt="Drifting method demo figure" /><figcaption><strong>Figure 1.</strong> A representative method figure is placed before the explanation, not replaced by a diagram.</figcaption></figure>
+<div class="body"><h3>What this block demonstrates</h3><ul><li><strong>One-command launch:</strong> a paper URL can create a local reading room.</li><li><strong>Paper metadata:</strong> the title area shows authors instead of filesystem paths.</li><li><strong>HTML-first study:</strong> equations, derivations, dependencies, and confusion repairs are appended as blocks.</li><li><strong>Crop workflow:</strong> PaperMentor can produce a crop preview, then attach the exact source figure.</li></ul><p>Try it with <code>node scripts/papermentor-session.mjs launch https://arxiv.org/pdf/2602.04770 --open</code>.</p></div>
+</article>
+</main></body></html>

@@ -18,6 +18,7 @@ PaperMentor uses one local append-only reading document per paper session:
 Use `scripts/papermentor-session.mjs` when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
 
 ```bash
+node scripts/papermentor-session.mjs launch "https://arxiv.org/pdf/2602.04770" --open
 node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
 node scripts/papermentor-session.mjs status --session paper-title
 ```
@@ -92,6 +93,48 @@ Mode-specific dynamic menus:
 - `slide-deck`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
 
 If a slide PDF is protected or not text-extractable, stay in `slide-deck` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
+
+## `/papermentor launch`
+
+Purpose: start a polished reading room from one URL or local source file.
+
+Required behavior:
+
+- accept arXiv PDF/abs URLs, local PDFs, lecture-note PDFs, PPT/PPTX decks, and text fixtures;
+- download URL sources into `.papermentor/sources/` when needed;
+- extract title and authors from the first page when possible;
+- never display local source paths under the report title; show authors instead;
+- detect source mode and section/slide boundaries;
+- create `.papermentor/sessions/<slug>/index.html` immediately;
+- attach the representative first figure/slide when auto-crop succeeds;
+- write `.papermentor/sessions/<slug>/crop-preview.html` with full-page and auto-crop candidates so users can recrop visually;
+- print the HTML path, crop-preview path, and TUI command.
+
+Example:
+
+```bash
+node scripts/papermentor-session.mjs launch https://arxiv.org/pdf/2602.04770 --open
+```
+
+Manual crop-preview / recrop:
+
+```bash
+node scripts/papermentor-session.mjs preview-crops --session drifting-models --source paper.pdf --page 1
+node scripts/papermentor-session.mjs extract-figure --session drifting-models --source paper.pdf --page 1 --crop 120,80,900,360 --title "Figure 1 — Method"
+```
+
+## `/papermentor preview-crops`
+
+Purpose: create a visual recrop sheet before attaching a representative source figure.
+
+Required behavior:
+
+- render the selected PDF page or PPT/PPTX slide;
+- write `.papermentor/sessions/<slug>/crop-preview.html`;
+- write `.papermentor/sessions/<slug>/crop-previews.json`;
+- include at least a full-page/full-slide candidate and, when possible, an auto Figure 1 candidate;
+- print copy-pasteable `extract-figure --crop x,y,width,height` commands;
+- do not add a study block to `index.html` until the user chooses or confirms the crop.
 
 ## `/papermentor start`
 

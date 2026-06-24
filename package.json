@@ -7,7 +7,8 @@
   "type": "module",
   "scripts": {
     "test": "node scripts/validate.mjs",
-    "session": "node scripts/papermentor-session.mjs"
+    "session": "node scripts/papermentor-session.mjs",
+    "launch": "node scripts/papermentor-session.mjs launch"
   },
   "keywords": [
     "ai-agent-skill",
@@ -28,5 +29,8 @@
   },
   "engines": {
     "node": ">=18"
+  },
+  "bin": {
+    "papermentor": "scripts/papermentor-session.mjs"
   }
 }

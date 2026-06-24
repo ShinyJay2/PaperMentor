@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 920 320" role="img" aria-label="Drifting method demo figure">
+  <rect width="920" height="320" fill="#fffef9"/>
+  <rect x="36" y="30" width="848" height="226" fill="#fbf7ef" stroke="#d8cebd"/>
+  <g fill="none" stroke-width="2">
+    <path d="M130 176 C210 72 315 80 390 160 S560 230 725 90" stroke="#24211d"/>
+    <path d="M130 205 C250 150 340 150 465 164 S645 160 760 124" stroke="#e89a3c"/>
+    <path d="M130 140 C245 98 340 120 450 132 S620 126 760 102" stroke="#607bbd"/>
+  </g>
+  <g fill="#e89a3c"><circle cx="130" cy="205" r="5"/><circle cx="465" cy="164" r="5"/><circle cx="760" cy="124" r="5"/></g>
+  <g fill="#607bbd"><circle cx="130" cy="140" r="5"/><circle cx="450" cy="132" r="5"/><circle cx="760" cy="102" r="5"/></g>
+  <g stroke="#e89a3c" stroke-width="1.5"><line x1="160" y1="196" x2="184" y2="181"/><line x1="500" y1="158" x2="526" y2="151"/><line x1="700" y1="128" x2="725" y2="116"/></g>
+  <text x="72" y="286" font-family="Times New Roman, serif" font-size="18" fill="#1f1b16"><tspan font-weight="700">Figure 1.</tspan> Demo crop: generated distribution drifts toward the fixed data distribution during training.</text>
+</svg>

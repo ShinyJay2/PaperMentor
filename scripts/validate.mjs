@@ -1,17 +1,17 @@
 import { existsSync, readFileSync, statSync, mkdtempSync, rmSync, writeFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','docs/ci/github-actions-ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/lecture-note-scanner.md','prompts/slide-deck-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/start_here.md','templates/lecture_note_start_here.md','templates/slide_deck_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
   'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/lecture_note_mode_checklist.md','tests/slide_deck_mode_checklist.md','tests/prerequisite_depth_checklist.md',
-  'demo/sample-paper.md','demo/sample-session.md','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
+  'demo/sample-paper.md','demo/sample-session.md','demo/report/index.html','demo/report/assets/drifting-method-demo.svg','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
 
 const failures = [];
@@ -55,12 +55,12 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'HTML-first reading room', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'HTML-first reading room', 'Start in one command', 'preview-crops', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
 const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
-for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure', 'assets/mathjax/tex-svg.js', 'extractFigure', 'pendingBlockPrompt', 'pdftoppm', 'soffice']) {
+for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure', 'assets/mathjax/tex-svg.js', 'extractFigure', 'previewCrops', 'launchSession', 'inferMetadataFromText', 'pendingBlockPrompt', 'pdftoppm', 'soffice']) {
   if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
 }
 for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css', 'cdn.jsdelivr.net/npm/mathjax']) {
@@ -134,8 +134,17 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
+}
+
+const packageJson = readJson(join(root, 'package.json'), {});
+if (packageJson.bin?.papermentor !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a papermentor CLI bin');
+if (!packageJson.scripts?.launch?.includes('papermentor-session.mjs launch')) failures.push('package.json should expose npm run launch');
+
+const ci = readFileSync(join(root, 'docs/ci/github-actions-ci.yml'), 'utf8');
+for (const phrase of ['poppler-utils', 'libreoffice', 'python-pptx', 'npm test', 'npm pack --dry-run']) {
+  if (!ci.includes(phrase)) failures.push(`CI template missing phrase: ${phrase}`);
 }
 
 function expectedInstalledResources() {
@@ -200,6 +209,71 @@ function validateSessionHelper() {
     writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     writeFileSync(paperTextPath, '1. Introduction\nGenerative modeling learns a mapping f such that the pushforward distribution matches the data distribution. The paper proposes Drifting Models, a training-time drifting field, one-step inference, and a contrast with diffusion/flow models.\n\n2. Related Work\nDiffusion-/Flow-based Models. Sohl-Dickstein et al., 2015 and Lipman et al., 2022 formulate iterative mappings. Generative Adversarial Networks. Goodfellow et al., 2014 train a generator adversarially. Variational Autoencoders. Kingma & Welling, 2013 optimize ELBO.\n\n3. Drifting Models for Generation\nWe denote the pushforward distribution as q = f# p epsilon. (1) A sample drifts as xi+1 = xi + Vp,q(xi). (2) Proposition 3.1 uses an anti-symmetric drifting field. The training objective uses stopgrad. (6)\n');
+    const launchTextPath = join(temp, 'launch-source.txt');
+    writeFileSync(launchTextPath, `TurboQuant: Extreme Quantization for Vector Search
+Jane Researcher John Vector
+
+Abstract
+This paper designs a quantization map Q from real-valued vectors into binary strings while preserving mean-squared error and inner-product estimates.
+
+1. Introduction
+Vector search systems need compact representations.
+
+2. Problem Definition
+The quantizer Q maps x in R^d to B bits. Equation (1) defines MSE and Equation (2) defines inner-product distortion.
+
+3. Method
+The method uses randomized quantization and unbiased inner-product estimates.`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchTextPath, '--slug', 'launch-smoke', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const slideLaunchPath = join(temp, 'slide-launch.md');
+    writeFileSync(slideLaunchPath, '# Slide Deck Smoke\nPresenter Name\n\nSlide 1\nMethod overview\n\nSlide 2\nTraining flow');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', slideLaunchPath, '--slug', 'slide-launch-smoke', '--mode', 'slide-deck', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const slideLaunchState = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'state.json'), {});
+    const slideLaunchCards = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'cards.json'), { cards: [] });
+    if (slideLaunchCards.cards?.[0]?.type !== 'start-here') failures.push('slide-deck launch should store the initial block as start-here, not slide-explanation');
+    if (slideLaunchState.readingPath?.find((item) => item.key === 'narration')?.status === 'current') failures.push('slide-deck launch should not skip key-slide explanation and jump to narration');
+    const launchDir = join(temp, '.papermentor', 'sessions', 'launch-smoke');
+    const launchState = readJson(join(launchDir, 'state.json'), {});
+    const launchHtml = readFileSync(join(launchDir, 'index.html'), 'utf8');
+    if (launchState.title !== 'TurboQuant: Extreme Quantization for Vector Search' || launchState.authors !== 'Jane Researcher, John Vector') failures.push('launch should infer title and authors from source text');
+    if (!launchState.paperSections?.some((section) => section.includes('Problem Definition'))) failures.push('launch should detect source sections from one command');
+    if (!launchHtml.includes('Jane Researcher, John Vector') || launchHtml.includes(launchTextPath)) failures.push('launch report should show authors and hide source paths');
+    if (!launchHtml.includes('One-sentence orientation')) failures.push('launch should create an initial Start Here block');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Figure Failure Render', '--slug', 'figure-failure-render'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'figure-failure-render', '--type', 'start-here', '--title', 'Start Here', '--body', '## One-sentence orientation\n\nA paper shell.\n\n## Representative figure\n\nPaperMentor could not auto-attach the representative figure. Run crop preview and recrop manually.'], { cwd: temp, stdio: 'pipe' });
+    const failureHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'figure-failure-render', 'index.html'), 'utf8');
+    if (!failureHtml.includes('could not auto-attach the representative figure') || !failureHtml.includes('Run crop preview')) failures.push('renderer should keep visible auto-crop failure guidance when no figure is attached');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', figurePath, '--slug', 'figure-failure-launch', '--crop', '1,1,999999,999999', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const failureLaunchDir = join(temp, '.papermentor', 'sessions', 'figure-failure-launch');
+    const failureLaunchHtml = readFileSync(join(failureLaunchDir, 'index.html'), 'utf8');
+    const failureLaunchState = readJson(join(failureLaunchDir, 'state.json'), {});
+    if (!failureLaunchHtml.includes('could not auto-attach the representative figure') || !failureLaunchHtml.includes('Run crop preview')) failures.push('launch should render sanitized recrop guidance after an extraction failure');
+    if (failureLaunchHtml.includes(temp) || failureLaunchHtml.includes(figurePath) || failureLaunchHtml.includes(String(failureLaunchState.figureExtractionWarning || '___never___'))) failures.push('launch extraction failure guidance should hide absolute paths and raw diagnostic messages from HTML');
+    if (!failureLaunchHtml.includes("--source &#39;")) failures.push('launch extraction failure guidance should shell-quote the recrop source path');
+
+    const spacedFigurePath = join(temp, 'source with spaces.svg');
+    writeFileSync(spacedFigurePath, readFileSync(figurePath, 'utf8'));
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', spacedFigurePath, '--slug', 'spaced-source-failure', '--crop', '1,1,999999,999999', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const spacedFailureHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'spaced-source-failure', 'index.html'), 'utf8');
+    if (!spacedFailureHtml.includes("--source &#39;") || !spacedFailureHtml.includes('source with spaces.svg') && !spacedFailureHtml.includes('source-with-spaces-')) failures.push('launch extraction failure recrop command should shell-quote source paths derived from names with spaces');
+
+    const serverScript = join(temp, 'serve-once.cjs');
+    const portFile = join(temp, 'server-port.txt');
+    writeFileSync(serverScript, `const http=require('http');const fs=require('fs');const file=process.argv[2];const portFile=process.argv[3];const server=http.createServer((req,res)=>{res.setHeader('content-type','text/plain');res.end(fs.readFileSync(file));});server.listen(0,'127.0.0.1',()=>fs.writeFileSync(portFile,String(server.address().port)));`);
+    const server = spawn('node', [serverScript, launchTextPath, portFile], { cwd: temp, stdio: 'ignore' });
+    try {
+      for (let i = 0; i < 50 && !existsSync(portFile); i += 1) execFileSync('node', ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50)']);
+      const port = readFileSync(portFile, 'utf8').trim();
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke-2', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+      const sourceFiles = readdirSync(join(temp, '.papermentor', 'sources')).filter((name) => name.endsWith('.txt'));
+      if (sourceFiles.length !== 1) failures.push(`URL launch should reuse deterministic source cache, got ${sourceFiles.join(',')}`);
+      const urlHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'launch-url-smoke', 'index.html'), 'utf8');
+      if (urlHtml.includes('127.0.0.1') || urlHtml.includes('/launch-source.txt')) failures.push('URL launch HTML should not expose source URL or cached source path');
+    } finally {
+      server.kill();
+    }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
@@ -251,7 +325,7 @@ function validateSessionHelper() {
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
     if (html.includes('loading="lazy"')) failures.push('session report figures should load eagerly for reliable browser screenshots and first-open rendering');
     if (!(html.indexOf('One-sentence paper model') < html.indexOf('class="paper-figure"') && html.indexOf('class="paper-figure"') < html.indexOf('Preliminary ladder'))) failures.push('Start Here should render one-sentence model first, then representative figure, then preliminaries');
-    for (const phrase of ['Figure 1', 'Read it as', 'The key observation', 'This visual anchors']) {
+    for (const phrase of ['Figure 1', 'Read it by', 'The key observation', 'This visual anchors']) {
       if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);
     }
     for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Figure from the paper.']) {
@@ -563,6 +637,29 @@ prs.save(${JSON.stringify(pptxPath)})
       'slide-deck'
     ], { cwd: temp, stdio: 'pipe' });
 
+    const previewOutput = execFileSync('node', [
+      join(root, 'scripts', 'papermentor-session.mjs'),
+      'preview-crops',
+      '--session',
+      'pptx-smoke',
+      '--source',
+      pptxPath,
+      '--page',
+      '1',
+      '--title',
+      'Slide 1 — Full method pipeline',
+      '--overwrite'
+    ], { cwd: temp, encoding: 'utf8' });
+    const previewHtmlPath = join(temp, '.papermentor', 'sessions', 'pptx-smoke', 'crop-preview.html');
+    const previewJsonPath = join(temp, '.papermentor', 'sessions', 'pptx-smoke', 'crop-previews.json');
+    const previewHtml = readFileSync(previewHtmlPath, 'utf8');
+    const previewData = readJson(previewJsonPath, { previews: [] });
+    if (!previewOutput.includes('Crop preview written')) failures.push('preview-crops should print the preview path');
+    if (!previewHtml.includes('Crop preview') || !previewHtml.includes('Full page / slide')) failures.push('preview-crops should render a visual preview HTML');
+    if (previewHtml.includes(temp) || previewHtml.includes(pptxPath)) failures.push('crop preview HTML should not leak absolute local source paths');
+    if (!previewData.previews?.length || !previewData.previews?.[0]?.command?.includes('extract-figure')) failures.push('preview-crops should persist recrop commands');
+    if (JSON.stringify(previewData).includes(temp) || JSON.stringify(previewData).includes(pptxPath)) failures.push('crop preview metadata should use relative/session source paths, not absolute paths');
+
     execFileSync('node', [
       join(root, 'scripts', 'papermentor-session.mjs'),
       'extract-figure',
@@ -586,7 +683,7 @@ prs.save(${JSON.stringify(pptxPath)})
     const assetsDir = join(sessionDir, 'assets');
     const html = readFileSync(htmlPath, 'utf8');
     const data = readJson(cardsPath, { cards: [] });
-    const pngs = readdirSync(assetsDir).filter((name) => name.endsWith('.png'));
+    const pngs = readdirSync(assetsDir).filter((name) => name.endsWith('.png') && !name.startsWith('crop-preview-'));
     if (pngs.length !== 1) failures.push(`pptx extraction should create one PNG asset, got ${pngs.length}`);
     if (pngs.length === 1) {
       const pngPath = join(assetsDir, pngs[0]);
@@ -636,7 +733,7 @@ prs.save(${JSON.stringify(pptxPath)})
       const legacySessionDir = join(temp, '.papermentor', 'sessions', 'legacy-ppt-smoke');
       const legacyHtml = readFileSync(join(legacySessionDir, 'index.html'), 'utf8');
       const legacyCards = readJson(join(legacySessionDir, 'cards.json'), { cards: [] });
-      const legacyPngs = readdirSync(join(legacySessionDir, 'assets')).filter((name) => name.endsWith('.png'));
+      const legacyPngs = readdirSync(join(legacySessionDir, 'assets')).filter((name) => name.endsWith('.png') && !name.startsWith('crop-preview-'));
       if (legacyPngs.length !== 1) failures.push(`legacy .ppt extraction should create one PNG asset, got ${legacyPngs.length}`);
       if (legacyPngs.length === 1) {
         const fileOutput = execFileSync('file', [join(legacySessionDir, 'assets', legacyPngs[0])], { encoding: 'utf8' });

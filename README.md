@@ -114,6 +114,39 @@ Claude Code: ~/.claude/skills/papermentor
 
 ---
 
+## Start in one command
+
+After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL or local file:
+
+```bash
+node scripts/papermentor-session.mjs launch https://arxiv.org/pdf/2602.04770 --open
+```
+
+PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative first figure when it can, and writes a crop preview for quick recropping.
+
+```text
+.papermentor/sessions/<paper>/
+  index.html          # the reading room
+  crop-preview.html   # visual recrop candidates and commands
+  state.json          # current section/action state
+```
+
+Local files work the same way:
+
+```bash
+node scripts/papermentor-session.mjs launch ./paper.pdf --open
+node scripts/papermentor-session.mjs launch ./lecture-notes.pdf --mode lecture-note
+node scripts/papermentor-session.mjs launch ./slides.pptx --mode slide-deck
+```
+
+Want to inspect the figure crop before committing it to the report?
+
+```bash
+node scripts/papermentor-session.mjs preview-crops --session <paper-slug> --source paper.pdf --page 1
+```
+
+---
+
 
 ## Source modes
 
