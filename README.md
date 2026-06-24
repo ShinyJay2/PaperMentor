@@ -119,10 +119,10 @@ Claude Code: ~/.claude/skills/papermentor
 After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL or local file:
 
 ```bash
-node scripts/papermentor-session.mjs launch https://arxiv.org/pdf/2602.04770 --open
+papermentor launch https://arxiv.org/pdf/2602.04770 --open
 ```
 
-PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative first figure when it can, and writes a crop preview for quick recropping.
+PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative method/system figure when it can, and writes a crop preview for quick recropping.
 
 ```text
 .papermentor/sessions/<paper>/
@@ -134,15 +134,15 @@ PaperMentor downloads the source when needed, extracts the title and authors, de
 Local files work the same way:
 
 ```bash
-node scripts/papermentor-session.mjs launch ./paper.pdf --open
-node scripts/papermentor-session.mjs launch ./lecture-notes.pdf --mode lecture-note
-node scripts/papermentor-session.mjs launch ./slides.pptx --mode slide-deck
+papermentor launch ./paper.pdf --open
+papermentor launch ./lecture-notes.pdf --mode lecture-note
+papermentor launch ./slides.pptx --mode slide-deck
 ```
 
 Want to inspect the figure crop before committing it to the report?
 
 ```bash
-node scripts/papermentor-session.mjs preview-crops --session <paper-slug> --source paper.pdf --page 1
+papermentor preview-crops --session <paper-slug> --source paper.pdf --page 1
 ```
 
 ---
@@ -164,7 +164,14 @@ PaperMentor is intentionally optimized for concrete reading artifacts: papers, l
 
 ## HTML-first reading room
 
-The session helper keeps one `index.html` open and appends a new explanation block after each chosen reading action. The TUI writes a `pending-prompt.md` runner prompt for the selected action, and `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests.
+The session helper keeps one `index.html` open, starts with a compact usage block, and appends a new explanation block after each chosen reading action. The TUI writes a `pending-prompt.md` runner prompt for the selected action, and `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests. To share or download a finished reading room, export either a one-file PDF or a portable HTML zip bundle:
+
+```bash
+papermentor export --session <paper-slug> --format pdf --output papermentor-report.pdf --overwrite
+papermentor export --session <paper-slug> --format zip --output papermentor-report.zip --overwrite
+```
+
+Use PDF for a single shareable file. Use ZIP when you want the interactive local HTML bundle; unzip it anywhere and open `index.html`. It is a report bundle, not a blog export.
 
 
 PaperMentor is guided but interruptible. For each source, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
@@ -178,7 +185,7 @@ PaperMentor is guided but interruptible. For each source, it renders the HTML re
   notes.md        # portable Markdown notes
 ```
 
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `Start Here`: one sentence about what the source teaches or claims, the actual representative method/system figure when present, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
+The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `How to use this reading room`, explaining the HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The next block is `Start Here`: one sentence about what the source teaches or claims, the actual representative method/system figure when present, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
 
 ```text
 ╭──────────────────────────── PaperMentor Live ─────────────────────────────╮
@@ -234,9 +241,9 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 One-line starts:
 
 ```bash
-node scripts/papermentor-session.mjs start --title "My source" --source source.pdf --mode auto
-node scripts/papermentor-session.mjs analyze --session my-source --mode auto --paper-text-file source.txt
-node scripts/papermentor-session.mjs tui --session my-source
+papermentor start --title "My source" --source source.pdf --mode auto
+papermentor analyze --session my-source --mode auto --paper-text-file source.txt
+papermentor tui --session my-source
 ```
 
 - `scan` — produce the source map before details, including the exact cropped/screenshot representative method/system/algorithm figure when present, with explanation underneath. Never substitute Mermaid or a redrawn schematic for the paper figure.

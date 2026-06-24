@@ -32,13 +32,25 @@ If a selected slide deck is protected or text extraction fails, keep `slide-deck
 
 ### HTML-first reading room rule
 
-On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `Start Here`, not a terminal summary. It must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the HTML path, detected sections/slides, numbered choices, and a place for user questions.
+On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the HTML path, detected sections/slides, numbered choices, and a place for user questions.
 
-The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`scripts/papermentor-session.mjs tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. When an action is chosen, the helper writes a pending HTML-block prompt (`pending-prompt.md`) with inferred card type, local equations/concepts/citations, and the right template so the next answer can be appended with `card` instead of being dumped into the terminal.
+The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`papermentor tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. When an action is chosen, the helper writes a pending HTML-block prompt (`pending-prompt.md`) with inferred card type, local equations/concepts/citations, and the right template so the next answer can be appended with `card` instead of being dumped into the terminal.
 
 ### Representative figure rule
 
-In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the representative figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `scripts/papermentor-session.mjs card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …”; use a semantic caption like `Figure 1. Drifting Model` only when helpful, then explain the components, flow, what to observe, and supported equations/claims directly under the image in the body.
+In the first paper map, include the exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page when present. Prefer the figure that explains the method or overall system; do not use experiment/result plots as the representative figure unless no method figure exists. Do not redraw, simplify, generate a substitute diagram, or replace it with Mermaid/ASCII/SVG schematics. Attach the captured/cropped figure with `papermentor card --figure-file <path>` or `--figure-url <url>`. Do not use provenance captions such as “Exact crop of …” and do not paste raw PDF-extracted caption text when it contains broken math or hyphenation.
+
+Use a short semantic caption, then **open the cropped figure image and describe what is literally drawn in it.** Read the explanation off the pixels — never from the caption, the body text, or generic priors. Explain the image under it with this fixed schema: `Concept / method role`, `How to read it`, `Parts to identify`, `In-figure math / symbols`, `Flow / sequence`, `What to observe`, and `Equations / claims it supports`. The explanation must be specific to this exact figure, not reusable for any other paper:
+
+- `Concept / method role`: what this exact figure is (architecture / pipeline / algorithm / mechanism) and the single transformation it makes possible, in this paper’s own vocabulary.
+- `How to read it`: name every labelled box/module/object drawn in the crop and say in one clause what each one represents — a component glossary.
+- `Parts to identify`: enumerate every arrow, line, shape, color, plate/loop, brace, axis, and legend, and state what each encodes. Be exhaustive, not a sample.
+- `In-figure math / symbols`: transcribe in LaTeX every equation, variable, subscript, and annotation printed *inside* the figure, and define each symbol. If no math is rendered in the figure, say so explicitly.
+- `Flow / sequence`: walk the arrows in execution order — for each arrow name the quantity/tensor it carries, for each box the transformation it applies — and end at the output or loss.
+- `What to observe`: the specific design choice or contrast this figure encodes, tied to a named element.
+- `Equations / claims it supports`: map the figure’s elements to the numbered equations and claims in the body.
+
+Never substitute generic reading advice such as “follow the arrows”, “read the boxes in order”, or “look left to right before reading the math”. Telling the reader to move their eyes is not an explanation; describing each drawn element and the math inside it is.
 
 ### Visualization and conceptual diagram rule
 
@@ -71,8 +83,8 @@ When starting a source:
 1. Create or update one session folder at `.papermentor/sessions/<source-slug>/`.
 2. Keep exactly one rendered HTML block document per source: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, `turns.jsonl`, and `notes.md`.
-4. Use `scripts/papermentor-session.mjs` when available to create sessions, add cards, regenerate the block document, and print the CLI console.
-5. Start by rendering the `Start Here` HTML block, including a one-sentence source model, actual representative method/system/algorithm figure image when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful paper content. The HTML should show the figure followed immediately by a short explanation under the image: what the figure is, how to read it, what to observe, and which equations/claims it supports. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Use `extract-figure` for real PDF/PPT/image crops: PDFs render with Poppler `pdftoppm`, PPT/PPTX decks convert via LibreOffice `soffice`, and crop rectangles use `--auto figure1` or `--crop x,y,width,height`. Then show detected paper sections in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
+4. Use the installed `papermentor` CLI when available to create sessions, add cards, regenerate the block document, and print the CLI console.
+5. Start by rendering a compact `How to use this reading room` HTML block, then the `Start Here` HTML block, including a one-sentence source model, actual representative method/system/algorithm figure image when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful paper content. The HTML should show the figure followed immediately by a figure-specific explanation under the image. `papermentor launch` ships a deterministic placeholder scaffold there (it cannot see the image); your first job is to **open the cropped figure image, read every box/arrow/line/shape and every equation printed inside it, and replace that scaffold** with a real element-by-element reading via `extract-figure --body-file` or `card --type start-here --figure-file <crop> --body-file <reading>`. When `state.json` has `figureReadingPending`, that replacement is still outstanding — do it before moving on to sections. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Use `extract-figure` for real PDF/PPT/image crops: PDFs render with Poppler `pdftoppm`, PPT/PPTX decks convert via LibreOffice `soffice`, and crop rectangles use `--auto figure1` or `--crop x,y,width,height`. Then show detected paper sections in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the paper title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
 
@@ -94,6 +106,42 @@ Status marks:
 - `[ ]` pending
 - `[!]` blocked by unresolved confusion
 - `[↺]` revisit recommended
+
+### Preliminary ladder depth rule
+
+The preliminary ladder is not a section summary, not a topic list, and not a list of extracted keywords. It is a beginner-facing prerequisite curriculum for this exact paper. Before the reader enters sections, identify the concepts they must know to understand the paper's problem, method, notation, and core equations.
+
+Write it like a tutor answering: “What do I need to know before I can read this paper?” The ladder must start below the paper's notation and climb upward. For each prerequisite, explain the idea in plain language, give a tiny concrete example, then reconnect it to the paper's symbols, figure, equation, or method claim.
+
+Produce the ladder in this shape, like a patient tutor: (1) first **list the exact prerequisites in dependency order**, from the most primitive idea up to the paper's notation and key equations; (2) **teach each concept from zero, in order**, grounding every one in a tiny **concrete numeric example with real numbers** — e.g. 2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] → 0.01+0.01=0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimate where `90,110,95,105` average to `100` — then reconnect it to the paper's symbol/figure/equation; (3) **reconstruct the target paragraph/problem in one precise sentence**; (4) **re-translate that sentence into the reader's domain** when helpful (e.g. an LLM/embedding framing); (5) **name what to study next** for the later sections. Prefer a concrete number over a sentence of abstraction. Follow `prompts/prerequisite-analyzer.md`.
+
+For a dense mathematical paper, infer prerequisites from the actual paper objects and equations. Examples:
+
+- Quantization paper: bit → binary string → vector → $\mathbb{R}^d$ → function/map → encoding/decoding → quantization → lossy compression → distortion → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case analysis.
+- Self-supervised vision paper: image → patch → vector/embedding → representation → encoder → target/context split → mask/block index set → predictor → loss/objective → $\ell_2$ norm → moving-average target network → representation-space prediction.
+- Optimization paper: scalar/vector/function → objective function → gradient → step size → constraint → estimator/noise → convergence statement → theorem assumptions.
+
+Do not output broad labels such as “linear algebra”, “probability”, “optimization”, “self-supervised learning”, or “transformers” unless you immediately decompose them into the exact primitive concepts used here. Do not output only paper-specific labels such as “I-JEPA” or “ViT-H”; first explain the prerequisites that make those labels meaningful.
+
+For a dense mathematical paragraph, use this ordering when needed:
+
+1. primitive vocabulary — e.g. bit, binary string, real number, vector, coordinate, image patch, function/map, random variable;
+2. notation decoding — e.g. $\mathbb{R}^d$, $\{0,1\}^B$, $Q:\mathbb{R}^d\to\{0,1\}^B$, $Q^{-1}$, $B_i$, $s_y^{(i)}$, $\|\cdot\|_2$, $\langle x,y\rangle$, $\mathbb{E}_Q[\cdot]$;
+angle$, $\mathbb{E}_Q[\cdot]$;
+3. core concept — e.g. quantization/dequantization, lossy compression, embedding/representation, context block, target block, randomized quantizer, predictor;
+4. metric / assumption layer — e.g. MSE, inner-product error, squared $\ell_2$ loss, unbiased estimator, exponential moving average, worst-case analysis, computational efficiency;
+5. source-specific reconstruction — rewrite the target paragraph/equation/method claim in one precise sentence.
+
+Every ladder item must include:
+
+- concept name;
+- why it is needed for this paper;
+- minimal explanation with a concrete toy example;
+- notation or paper object it unlocks;
+- where it appears in the paper (section, equation, figure, or claim);
+- diagnostic check.
+
+Prefer numbered concept cards over wide tables. A good item should be teachable to a motivated beginner in isolation, then reconnect to the paper. Stop only when the reader can reconstruct the paper's main method claim or equation in their own words.
 
 ## Strict policies
 

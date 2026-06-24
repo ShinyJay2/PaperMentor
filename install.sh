@@ -40,11 +40,34 @@ copy_skill() {
   cp -R "$ROOT_DIR/assets" "$dest/assets"
 }
 
+install_cli() {
+  local skill_dir="$1"
+  if [[ "${PAPERMENTOR_INSTALL_CLI:-1}" == "0" ]]; then
+    return
+  fi
+  local bin_dir="${PAPERMENTOR_BIN_DIR:-$HOME/.local/bin}"
+  mkdir -p "$bin_dir"
+  local bin_path="$bin_dir/papermentor"
+  cat > "$bin_path" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export PAPERMENTOR_CLI="papermentor"
+exec node "$skill_dir/scripts/papermentor-session.mjs" "\$@"
+EOF
+  chmod +x "$bin_path"
+  printf 'PaperMentor CLI installed: %s\n' "$bin_path"
+  case ":$PATH:" in
+    *":$bin_dir:"*) ;;
+    *) printf 'Note: add %s to PATH to run `papermentor` from any shell.\n' "$bin_dir" ;;
+  esac
+}
+
 install_codex() {
   local codex_home="${CODEX_HOME:-$HOME/.codex}"
   local dest="$codex_home/skills/papermentor"
   copy_skill "$dest"
   printf 'PaperMentor installed for Codex: %s\n' "$dest"
+  install_cli "$dest"
 }
 
 install_claude() {
@@ -52,6 +75,7 @@ install_claude() {
   local dest="$claude_home/skills/papermentor"
   copy_skill "$dest"
   printf 'PaperMentor installed for Claude Code: %s\n' "$dest"
+  install_cli "$dest"
 }
 
 case "$TARGET" in
@@ -64,4 +88,4 @@ case "$TARGET" in
     ;;
 esac
 
-printf 'Try: Use $papermentor on a paper URL, then open .papermentor/sessions/<paper>/index.html.\n'
+printf 'Try: papermentor launch <paper.pdf-or-url> --open\n'

@@ -1,5 +1,71 @@
 # Design
 
+## Skill architecture
+
+PaperMentor is a **skill**, so the division of labor is deliberate:
+
+- **Brain = the model** (Claude reading `SKILL.md`). It produces *every explanation that requires looking at the source*: the one-sentence model, the representative-figure reading, the preliminary ladder, equation/derivation/dependency/proof cards, confusion repair, and the final insight.
+- **Hands = `scripts/papermentor-session.mjs`** (a dependency-free Node script). It does only *deterministic plumbing*: session files, HTML render, PDF/PPT cropping, source-mode/section/equation **detection for CLI navigation**, and — crucially — it emits **honest scaffolds**, never finished source-derived prose.
+
+> Core rule: if producing it requires reading the source content, a prompt (the model) does it. If it is the same regardless of the paper, the script does it. The script may ship a labelled *scaffold* that the model is told to replace, but it must not fake the explanation itself.
+
+```
+                          ┌──────────────────────────────────────────────┐
+                          │  BRAIN — the model (Claude)                  │
+                          │  contract + specs it follows:                │
+                          │   skills/papermentor/SKILL.md  (behaviour)   │
+                          │   skills/papermentor/commands.md (CLI specs) │
+                          │   skills/papermentor/examples.md (few-shot)  │
+                          │   prompts/*.md   (per-task OUTPUT specs)      │
+                          │   templates/*.md (per-card HTML BLOCK schema)│
+                          └───────────────┬──────────────────────────────┘
+                                          │ writes explanation blocks via
+                                          │   `papermentor card --body-file …`
+                                          ▼
+   user picks an action            ┌─────────────────────────┐        appends one block,
+   in the CLI/TUI navigator  ────▶ │  HANDS — session.mjs    │ ─────▶ re-renders index.html
+                                   │  (deterministic only)   │
+   ◀── numbered choices / TUI ──── │  • session state I/O    │
+                                   │  • PDF/PPT crop + render │
+                                   │  • section/eq detection │  (navigation, not explanation)
+                                   │  • writes pending-prompt│
+                                   │  • emits SCAFFOLDS only │
+                                   └────────────┬────────────┘
+                                                │ when an action is chosen, writes
+                                                ▼
+                                   .papermentor/sessions/<slug>/pending-prompt.md
+                                   = "HTML Block Runner Prompt":
+                                     · selected action
+                                     · source context (mode/title/section)
+                                     · detected signals (equations/concepts/citations)
+                                     · Template to follow → templates/<type>.md
+                                                │
+                                                ▼ the model reads it, follows prompts/<task>.md
+                                                  + templates/<type>.md, and appends the card.
+
+   Two surfaces, one loop:
+     index.html  ── the permanent report (explanation blocks accumulate here only)
+     CLI / TUI   ── the branching navigator (choices, blockers, diagnostics; never explanations)
+```
+
+### Prompt & template catalog
+
+| Stage | `prompts/*.md` (what to produce) | `templates/*.md` (block shape) |
+|---|---|---|
+| Mode detect | `source-mode-detector` | — |
+| Map (Start Here) | `paper-scanner` / `lecture-note-scanner` / `slide-deck-scanner` | `start_here` / `paper_map` (+ lecture/slide variants) |
+| Prerequisites | `prerequisite-analyzer` | `prerequisite_ladder` / `concept_ladder` |
+| Equation | `equation-analyzer` | `equation_card` |
+| Derivation | `derivation-tracer` | `derivation_trace` |
+| Dependencies | `dependency-tracer` | `dependency_trace` |
+| Proof | `proof-analyzer` | `proof_walkthrough` |
+| Method | `method-analyzer` | `method_dissection` |
+| Confusion / why | `confusion-resolver` | `confusion_response` / `recursive_why` |
+| Figure / diagram | `visualization-planner` (+ figure rule in `SKILL.md`) | `visualization_card` / `conceptual_diagram` |
+| Final insight | `final-insight-extractor` | `final_insight` |
+
+The script maps a chosen card type to its template in `promptTemplateForType()`; the model fills it. Source-derived report content (one-sentence model, figure reading, preliminary ladder) ships from the script as a *scaffold* and is replaced by the model — the script flags this with `startHerePending` and prints the next-step hint after `launch`.
+
 ## Source of truth
 - Status: Active
 - Last refreshed: 2026-06-23

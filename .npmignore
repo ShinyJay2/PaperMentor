@@ -4,3 +4,7 @@ node_modules/
 .omc/
 .papermentor/
 npm-debug.log*
+*.pdf
+*.ppt
+*.pptx
+papermentor-skill-*.tgz

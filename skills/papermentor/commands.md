@@ -15,12 +15,13 @@ PaperMentor uses one local append-only reading document per paper session:
   notes.md        # portable Markdown notes
 ```
 
-Use `scripts/papermentor-session.mjs` when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
+Use the installed `papermentor` CLI when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
 
 ```bash
-node scripts/papermentor-session.mjs launch "https://arxiv.org/pdf/2602.04770" --open
-node scripts/papermentor-session.mjs start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
-node scripts/papermentor-session.mjs status --session paper-title
+papermentor launch "https://arxiv.org/pdf/2602.04770" --open
+papermentor start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
+papermentor status --session paper-title
+papermentor doctor
 ```
 
 Reading Path:
@@ -45,8 +46,9 @@ Do not explain the paper in the CLI. The CLI is a controller; `index.html` is th
 On paper start:
 
 1. Detect the paper title, sections/table of contents, major equations, and representative method/system/algorithm figure.
-2. Render a first `Start Here` block in `index.html` containing one sentence about what the paper does, the actual representative figure crop, and detailed preliminaries.
-3. Print only the HTML path and section choices in CLI.
+2. Render a first `How to use this reading room` block in `index.html` explaining the HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior.
+3. Render `Start Here` immediately after it, containing one sentence about what the paper does, the actual representative figure crop, and detailed preliminaries.
+4. Print only the HTML path and section choices in CLI.
 4. Launch or offer the arrow-key TUI when the terminal supports it.
 
 Branching navigator behavior:
@@ -81,9 +83,9 @@ Codex decides whether a turn belongs in the polished HTML report. Do not ask aft
 Use `--mode auto` unless the user explicitly chooses a mode. Supported modes are `paper`, `lecture-note`, and `slide-deck`. PaperMentor is optimized for concrete reading artifacts, not general webpages. Never attach unrelated local diagrams as evidence for a source.
 
 ```bash
-node scripts/papermentor-session.mjs start --title "Source title" --source source.pdf --mode auto
-node scripts/papermentor-session.mjs analyze --session source-title --mode auto --paper-text-file source.txt
-node scripts/papermentor-session.mjs tui --session source-title
+papermentor start --title "Source title" --source source.pdf --mode auto
+papermentor analyze --session source-title --mode auto --paper-text-file source.txt
+papermentor tui --session source-title
 ```
 
 Mode-specific dynamic menus:
@@ -93,6 +95,24 @@ Mode-specific dynamic menus:
 - `slide-deck`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
 
 If a slide PDF is protected or not text-extractable, stay in `slide-deck` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
+
+## `/papermentor doctor`
+
+Purpose: diagnose local runtime parity before PDF/PPTX extraction.
+
+Required behavior:
+
+- check `pdftoppm` for PDF page rendering;
+- check LibreOffice (`soffice` or `libreoffice`) for PPT/PPTX conversion;
+- check ImageMagick (`magick` or `convert`, with macOS `sips` as a local crop renderer) for crop extraction;
+- check Python `pptx` / apt `python3-pptx` availability for PPTX fixture support;
+- print install guidance for missing tools and exit non-zero when extraction dependencies are incomplete.
+
+Example:
+
+```bash
+papermentor doctor
+```
 
 ## `/papermentor launch`
 
@@ -106,21 +126,40 @@ Required behavior:
 - never display local source paths under the report title; show authors instead;
 - detect source mode and section/slide boundaries;
 - create `.papermentor/sessions/<slug>/index.html` immediately;
-- attach the representative first figure/slide when auto-crop succeeds;
+- attach the representative method/system figure or representative slide when auto-crop succeeds;
 - write `.papermentor/sessions/<slug>/crop-preview.html` with full-page and auto-crop candidates so users can recrop visually;
 - print the HTML path, crop-preview path, and TUI command.
 
 Example:
 
 ```bash
-node scripts/papermentor-session.mjs launch https://arxiv.org/pdf/2602.04770 --open
+papermentor launch https://arxiv.org/pdf/2602.04770 --open
 ```
 
 Manual crop-preview / recrop:
 
 ```bash
-node scripts/papermentor-session.mjs preview-crops --session drifting-models --source paper.pdf --page 1
-node scripts/papermentor-session.mjs extract-figure --session drifting-models --source paper.pdf --page 1 --crop 120,80,900,360 --title "Figure 1 — Method"
+papermentor preview-crops --session drifting-models --source paper.pdf --page 1
+papermentor extract-figure --session drifting-models --source paper.pdf --page 1 --crop 120,80,900,360 --title "Figure 1 — Method"
+```
+
+## `/papermentor export`
+
+Purpose: create a one-file PDF or portable HTML report bundle for download, sharing, or archiving.
+
+Behavior:
+
+- render the current `index.html` first;
+- with `--format pdf`, print the report to one local PDF file using Chrome/Chromium/Edge;
+- with `--format zip`, zip `index.html`, `assets/`, `cards.json`, `notes.md`, `state.json`, and `turns.jsonl`;
+- keep source PDFs out of the export by default;
+- after unzip, users open `index.html` in a local browser.
+
+Example:
+
+```bash
+papermentor export --session drifting-models --format pdf --output drifting-papermentor-report.pdf --overwrite
+papermentor export --session drifting-models --format zip --output drifting-papermentor-report.zip --overwrite
 ```
 
 ## `/papermentor preview-crops`
@@ -145,13 +184,13 @@ Required behavior:
 - identify the paper title/source;
 - create `.papermentor/sessions/<paper-slug>/index.html`;
 - create `state.json`, `cards.json`, and `notes.md`;
-- render a first `Start Here` HTML block immediately when `--body-file`/`--body` is provided; use `--figure-file` for the exact representative paper figure crop when present;
+- render a first `How to use this reading room` HTML block, then a `Start Here` HTML block immediately when `--body-file`/`--body` is provided; use `--figure-file` for the exact representative paper figure crop when present;
 - print the HTML path and detected section choices, not an explanation.
 
 Recommended helper call after scanning the PDF:
 
 ```bash
-node scripts/papermentor-session.mjs start \
+papermentor start \
   --title "<source title>" \
   --source "<pdf path or URL>" \
   --mode auto \
@@ -179,7 +218,7 @@ Required behavior:
 Helper:
 
 ```bash
-node scripts/papermentor-session.mjs analyze --session <slug> --paper-text-file paper.txt
+papermentor analyze --session <slug> --paper-text-file paper.txt
 ```
 
 ## `/papermentor tui`
@@ -197,7 +236,7 @@ Required behavior:
 Helper:
 
 ```bash
-node scripts/papermentor-session.mjs tui --session <slug>
+papermentor tui --session <slug>
 ```
 
 ## `/papermentor scan`
@@ -215,7 +254,7 @@ Required output:
 - major equations;
 - exact screenshot/crop of the representative method/system/algorithm/architecture figure from the PDF/page, attached with `--figure-file` or `--figure-url`; do not redraw it and do not substitute Mermaid/ASCII/SVG schematics;
 - semantic figure caption only if helpful, not provenance text such as “Exact crop of …”;
-- explanation under the figure: components, flow/sequence, what to observe, and supported equations/claims;
+- explanation under the figure must be read off the cropped image itself and use the fixed labels `Concept / method role`, `How to read it`, `Parts to identify`, `In-figure math / symbols`, `Flow / sequence`, `What to observe`, and `Equations / claims it supports`. It must be specific to this exact figure: name every box/object and what it is, enumerate every arrow/line/shape/axis/legend and what it encodes, transcribe in LaTeX every equation/symbol printed inside the figure, and trace the arrows in order naming the quantity each carries — never generic advice like “follow the arrows with your eyes”;
 - method pipeline;
 - experiment logic if present;
 - suggested reading order;
@@ -390,7 +429,7 @@ Required output:
 Helper:
 
 ```bash
-node scripts/papermentor-session.mjs diagram \
+papermentor diagram \
   --session <slug> \
   --kind method-pipeline \
   --nodes "input|generator|drift field|training objective|updated generator"
@@ -467,7 +506,7 @@ Required behavior:
 Example:
 
 ```sh
-node scripts/papermentor-session.mjs run --session drifting-models --index 2
+papermentor run --session drifting-models --index 2
 ```
 
 ## `/papermentor extract-figure`
@@ -480,13 +519,13 @@ Required behavior:
 - for PDFs, render the requested page with Poppler `pdftoppm`;
 - for PPT/PPTX, convert through LibreOffice `soffice`, then render the selected slide;
 - crop with ImageMagick or macOS `sips` when `--auto figure1` or `--crop x,y,width,height` is provided;
-- attach the extracted image as a normal card figure and write the explanation under the image;
+- attach the extracted image as a normal card figure, then open that crop and write the explanation under the image from what is literally drawn — every box, arrow, line, shape, and every equation/symbol printed inside the figure;
 - never use Mermaid as a replacement for an actual paper/slide figure.
 
 Example:
 
 ```sh
-node scripts/papermentor-session.mjs extract-figure --session drifting-models --source paper.pdf --page 1 --auto figure1 --title "Representative method figure"
+papermentor extract-figure --session drifting-models --source paper.pdf --page 1 --auto figure1 --title "Representative method figure"
 ```
 
 ## `/papermentor render`

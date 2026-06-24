@@ -36,11 +36,29 @@ function Copy-PaperMentorSkill($Dest) {
   Copy-Item -Recurse -Path (Join-Path $RootDir "assets") -Destination (Join-Path $Dest "assets")
 }
 
+function Install-PaperMentorCli($SkillDir) {
+  if ($env:PAPERMENTOR_INSTALL_CLI -eq "0") { return }
+  $BinDir = if ($env:PAPERMENTOR_BIN_DIR) { $env:PAPERMENTOR_BIN_DIR } else { Join-Path $HOME ".papermentor\bin" }
+  New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
+  $CmdPath = Join-Path $BinDir "papermentor.cmd"
+  $ScriptPath = Join-Path $SkillDir "scripts\papermentor-session.mjs"
+  @"
+@echo off
+set PAPERMENTOR_CLI=papermentor
+node "$ScriptPath" %*
+"@ | Set-Content -Encoding ASCII -Path $CmdPath
+  Write-Host "PaperMentor CLI installed: $CmdPath"
+  if (-not (($env:PATH -split ';') -contains $BinDir)) {
+    Write-Host "Note: add $BinDir to PATH to run 'papermentor' from any shell."
+  }
+}
+
 function Install-Codex() {
   $CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
   $Dest = Join-Path $CodexHome "skills\papermentor"
   Copy-PaperMentorSkill $Dest
   Write-Host "PaperMentor installed for Codex: $Dest"
+  Install-PaperMentorCli $Dest
 }
 
 function Install-Claude() {
@@ -48,6 +66,7 @@ function Install-Claude() {
   $Dest = Join-Path $ClaudeHome "skills\papermentor"
   Copy-PaperMentorSkill $Dest
   Write-Host "PaperMentor installed for Claude Code: $Dest"
+  Install-PaperMentorCli $Dest
 }
 
 switch ($Platform.ToLowerInvariant()) {
@@ -59,4 +78,4 @@ switch ($Platform.ToLowerInvariant()) {
   default { throw "Usage: install.ps1 [codex|claude|all]" }
 }
 
-Write-Host 'Try: Use $papermentor on a paper URL, then open .papermentor/sessions/<paper>/index.html.'
+Write-Host 'Try: papermentor launch <paper.pdf-or-url> --open'

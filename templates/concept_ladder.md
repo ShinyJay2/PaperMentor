@@ -6,16 +6,21 @@ Name the concept the reader needs.
 
 ## Reader starting point
 
-State how far down the ladder must go. If the user lacks basic vocabulary, begin with primitives instead of graduate-level labels.
+State how far down the ladder must go. If the reader lacks basic vocabulary, begin with primitives instead of broad labels.
 
 ## Ladder
 
-Prefer numbered concept cards for long ladders. Use a table only for short ladders; wide tables become unreadable in HTML.
+Use numbered concept cards. Use a table only for very short ladders.
 
+For each step include:
 
-| Step | Tier | Prerequisite | Why needed | Minimal explanation + example | Notation | Checkpoint |
-| --- | --- | --- | --- | --- | --- | --- |
-| 1 | primitive vocabulary |  |  |  |  |  |
+- **Concept / tier**
+- **Why needed**
+- **Minimal explanation + concrete example**
+- **Notation or paper object unlocked**
+- **Checkpoint**
+
+Do not stop at “linear algebra”, “probability”, “optimization”, “self-supervised learning”, or “transformers”. Decompose the broad area into the exact concepts the source uses.
 
 ## Reconnect
 

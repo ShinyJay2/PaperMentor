@@ -1,9 +1,9 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync, rmSync, mkdtempSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync, rmSync, mkdtempSync, readdirSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { basename, dirname, extname, join, resolve, sep, relative } from 'node:path';
 import { createHash } from 'node:crypto';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const root = process.cwd();
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -73,6 +73,10 @@ function parseArgs(argv) {
     }
   }
   return args;
+}
+
+function cliCommand() {
+  return process.env.PAPERMENTOR_CLI || 'papermentor';
 }
 
 function slugify(value) {
@@ -416,6 +420,27 @@ function formatAuthors(value) {
   return cleaned;
 }
 
+function looksLikeAuthorLine(line) {
+  const value = String(line || '').trim();
+  if (!value || /@|http|www\.|abstract|figure|fig\.|keywords?/i.test(value)) return false;
+  if (/\b(university|institute|department|laborator(?:y|ies)|research\s+(?:lab|labs|center|centre|institute|group)|meta ai|fair|mila|mcgill)\b/i.test(value)) return false;
+  const withoutMarks = value.replace(/\d|[*†‡§,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const tokens = withoutMarks.split(/\s+/).filter(Boolean);
+  if (tokens.length === 2 && tokens.every((token) => /^[A-Z][A-Za-z.'-]+$/.test(token))) return true;
+  return tokens.length >= 4
+    && tokens.length <= 24
+    && tokens.filter((token) => /^[A-Z][A-Za-z.'-]+$/.test(token)).length >= Math.min(tokens.length, 8);
+}
+
+function looksLikeTitleContinuation(line) {
+  const value = String(line || '').trim();
+  if (value.length < 8 || value.length > 120) return false;
+  if (/^(abstract|figure|fig\.|table|keywords?|introduction|related work|methods?)\b/i.test(value)) return false;
+  if (/@|http|www\.|university|institute|department/i.test(value)) return false;
+  if (looksLikeAuthorLine(value)) return false;
+  return /[A-Za-z]/.test(value) && !/[.!?]$/.test(value);
+}
+
 function inferMetadataFromText(text, args = {}) {
   const lines = String(text || '')
     .split(/\r?\n/)
@@ -423,84 +448,166 @@ function inferMetadataFromText(text, args = {}) {
     .filter(Boolean)
     .filter((line) => !/^(\d+|abstract|figure\s+\d+|fig\.\s*\d+|table\s+\d+|keywords?|project page:?|conference|preprint)$/i.test(line))
     .filter((line) => !/^\d{1,2}\s+[A-Z][a-z]+\s+\d{4}$/.test(line));
-  const title = args.title || lines.find((line) => line.length >= 8 && line.length <= 140 && !/@/.test(line)) || '';
-  const titleIndex = lines.findIndex((line) => line === title);
+  let title = args.title || '';
+  let titleIndex = -1;
+  if (!title) {
+    titleIndex = lines.findIndex((line) => line.length >= 8 && line.length <= 140 && !/@/.test(line) && !looksLikeAuthorLine(line));
+    title = titleIndex >= 0 ? lines[titleIndex] : '';
+    if (titleIndex >= 0 && looksLikeTitleContinuation(lines[titleIndex + 1])) {
+      title = `${title} ${lines[titleIndex + 1]}`.replace(/\s+/g, ' ').trim();
+    }
+  } else {
+    titleIndex = lines.findIndex((line) => line === title);
+  }
   const afterTitle = titleIndex >= 0 ? lines.slice(titleIndex + 1, titleIndex + 7) : lines.slice(1, 7);
   const authors = args.authors || args.author || afterTitle.find((line) => {
     if (/^(abstract|figure|fig\.|introduction|project page|keywords?)/i.test(line)) return false;
     if (/@|http|www\.|university|institute|department/i.test(line)) return false;
-    return /([A-Z][a-zA-Z.'-]+\s+){1,}[A-Z][a-zA-Z.'-]+/.test(line) || line.includes(',');
+    return looksLikeAuthorLine(line) || line.includes(',');
   }) || '';
   return { title, authors: formatAuthors(authors) };
 }
 
 
-function abstractSnippet(text) {
-  const value = String(text || '').replace(/\r/g, '');
-  const abstractAt = value.search(/\bAbstract\b/i);
-  const source = abstractAt >= 0 ? value.slice(abstractAt).replace(/^[\s\S]*?\bAbstract\b/i, '') : value.slice(0, 1200);
-  const match = source.match(/([\s\S]{120,1600}?)(?:\n\s*1\.?\s+Introduction|\n\s*Introduction\b|\n\s*\d+\.\s+[A-Z][^\n]{3,90})/i);
-  const raw = match?.[1] || source.slice(0, 900);
-  return raw
-    .replace(/arXiv:\S+[^\n]*/gi, ' ')
-    .replace(/\b\d{1,2}\s+[A-Z][a-z]+\s+\d{4}\b/g, ' ')
-    .replace(/\bFigure\s+\d+\.[\s\S]{0,500}?(\.|$)/gi, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 700);
-}
 
 function representativeFigureExplanation({ sourceMode, text }) {
   const mode = normalizeSourceMode(sourceMode);
+  // This is a deterministic scaffold, not a real reading: the launch script cannot
+  // see the cropped image. Every bullet is an instruction to be replaced by what is
+  // literally drawn in the figure crop above. It must never read as a finished,
+  // generic "follow the arrows with your eyes" explanation.
   if (mode === 'slide-deck') {
     return [
       '## Representative figure explanation',
       '',
-      '- **What it shows:** The first representative slide anchors the deck before PaperMentor reconstructs the missing spoken narration.',
-      '- **Flow / sequence:** read the slide title, then follow the visual hierarchy from the largest object to labels and arrows.',
-      '- **What to observe:** which object, process, or contrast the lecturer expects you to carry into the next slide.',
-      '- **Equations / claims it supports:** the slide-level explanation and transition blocks that will be appended next.'
-    ].join('\n');
-  }
-  const cleaned = String(text || '').replace(/\s+/g, ' ');
-  const driftSpecific = /drifting models?|pushforward|prior distribution|data distribution/i.test(cleaned);
-  if (driftSpecific) {
-    return [
-      '## Representative figure explanation',
+      '_Not read yet. Open the slide crop above and replace every bullet with what is literally on the slide — each box, arrow, label, axis, and any equation printed on it, symbol by symbol. Delete this note once filled._',
       '',
-      '- **What it shows:** The model gradually transports a simple prior distribution toward the data distribution during training.',
-      '- **Flow / sequence:** read the snapshots left to right, then connect each snapshot to the orange markers on the decreasing loss curve.',
-      '- **What to observe:** training changes the distribution path itself; after training, generation can use the learned drift in one step.',
-      '- **Equations / claims it supports:** the pushforward distribution, drifting field, and one-step inference claims developed in Section 3.'
+      '- **Concept / method role:** Name what this exact slide visual is (architecture, pipeline, result, or mechanism) and the one thing the speaker wants remembered — in this deck’s own terms, not a generic description.',
+      '- **How to read it:** Name every labelled box/object on the slide and say in one clause what each one is.',
+      '- **Parts to identify:** List every arrow, line, shape, color, axis, legend, and callout, and state what each encodes — be exhaustive, not a sample.',
+      '- **In-figure math / symbols:** Transcribe in LaTeX every equation, variable, subscript, and annotation printed inside the slide visual, and define each symbol; if none appear, say so explicitly.',
+      '- **Flow / sequence:** Walk the arrows in order — for each arrow name the quantity it carries and for each box the operation it applies — and end at the slide’s conclusion. Do not write “follow the arrows” or “left to right”.',
+      '- **What to observe:** Name the specific object or contrast this slide encodes, tied to a named element.',
+      '- **Equations / claims it supports:** Map these elements to the slide’s equations and the claim it carries into the next slide.'
     ].join('\n');
   }
   if (mode === 'lecture-note') {
     return [
       '## Representative figure explanation',
       '',
-      '- **What it shows:** The first representative visual anchors the note before definitions and derivations are unpacked.',
-      '- **Flow / sequence:** identify the objects, then trace how the note moves from intuition to notation.',
-      '- **What to observe:** which concept is being made concrete visually before the formal statement appears.',
-      '- **Equations / claims it supports:** the concept ladder and notation blocks that will be appended next.'
+      '_Not read yet. Open the figure crop above and replace every bullet with what is literally drawn — each object, axis, highlighted case, arrow, and any equation rendered inside the figure, symbol by symbol. Delete this note once filled._',
+      '',
+      '- **Concept / method role:** Name what this exact figure makes concrete (which definition, example, proof object, or derivation step) — not a generic description.',
+      '- **How to read it:** Name every labelled object drawn in the figure and say in one clause what each one is.',
+      '- **Parts to identify:** List every axis, coordinate, highlighted case, arrow, line, brace, and label, and state what each encodes — be exhaustive, not a sample.',
+      '- **In-figure math / symbols:** Transcribe in LaTeX every equation, variable, subscript, and annotation rendered inside the figure, and define each symbol; if none appear, say so explicitly.',
+      '- **Flow / sequence:** Walk the construction in order — for each arrow or step name the object it produces — ending at the formal statement. Do not write “follow the construction” or “left to right”.',
+      '- **What to observe:** Name the specific concept this figure makes concrete before the formal statement, tied to a named element.',
+      '- **Equations / claims it supports:** Map these elements to the definitions, theorems, and equations this figure illustrates.'
     ].join('\n');
   }
   return [
     '## Representative figure explanation',
     '',
-    '- **What it shows:** The representative method figure anchors the paper before equation-level reading begins.',
-    '- **Flow / sequence:** follow the visual objects and arrows before reading the surrounding math.',
-    '- **What to observe:** the main transformation the paper claims to make possible.',
-    '- **Equations / claims it supports:** the method explanation, dependency trace, and derivation blocks that will be appended next.'
+    '_Not read yet. Open the figure crop above and replace every bullet with what is literally drawn — every box, arrow, line, shape, label, and any equation rendered inside the figure, symbol by symbol. Delete this note once filled._',
+    '',
+    '- **Concept / method role:** Name what this exact figure is — architecture, pipeline, algorithm, or mechanism — and the single transformation it makes possible, in this paper’s own terms. No generic boilerplate.',
+    '- **How to read it:** Name every labelled box/module/object drawn in the crop and say in one clause what each one represents (a component glossary, not reading advice).',
+    '- **Parts to identify:** List every arrow, line, shape, color, plate/loop, brace, axis, and legend, and state what each encodes — be exhaustive, not a sample.',
+    '- **In-figure math / symbols:** Transcribe in LaTeX every equation, variable, subscript, and annotation printed inside the figure, and define each symbol; if none appear, say so explicitly.',
+    '- **Flow / sequence:** Walk the arrows in execution order — for each arrow name the quantity/tensor it carries and for each box the transformation it applies — ending at the output or loss. Do not write “follow the arrows” or “left to right”.',
+    '- **What to observe:** Name the specific design choice or contrast this figure encodes (e.g. prediction in representation space vs pixel space), tied to a named element.',
+    '- **Equations / claims it supports:** Map these elements to the numbered equations and claims in the paper body.'
   ].join('\n');
 }
 
+function hasBalancedDelimiters(value) {
+  const text = String(value || '');
+  const pairs = { '{': '}', '[': ']', '(': ')' };
+  const stack = [];
+  for (const char of text) {
+    if (pairs[char]) stack.push(pairs[char]);
+    else if (Object.values(pairs).includes(char)) {
+      if (stack.pop() !== char) return false;
+    }
+  }
+  return stack.length === 0;
+}
+
+function looksLikeBrokenPdfMath(value) {
+  const text = String(value || '').trim();
+  if (!text) return true;
+  if (!hasBalancedDelimiters(text)) return true;
+  if (/[{}\\]/.test(text) && /\s(?:is defined by|maps to)\s/i.test(text)) return true;
+  if (/(?:^|[^\w])(?:left|right|sum|lVert|rVert|vs|hat)\b/.test(text) && !/^\\/.test(text)) return true;
+  if (/\b[a-z]\s+is defined by\s+\d+}/i.test(text)) return true;
+  if ((text.match(/[{}]/g) || []).length > 4 && !/^\\(?:mathbb|mathcal|operatorname|mathrm)\{[^}]+\}$/.test(text)) return true;
+  return false;
+}
+
+function cleanNotationCandidate(value) {
+  const text = String(value || '')
+    .replace(/\s+/g, ' ')
+    .replace(/[.,;:]+$/g, '')
+    .trim();
+  if (!text || text.length > 64 || looksLikeBrokenPdfMath(text)) return '';
+  if (/_\{[^}]*=/.test(text)) return '';
+  return text;
+}
+
+
 function launchStartBody({ sourceMode, text }) {
   const noun = sourceModeNoun(sourceMode);
-  const snippet = abstractSnippet(text);
-  const oneSentence = snippet
-    ? snippet.split(/(?<=[.!?])\s+/).find((sentence) => sentence.length > 50) || snippet
-    : `PaperMentor created a guided ${noun} reading room and detected section-level choices.`;
-  return `${representativeFigureExplanation({ sourceMode, text })}\n\n## One-sentence orientation\n\n${oneSentence}\n\n## How to use this reading room\n\n1. Keep this HTML report open.\n2. Return to the CLI and choose a section, slide, equation, derivation, dependency, or question.\n3. Each chosen action appends one new explanation block to this same document.\n\n## Preliminary ladder\n\n- **Source mode:** ${sourceModeLabel(sourceMode)}.\n- **First task:** inspect the representative figure or opening section before decoding equations.\n- **Next task:** use the CLI choices to select the first blocker instead of reading linearly.\n`;
+  // Launch ships only scaffolds. Every source-derived explanation below — the
+  // one-sentence model, the figure reading, and the preliminary ladder — must be
+  // written by the model after reading the source. The script never synthesises this
+  // content from the text; that is exactly the work the prompt/skill owns.
+  return `## One-sentence orientation
+
+_Not written yet. Replace this with exactly one sentence stating what this ${noun} does or claims: name the problem, the object it transforms/predicts/proves, and the main idea. Write it from the source, not from priors._
+
+${representativeFigureExplanation({ sourceMode, text })}
+
+${preliminaryLadderScaffold(sourceMode)}
+`;
+}
+
+function preliminaryLadderScaffold(sourceMode) {
+  const noun = sourceModeNoun(sourceMode);
+  return `## Preliminary ladder
+
+_Not built yet. Read the source and teach the exact concepts a beginner must know before this ${noun}, the way a patient tutor would._
+
+1. **List the prerequisites in order** for THIS ${noun}, from the most primitive up to its notation, method, and key equations (e.g. for a quantization paper: bit → binary → vector → real number → dimension → function → encoding/decoding → quantization → lossy compression → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case).
+2. **Teach each concept from zero with a tiny, concrete, numeric example** — actual numbers, not abstract prose (bit: 2 bits = 4 cases \`00 01 10 11\`; vector: \`x=[1.2,3.5,-0.7]\`; MSE: \`[0.1,-0.1] -> 0.01+0.01=0.02\`; inner product: \`[1,2]·[3,4]=11\`; unbiased: average of 90,110,95,105 = 100). Decompose broad labels into the exact primitives this source uses; never list keywords.
+3. **Reconstruct the target paragraph/problem in one precise sentence**, then **re-translate it into the reader's domain** (e.g. an LLM/embedding framing).
+4. **Name what to study next** to finish the paper (the more advanced tools the later sections assume).
+
+Follow \`prompts/prerequisite-analyzer.md\` and \`templates/prerequisite_ladder.md\`. Do not ship this scaffold — replace it with the real ladder.`;
+}
+
+function readingGuideBody({ slug, sourceMode }) {
+  const noun = sourceModeNoun(sourceMode);
+  const sectionNoun = normalizeSourceMode(sourceMode) === 'slide-deck' ? 'slide' : 'section';
+  return `PaperMentor has two linked surfaces: this report and the CLI/TUI. Keep this HTML open, then return to the terminal and choose a ${sectionNoun}, equation, derivation, dependency, or question. Each chosen action appends one polished explanation block to this same report.
+
+**Refresh behavior:** the HTML tries to auto-refresh when \`state.json\` changes. If your browser blocks local file polling, press reload after the CLI finishes. A PDF export is a snapshot, so re-export it after adding blocks.
+
+**Return command:** \`papermentor tui --session ${slug}\` for the interactive ${noun} navigator.`;
+}
+
+function addReadingGuideBlock({ slug, sourceMode, sections, args = {} }) {
+  addCard({
+    ...args,
+    session: slug,
+    type: 'reading-guide',
+    title: 'How to use this reading room',
+    location: 'Reading guide',
+    body: readingGuideBody({ slug, sourceMode }),
+    choices: sections.join('|'),
+    quiet: true,
+    noPath: true
+  });
 }
 
 function isProvenanceOnlyCaption(value) {
@@ -519,6 +626,17 @@ function figureCaption(args) {
   return isProvenanceOnlyCaption(caption) ? '' : caption;
 }
 
+function semanticRepresentativeFigureCaption({ representativeFigure, sourceMode }) {
+  if (!representativeFigure?.label) return '';
+  const mode = normalizeSourceMode(sourceMode);
+  if (mode === 'paper' && representativeFigure.inMethod) {
+    return `Figure ${representativeFigure.label}. Representative method figure from the Method section.`;
+  }
+  if (mode === 'paper') return `Figure ${representativeFigure.label}. Representative figure from the paper.`;
+  if (mode === 'slide-deck') return `Figure ${representativeFigure.label}. Representative visual from the slide deck.`;
+  return `Figure ${representativeFigure.label}. Representative visual.`;
+}
+
 function copyBundledReportAssets(slug) {
   mkdirSync(assetDir(slug), { recursive: true });
   const sourceFonts = join(bundledAssetsDir, 'fonts');
@@ -533,6 +651,60 @@ function commandPath(name) {
   const result = spawnSync(lookup, [name], { encoding: 'utf8' });
   if (result.status !== 0) return '';
   return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
+}
+
+function pythonModuleAvailable(moduleName) {
+  const result = spawnSync('python3', ['-c', `import ${moduleName}`], { encoding: 'utf8' });
+  return result.status === 0;
+}
+
+function dependencyStatusRows() {
+  const libreOffice = commandPath('soffice') || commandPath('libreoffice');
+  const imageMagick = commandPath('magick') || commandPath('convert') || (process.platform === 'darwin' ? commandPath('sips') : '');
+  return [
+    {
+      name: 'pdftoppm',
+      ok: Boolean(commandPath('pdftoppm')),
+      purpose: 'render PDF pages for launch, preview-crops, and extract-figure',
+      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
+    },
+    {
+      name: 'LibreOffice',
+      ok: Boolean(libreOffice),
+      purpose: 'convert PPT/PPTX decks to PDF before slide image extraction',
+      install: 'Ubuntu: sudo apt-get install libreoffice; macOS: brew install --cask libreoffice'
+    },
+    {
+      name: 'ImageMagick',
+      ok: Boolean(imageMagick),
+      purpose: 'crop rendered pages/slides when --crop or --auto is used',
+      install: 'Ubuntu: sudo apt-get install imagemagick; macOS: brew install imagemagick'
+    },
+    {
+      name: 'python3-pptx',
+      ok: pythonModuleAvailable('pptx'),
+      purpose: 'generate and validate PPTX fixture smoke tests',
+      install: 'Ubuntu: sudo apt-get install python3-pptx; Python env: python3 -m pip install python-pptx'
+    }
+  ];
+}
+
+function runDoctor(args = {}) {
+  const rows = dependencyStatusRows();
+  const payload = {
+    status: rows.every((row) => row.ok) ? 'ok' : 'missing-dependencies',
+    checks: rows
+  };
+  if (args.json) {
+    console.log(JSON.stringify(payload, null, 2));
+  } else {
+    console.log('PaperMentor dependency doctor');
+    for (const row of rows) {
+      console.log(`${row.ok ? '[ok]' : '[missing]'} ${row.name} — ${row.purpose}`);
+      if (!row.ok) console.log(`  install: ${row.install}`);
+    }
+  }
+  if (payload.status !== 'ok') process.exitCode = 1;
 }
 
 
@@ -572,14 +744,34 @@ function runTool(command, args, errorHint) {
   }
 }
 
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
 function convertPptToPdf(source, outDir) {
   const soffice = commandPath('soffice') || commandPath('libreoffice');
   if (!soffice) throw new Error('PPT/PPTX extraction requires LibreOffice (`soffice`) on PATH to convert slides to PDF');
   mkdirSync(outDir, { recursive: true });
-  runTool(soffice, ['--headless', '--convert-to', 'pdf', '--outdir', outDir, source], 'LibreOffice could not convert the deck to PDF');
+  const profileDir = mkdtempSync(join(outDir, 'libreoffice-profile-'));
+  const args = ['--headless', `-env:UserInstallation=${pathToFileURL(profileDir).href}`, '--convert-to', 'pdf', '--outdir', outDir, source];
+  try {
+    execFileSync(soffice, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch (error) {
+    const stdout = error.stdout ? String(error.stdout).trim() : '';
+    const stderr = error.stderr ? String(error.stderr).trim() : '';
+    throw new Error(`LibreOffice could not convert the deck to PDF${stderr ? `: ${stderr.slice(0, 400)}` : stdout ? `: ${stdout.slice(0, 400)}` : ''}`);
+  }
   const pdf = join(outDir, `${basename(source, extname(source))}.pdf`);
-  if (!existsSync(pdf)) throw new Error(`LibreOffice conversion finished but no PDF was found at ${pdf}`);
-  return pdf;
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    if (existsSync(pdf)) return pdf;
+    const candidates = readdirSync(outDir)
+      .filter((name) => extname(name).toLowerCase() === '.pdf')
+      .map((name) => join(outDir, name));
+    if (candidates.length === 1) return candidates[0];
+    if (attempt < 7) sleepMs(125);
+  }
+  const seen = readdirSync(outDir).filter((name) => !name.startsWith('libreoffice-profile-')).join(', ') || 'none';
+  throw new Error(`LibreOffice conversion finished but no PDF was found at ${pdf}; outdir files: ${seen}`);
 }
 
 function renderPdfPageToImage(pdfPath, page, outFile, dpi = 180) {
@@ -648,42 +840,100 @@ function parsePdfBbox(xml) {
   return { page, words };
 }
 
+function pdfPageSize(pdfPath, pageNumber) {
+  const pdfinfo = commandPath('pdfinfo');
+  if (!pdfinfo) return { width: 612, height: 792 };
+  try {
+    const out = execFileSync(pdfinfo, ['-f', String(pageNumber), '-l', String(pageNumber), pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    const match = out.match(/Page\s+\d+\s+size:\s+([0-9.]+)\s+x\s+([0-9.]+)\s+pts/i) || out.match(/Page size:\s+([0-9.]+)\s+x\s+([0-9.]+)\s+pts/i);
+    if (match) return { width: Number(match[1]), height: Number(match[2]) };
+  } catch {
+    // Keep the conservative letter-size fallback below.
+  }
+  return { width: 612, height: 792 };
+}
+
+function rectFromPdfPoints({ page, dpi, leftPt, topPt, rightPt, bottomPt }) {
+  const scaleX = Number(dpi || 180) / 72;
+  const scaleY = Number(dpi || 180) / 72;
+  const left = Math.max(0, Math.min(page.width - 1, leftPt));
+  const top = Math.max(0, Math.min(page.height - 1, topPt));
+  const right = Math.max(left + 20, Math.min(page.width, rightPt));
+  const bottom = Math.max(top + 20, Math.min(page.height, bottomPt));
+  return {
+    x: Math.max(0, Math.round(left * scaleX)),
+    y: Math.max(0, Math.round(top * scaleY)),
+    width: Math.max(80, Math.round((right - left) * scaleX)),
+    height: Math.max(80, Math.round((bottom - top) * scaleY))
+  };
+}
+
+function autoFigureCropFromLayoutText(pdfPath, pageNumber, args = {}) {
+  const pdftotext = commandPath('pdftotext');
+  if (!pdftotext) return null;
+  const label = String(args.auto || args.figure || args['figure-number'] || '1').replace(/^fig(?:ure)?\.?\s*/i, '') || '1';
+  let text = '';
+  try {
+    text = execFileSync(pdftotext, ['-layout', '-f', String(pageNumber), '-l', String(pageNumber), pdfPath, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  } catch {
+    return null;
+  }
+  const lines = text.replace(/\f/g, '').split(/\r?\n/);
+  const labelRegex = new RegExp(`\\bFig(?:ure)?\\.?\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[.:]?`, 'i');
+  const index = lines.findIndex((line) => labelRegex.test(line));
+  if (index < 0) return null;
+  const line = lines[index] || '';
+  const column = Math.max(0, line.search(labelRegex));
+  const maxColumns = Math.max(90, ...lines.map((item) => item.length));
+  const page = pdfPageSize(pdfPath, pageNumber);
+  const captionY = (index / Math.max(1, lines.length - 1)) * page.height;
+  const rightColumn = column > maxColumns * 0.42;
+  const leftColumn = column > 4 && column < maxColumns * 0.30;
+  const leftPt = Number(args['auto-left'] || (rightColumn ? page.width * 0.49 : leftColumn ? 42 : 50));
+  const rightPt = Number(args['auto-right'] || (rightColumn ? page.width - 38 : leftColumn ? page.width * 0.51 : page.width - 50));
+  const topPt = Math.max(0, captionY - Number(args['auto-layout-top-pad'] || args['auto-top-pad'] || 260));
+  const includeCaption = Boolean(args['include-caption'] || args.includeCaption);
+  const bottomPt = includeCaption
+    ? Math.min(page.height, captionY + Number(args['auto-layout-bottom-pad'] || args['auto-height'] || 110))
+    : Math.max(topPt + 20, captionY - Number(args['auto-caption-gap'] || 8));
+  return rectFromPdfPoints({ page, dpi: args.dpi, leftPt, topPt, rightPt, bottomPt });
+}
+
 function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
   const pdftotext = commandPath('pdftotext');
   if (!pdftotext) return null;
+  if (args['force-layout-crop'] || process.env.PAPERMENTOR_FORCE_LAYOUT_CROP === '1') {
+    return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
+  }
   const label = String(args.auto || args.figure || args['figure-number'] || '1').replace(/^fig(?:ure)?\.?\s*/i, '') || '1';
   let xml = '';
   try {
     xml = execFileSync(pdftotext, ['-bbox', '-f', String(pageNumber), '-l', String(pageNumber), pdfPath, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   } catch {
-    return null;
+    return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
   }
   const { page, words } = parsePdfBbox(xml);
   const figureIndex = words.findIndex((word, index) => /^fig(?:ure)?\.?$/i.test(word.text) && new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[.:]?$`).test(words[index + 1]?.text || ''));
-  if (figureIndex < 0) return null;
+  if (figureIndex < 0) return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
   const figureWord = words[figureIndex];
   const after = words.filter((word) => word.yMin > figureWord.yMin + 18);
   const nextHeading = after.find((word) => /^(Abstract|Introduction|Background|Preliminaries|Methods?|Experiments?|Conclusion|References)$/i.test(word.text));
   const topPt = Math.max(0, figureWord.yMin - Number(args['auto-top-pad'] || 114));
-  const bottomPt = Math.min(page.height, (nextHeading?.yMin || figureWord.yMin + Number(args['auto-height'] || 86)) - Number(args['auto-bottom-pad'] || 8));
+  const includeCaption = Boolean(args['include-caption'] || args.includeCaption);
+  const bottomPt = includeCaption
+    ? Math.min(page.height, (nextHeading?.yMin || figureWord.yMin + Number(args['auto-height'] || 86)) - Number(args['auto-bottom-pad'] || 8))
+    : Math.max(topPt + 20, figureWord.yMin - Number(args['auto-caption-gap'] || 8));
   const leftPt = Number(args['auto-left'] || 50);
   const rightPt = Number(args['auto-right'] || (page.width - 50));
-  const scaleX = Number(args.dpi || 180) / 72;
-  const scaleY = Number(args.dpi || 180) / 72;
-  return {
-    x: Math.max(0, Math.round(leftPt * scaleX)),
-    y: Math.max(0, Math.round(topPt * scaleY)),
-    width: Math.max(80, Math.round((rightPt - leftPt) * scaleX)),
-    height: Math.max(80, Math.round((bottomPt - topPt) * scaleY))
-  };
+  return rectFromPdfPoints({ page, dpi: args.dpi, leftPt, topPt, rightPt, bottomPt });
 }
 
 function visualExplanationBody(args, state) {
-  const question = args.question || `What does this visual explain in ${state.currentSection || state.title}?`;
-  const concept = args.concept || args.title || 'Representative visual';
-  const observe = args.observe || args['what-to-observe'] || 'Follow the labeled objects and arrows before reading the surrounding equations.';
-  const conclusion = args.conclusion || 'Use this visual as the anchor for the next HTML explanation block.';
-  return `## Extracted visual explanation\n\n- **Question:** ${question}\n- **Concept:** ${concept}\n- **What to observe:** ${observe}\n- **Conclusion:** ${conclusion}`;
+  // No author-supplied reading was passed to extract-figure. Do NOT invent a generic
+  // "follow the labeled objects and arrows" explanation — that is the filler this skill
+  // exists to eliminate. Emit the same honest, element-by-element forcing scaffold the
+  // launch flow uses, so the model is told to replace it by reading the actual crop.
+  return representativeFigureExplanation({ sourceMode: state.sourceMode });
 }
 
 
@@ -857,7 +1107,7 @@ function previewCrops(args) {
     previews.push({
       label: 'Full page / slide',
       src: `assets/${basename(fullName)}`,
-      command: `node scripts/papermentor-session.mjs extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --title ${shellQuote(args.title || 'Representative figure')}`
+      command: `${cliCommand()} extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --title ${shellQuote(args.title || 'Representative figure')}`
     });
     const autoCrop = renderedPdf ? autoFigureCropFromPdf(renderedPdf, page, { ...args, auto: args.auto || 'figure1', dpi }) : null;
     if (autoCrop) {
@@ -867,7 +1117,7 @@ function previewCrops(args) {
       previews.push({
         label: `Auto Figure ${String(args.auto || '1').replace(/^fig(?:ure)?\.?\s*/i, '')}`,
         src: `assets/${basename(autoName)}`,
-        command: `node scripts/papermentor-session.mjs extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --crop ${shellQuote(crop)} --title ${shellQuote(args.title || 'Representative figure')}`
+        command: `${cliCommand()} extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --crop ${shellQuote(crop)} --title ${shellQuote(args.title || 'Representative figure')}`
       });
     }
     const previewPath = safeSessionPath(slug, 'crop-preview.html');
@@ -1118,47 +1368,91 @@ function detectCitations(text) {
 }
 
 function detectConcepts(text) {
-  const concepts = [
-    ['pushforward', 'pushforward distribution'],
-    ['drifting field', 'drifting field'],
-    ['stop-gradient', 'stop-gradient target'],
-    ['stopgrad', 'stop-gradient target'],
-    ['anti-symmetric', 'anti-symmetric drifting field'],
-    ['kernel', 'kernelized drift field'],
-    ['mean-shift', 'mean-shift attraction/repulsion'],
-    ['classifier-free guidance', 'classifier-free guidance'],
-    ['one-step', 'one-step inference'],
-    ['FID', 'FID evaluation'],
-    ['ImageNet', 'ImageNet experiment setup'],
-    ['robotic', 'robotic control experiment'],
-    ['causal inference', 'causal inference'],
-    ['causal', 'causal reasoning'],
-    ['counterfactual', 'counterfactual reasoning'],
-    ['confound', 'confounding'],
-    ['intervention', 'intervention'],
-    ['do-calculus', 'do-calculus'],
-    ['structural causal model', 'structural causal model'],
-    ['SCM', 'structural causal model'],
-    ['DAG', 'directed acyclic graph'],
-    ['potential outcome', 'potential outcomes'],
-    ['OOD', 'out-of-distribution generalization'],
-    ['out-of-distribution', 'out-of-distribution generalization'],
-    ['transformer', 'Transformer sequence model'],
-    ['attention', 'attention mechanism'],
-    ['decision transformer', 'Decision Transformer'],
-    ['imitation learning', 'imitation learning'],
-    ['reinforcement learning', 'reinforcement learning'],
-    ['foundation model', 'foundation model'],
-    ['diffusion policy', 'diffusion policy'],
-    ['ALOHA', 'ALOHA robotic imitation system']
-  ];
-  const lower = String(text || '').toLowerCase();
-  return unique(concepts.filter(([needle]) => lower.includes(needle.toLowerCase())).map(([, label]) => label)).slice(0, 8);
+  const source = String(text || '').replace(/\s+/g, ' ');
+  const stopStarts = /^(this|that|these|those|paper|source|section|figure|table|equation|eq|we|our|the|a|an|it|they|there|their|its)\b/i;
+  const stopEnds = /\b(and|or|with|while|that|which|where|when|using|uses?|is|are|be|being|been|to|from|for|of|in|on|by|as|at|than|then|into|over|under|after|before)\s*$/i;
+  const noisy = /\b(copyright|rights reserved|all rights|header|footer|preprint|accepted manuscript|anonymous|supplementary|page intentionally blank|generated by|downloaded from|license|arxiv|doi|conference|proceedings)\b/i;
+  const genericTail = /\b(section|paper|source|work|result|results|approach|problem|idea|example|study)\s*$/i;
+  const canonicalConcept = (value) => {
+    const phrase = String(value || '').trim();
+    const known = new Map([
+      ['vit-h', 'ViT-H'],
+      ['vit-l', 'ViT-L'],
+      ['vit-b', 'ViT-B'],
+      ['data2vec', 'data2vec'],
+      ['beit', 'BEiT'],
+      ['mae', 'MAE']
+    ]);
+    return known.get(phrase.toLowerCase()) || phrase;
+  };
+  const clean = (value) => canonicalConcept(String(value || '')
+    .replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9]+$/g, '')
+    .replace(/\s+/g, ' ')
+    .trim());
+  const scores = new Map();
+  const addCandidate = (value, score = 1) => {
+    for (const part of String(value || '').split(/\s+(?:and|or|with|versus|vs\.?|such that|so that)\s+|[,;:]/i)) {
+      const phrase = clean(part)
+        .replace(/^(?:a|an|the|new|novel|simple|current|local)\s+/i, '')
+        .replace(/\s+as\s+[A-Za-z0-9#_{}\\-]+$/i, '')
+        .replace(/\s+(?:we|this|that|these|those)\s*$/i, '')
+        .replace(stopEnds, '')
+        .trim();
+      const words = phrase.split(/\s+/).filter(Boolean);
+      const singleLower = words.length === 1 && /^[a-z]+$/.test(phrase);
+      const signal = score
+        + (/[A-Z]/.test(phrase[0] || '') ? 0.5 : 0)
+        + (/-/.test(phrase) ? 0.5 : 0)
+        + (/\b[A-Z]{2,}\b/.test(phrase) ? 0.5 : 0);
+      if (
+        phrase.length >= 5
+        && phrase.length <= 72
+        && words.length <= 5
+        && !stopStarts.test(phrase)
+        && !stopEnds.test(phrase)
+        && !noisy.test(phrase)
+        && !/^([A-Z]{3,})(?:\s+\1){1,}$/.test(phrase)
+        && !genericTail.test(phrase)
+        && (!singleLower || signal >= 2.5 || phrase.length >= 9)
+      ) {
+        const key = phrase.toLowerCase();
+        const existing = scores.get(key);
+        scores.set(key, existing ? { phrase: existing.phrase, score: existing.score + signal } : { phrase, score: signal });
+      }
+    }
+  };
+  for (const match of source.matchAll(/\b(?:proposes?|introduces?|presents?|develops?|defines?|studies?|evaluates?|optimizes?|learns?|builds?|designs?|uses?|denotes?|calls?)\s+(?:a|an|the|new|novel)?\s*([A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z][A-Za-z0-9-]*){0,5})/gi)) {
+    addCandidate(match[1], 3);
+  }
+  for (const match of source.matchAll(/\b([A-Za-z][A-Za-z0-9-]*(?:\s+[A-Za-z][A-Za-z0-9-]*){0,5})\s+(?:is|are|means|denotes|refers to|maps to|controls|measures|anchors|supports|matches|approximates|compares|changes|evaluates)\b/gi)) {
+    addCandidate(match[1], 3);
+  }
+  for (const match of source.matchAll(/\b(?:Figure|Fig\.|Table|Algorithm)\s+\d+[A-Za-z]?\.\s*([^.\n]{5,90})/gi)) {
+    addCandidate(match[1], 2.5);
+  }
+  for (const match of source.matchAll(/\b([A-Za-z][A-Za-z0-9- ]{2,40})\s+[A-Za-z]\s*[:=]\s*[^.\n]{1,80}/g)) {
+    addCandidate(match[1], 2.5);
+  }
+  for (const match of source.matchAll(/\b([A-Z][A-Za-z0-9-]+(?:\s+(?:[A-Z][A-Za-z0-9-]+|[a-z]{3,})){1,4})\b/g)) {
+    const phrase = clean(match[1]);
+    if (phrase.length >= 6 && !stopStarts.test(phrase) && !/\b(Abstract|Introduction|Related Work|References)\b/.test(phrase)) addCandidate(phrase, 1.5);
+  }
+  for (const match of source.matchAll(/\b([A-Z]{2,6})\b/g)) addCandidate(match[1], 1.5);
+  for (const match of source.matchAll(/\b([A-Za-z]+(?:-[A-Za-z]+){1,3})\b/g)) {
+    const phrase = clean(match[1].toLowerCase());
+    if (!stopStarts.test(phrase)) addCandidate(phrase, 1.5);
+  }
+  return [...scores.values()]
+    .filter(({ score }) => score >= 2.5)
+    .sort((a, b) => b.score - a.score || b.phrase.length - a.phrase.length)
+    .map(({ phrase }) => phrase)
+    .slice(0, 8);
 }
 
 function detectDefinitions(text) {
-  return unique([...String(text || '').matchAll(/\b(?:Definition|Def\.|Assumption|Example|Exercise|Theorem|Lemma|Proposition)\s+([0-9.]+)?\s*([^\n.]{0,80})/gi)]
+  return unique([...String(text || '').matchAll(/\b(?:Definition|Def\.|Assumption|Exercise|Theorem|Lemma|Proposition|Algorithm)\s+([0-9.]+)?\s*([^\n.]{0,80})/g)]
     .map((match) => `${match[0].replace(/\s+/g, ' ').trim()}`))
+    .filter((value) => !/\b(copyright|rights reserved|page intentionally blank|generated by|downloaded from|conference proceedings)\b/i.test(value))
     .slice(0, 10);
 }
 
@@ -1181,7 +1475,7 @@ function visualRepairActions(section, body) {
   if (/related work/.test(lowerTitle) && citations.length >= 3) {
     actions.push(`Draw related-work landscape for ${title}`);
   }
-  if (/drifting models|method|generation|pushforward|field|implementation/.test(lowerTitle) || /Algorithm\s+\d+|training objective|pipeline|optimizer/i.test(body)) {
+  if (/\b(method|methods|approach|model|architecture|algorithm|framework|system|implementation)\b/.test(lowerTitle) || /Algorithm\s+\d+|objective|pipeline|optimizer|architecture|framework|procedure/i.test(body)) {
     actions.push(`Draw method pipeline for ${title}`);
   }
   if (equations.length >= 2 || /Eq\.\s*\(\d+\).*Eq\.\s*\(\d+\)/is.test(body)) {
@@ -1193,29 +1487,27 @@ function visualRepairActions(section, body) {
   if (/proof|proposition|lemma|theorem/i.test(body)) {
     actions.push(`Draw proof dependency graph for ${title}`);
   }
-  if (/experiment|imagenet|toy|robot|fid|table|figure/i.test(lowerTitle) || /FID|ablation|Table\s+\d+|Figure\s+\d+/i.test(body)) {
+  if (/experiment|evaluation|results|analysis|ablation|benchmark|case study|table|figure/i.test(lowerTitle) || /metric|benchmark|ablation|Table\s+\d+|Figure\s+\d+/i.test(body)) {
     actions.push(`Visualize experimental evidence flow for ${title}`);
   }
   return unique(actions).slice(0, 4);
 }
 
 function equationLabel(number, body) {
-  const local = String(body || '').slice(Math.max(0, String(body || '').indexOf(`(${number})`) - 800), String(body || '').indexOf(`(${number})`) + 800);
-  if (number === '1') return `Explain Eq. (${number}) pushforward symbol by symbol`;
-  if (number === '2') return `Explain Eq. (${number}) sample drifting update`;
-  if (number === '3') return `Explain Eq. (${number}) anti-symmetry condition`;
-  if (number === '4') return `Explain Eq. (${number}) equilibrium fixed point`;
-  if (number === '5') return `Trace Eq. (${number}) training-time fixed-point iteration`;
-  if (number === '6') return `Explain Eq. (${number}) training objective and stopgrad`;
-  if (number === '7') return `Explain Eq. (${number}) drifting field expectation`;
-  if (number === '8') return `Explain Eq. (${number}) attraction and repulsion fields`;
-  if (number === '9') return `Explain Eq. (${number}) normalization factors`;
-  if (number === '10') return `Explain Eq. (${number}) attraction minus repulsion`;
+  const source = String(body || '');
+  const equationAt = source.indexOf(`(${number})`);
+  const local = equationAt >= 0
+    ? source.slice(Math.max(0, equationAt - 800), equationAt + 800)
+    : source.slice(0, 1200);
   if (/pushforward/i.test(local)) return `Explain Eq. (${number}) pushforward symbol by symbol`;
   if (/anti-symmetric/i.test(local)) return `Explain Eq. (${number}) anti-symmetry condition`;
   if (/fixed-point|equilibrium/i.test(local)) return `Explain Eq. (${number}) equilibrium fixed point`;
-  if (/stopgrad|loss|objective/i.test(local)) return `Explain Eq. (${number}) training objective and stopgrad`;
-  if (number === '2' || /xi\+1|drift/i.test(local)) return `Explain Eq. (${number}) sample drifting update`;
+  if (/stopgrad|stop-gradient/i.test(local)) return `Explain Eq. (${number}) stop-gradient target symbol by symbol`;
+  if (/\b(loss|objective|risk|likelihood|regulari[sz]er|constraint)\b/i.test(local)) return `Explain Eq. (${number}) objective symbol by symbol`;
+  if (/update|recurrence|iteration|x[i_{]?\s*\+?\s*1|t\s*\+\s*1/i.test(local)) return `Explain Eq. (${number}) update rule symbol by symbol`;
+  if (/expectation|expected value|\\mathbb\{E\}|E\[/i.test(local)) return `Explain Eq. (${number}) expectation symbol by symbol`;
+  if (/norm|distance|\\\|/.test(local)) return `Explain Eq. (${number}) distance or norm symbol by symbol`;
+  if (/probability|distribution|density|p\(|q\(/i.test(local)) return `Explain Eq. (${number}) probabilistic statement symbol by symbol`;
   return `Explain Eq. (${number}) symbol by symbol`;
 }
 
@@ -1272,7 +1564,7 @@ function actionProfileForSection(section, body, sourceMode = 'paper') {
   if (/introduction/.test(lowerTitle)) {
     actions.push('Explain the Introduction as a promise-and-mechanism story');
     for (const concept of concepts.slice(0, 4)) actions.push(`Unpack "${concept}" from the Introduction`);
-    actions.push('Compare training-time drifting with inference-time diffusion');
+    if (citations.length) actions.push('Identify which prior work or baseline frames the paper’s promise');
     actions.push(...visualRepairActions(title, body));
   } else if (/related work/.test(lowerTitle)) {
     actions.push('Build a related-work map: what each family contributes and why PaperMentor cares');
@@ -1283,24 +1575,24 @@ function actionProfileForSection(section, body, sourceMode = 'paper') {
     }
     for (const citation of citations.slice(0, 4)) actions.push(`Follow citation: explain how ${citation} is used here`);
     actions.push(...visualRepairActions(title, body));
-  } else if (/drifting models|method|generation|pushforward|field/.test(lowerTitle)) {
+  } else if (/\b(method|methods|approach|model|architecture|algorithm|framework|system)\b/.test(lowerTitle) || /Algorithm\s+\d+|objective|pipeline|optimizer|architecture|framework|procedure/i.test(body)) {
     actions.push('Give a compact method overview for this section');
     for (const number of equations.slice(0, 8)) actions.push(equationLabel(number, body));
-    if (/Proposition\s+3\.1/i.test(body)) actions.push('Explain Proposition 3.1 and why anti-symmetry gives zero drift');
-    if (/stopgrad|stop-gradient/i.test(body)) actions.push('Explain why stopgrad is used and what would break without it');
+    for (const item of detectDefinitions(body).filter((item) => /Proposition|Theorem|Lemma|Assumption|Definition/i.test(item)).slice(0, 3)) actions.push(`Explain ${item} and why it is needed`);
+    if (/stopgrad|stop-gradient/i.test(body)) actions.push('Explain why the stop-gradient target is used and what would break without it');
     actions.push('Build the dependency chain for the method section');
     actions.push(...visualRepairActions(title, body));
   } else if (/implementation/.test(lowerTitle)) {
-    actions.push('Walk through the image-generation implementation step by step');
-    if (/Algorithm\s+1/i.test(body)) actions.push('Explain Algorithm 1 as executable pseudocode');
+    actions.push('Walk through the implementation step by step');
+    for (const item of detectDefinitions(body).filter((value) => /Algorithm/i.test(value)).slice(0, 3)) actions.push(`Explain ${item} as executable pseudocode`);
     for (const concept of concepts.slice(0, 4)) actions.push(`Explain implementation detail: ${concept}`);
-    actions.push('Connect implementation choices back to the drifting objective');
+    actions.push('Connect implementation choices back to the objective or system contract');
     actions.push(...visualRepairActions(title, body));
-  } else if (/experiment|imageNet|toy|robot/i.test(lowerTitle)) {
+  } else if (/experiment|evaluation|results|analysis|ablation|benchmark|case study/i.test(lowerTitle)) {
     actions.push('Explain what the experiments are trying to prove');
-    if (/FID/i.test(body)) actions.push('Explain FID and why it matters for these results');
-    if (/ImageNet/i.test(body)) actions.push('Interpret the ImageNet results without hype');
-    if (/robot/i.test(body)) actions.push('Explain the robotic-control experiment setup');
+    for (const concept of concepts.slice(0, 4)) actions.push(`Explain evaluation concept: ${concept}`);
+    if (/metric|score|accuracy|error|loss|FID|BLEU|ROUGE|AUC/i.test(body)) actions.push('Explain the main metric and why it supports the claim');
+    if (/ablation/i.test(body)) actions.push('Interpret the ablation without overclaiming');
     actions.push(...visualRepairActions(title, body));
   } else if (/discussion|conclusion/.test(lowerTitle)) {
     actions.push('Extract the paper’s final insight from this section');
@@ -1602,7 +1894,7 @@ function addDiagram(args) {
   const question = args.question || `What structure in ${state.currentSection || 'this paper'} is hard to hold in working memory?`;
   const concept = args.concept || diagramTitle(kind);
   const visualEncoding = args['visual-encoding'] || `Mono-tone SVG: nodes represent paper objects; arrows represent dependency, sequence, or contrast.`;
-  const observe = args.observe || args['what-to-observe'] || `Follow the arrows and check which object must be understood before the next one.`;
+  const observe = args.observe || args['what-to-observe'] || `Each arrow is a dependency: the object it points to relies on the object it leaves, so the upstream object must be understood first.`;
   const conclusion = args.conclusion || `The diagram is a visual repair aid: it shows the relationship structure before the detailed explanation is appended.`;
   const limitation = args.limitation || `This is a generated conceptual diagram, not an exact figure from the paper and not a substitute for the paper's own figures.`;
   addCard({
@@ -1645,11 +1937,14 @@ function addCard(args) {
     createdAt: now()
   };
   cards.cards.push(card);
-  const pathKey = inferPathKey(type, state);
-  if (pathKey) setPathStatus(state, pathKey, args.status || 'done');
-  const activePathItems = readingPathForMode(state.sourceMode || 'paper');
-  const nextKey = args.next || activePathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
-  if (nextKey) setPathStatus(state, nextKey, 'current');
+  const shouldUpdatePath = !args.noPath && !args['no-path'];
+  if (shouldUpdatePath) {
+    const pathKey = inferPathKey(type, state);
+    if (pathKey) setPathStatus(state, pathKey, args.status || 'done');
+    const activePathItems = readingPathForMode(state.sourceMode || 'paper');
+    const nextKey = args.next || activePathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
+    if (nextKey) setPathStatus(state, nextKey, 'current');
+  }
   state.currentLocation = card.location;
   state.currentFocus = card.title;
   state.nextChoices = card.choices.length ? card.choices : state.nextChoices;
@@ -1719,6 +2014,13 @@ function renderHtml(slug) {
 window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayMath: [['$$', '$$'], ['\\\\[', '\\\\]']] }, svg: { fontCache: 'global' } };
 </script>
 <script defer src="assets/mathjax/tex-svg.js"></script>
+<script>
+try {
+  if (new URLSearchParams(window.location.search).has('papermentor-print')) {
+    document.documentElement.classList.add('papermentor-print-preview');
+  }
+} catch (_) {}
+</script>
 <style>
 @font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-300.woff2") format("woff2"); font-weight:300; font-style:normal; font-display:swap; }
 @font-face { font-family:"Satoshi"; src:url("assets/fonts/satoshi/Satoshi-400.woff2") format("woff2"); font-weight:400; font-style:normal; font-display:swap; }
@@ -1728,41 +2030,38 @@ window.MathJax = { tex: { inlineMath: [['$', '$'], ['\\\\(', '\\\\)']], displayM
 @font-face { font-family:"Pretendard"; src:url("assets/fonts/pretendard/PretendardVariable.woff2") format("woff2-variations"); font-weight:45 920; font-style:normal; font-display:swap; }
 :root {
   color-scheme: light;
-  --field:#f3efe4;
-  --paper:#fffef9;
+  --field:#f7f7f5;
+  --paper:#ffffff;
   --ink:#191715;
-  --muted:#726b60;
-  --line:#d6ccba;
-  --rule:#2a2723;
+  --muted:#66615a;
+  --line:#d9d6cf;
+  --rule:#242424;
   --accent:#405f9f;
-  --accent-soft:#eef2f8;
+  --accent-soft:#f1f4f8;
   --mono: "Anthropic Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   --text: "Satoshi", "Pretendard", "Apple SD Gothic Neo", Inter, "Helvetica Neue", Arial, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 }
 * { box-sizing:border-box; }
 html { scroll-behavior:smooth; }
+html, body, .page, .paper-title, .block, .paper-figure, .paper-figure figcaption { -webkit-print-color-adjust:exact; print-color-adjust:exact; }
 body {
   margin:0;
   color:var(--ink);
   font-family:var(--text);
   background:
-    linear-gradient(90deg, rgba(79,60,32,.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(79,60,32,.035) 1px, transparent 1px),
-    radial-gradient(circle at 50% -10%, rgba(255,255,255,.7), transparent 34%),
-    var(--field);
-  background-size:28px 28px, 28px 28px, auto, auto;
+    linear-gradient(180deg, #ffffff 0%, #f7f7f5 42%, #f4f4f1 100%);
 }
 .page {
-  width:min(900px, calc(100% - 44px));
+  width:min(820px, calc(100% - 40px));
   margin:0 auto;
-  padding:42px 0 84px;
+  padding:32px 0 64px;
 }
 .paper-title {
-  max-width:820px;
-  margin:0 auto 34px;
-  padding:22px 24px 24px;
+  max-width:700px;
+  margin:0 auto 24px;
+  padding:18px 22px 20px;
   text-align:center;
-  background:rgba(255,254,249,.72);
+  background:rgba(255,255,255,.82);
   border-top:3px double var(--rule);
   border-bottom:1px solid var(--line);
 }
@@ -1770,34 +2069,34 @@ body {
   margin:0;
   color:var(--ink);
   font-family:var(--text);
-  font-size:clamp(31px, 4.7vw, 50px);
-  line-height:1.04;
-  font-weight:760;
+  font-size:clamp(26px, 4.1vw, 42px);
+  line-height:1.06;
+  font-weight:740;
   letter-spacing:-.045em;
 }
 .paper-authors {
-  margin-top:10px;
+  margin-top:8px;
   color:var(--muted);
-  font-size:14px;
+  font-size:13px;
   line-height:1.55;
   font-weight:500;
   letter-spacing:-.01em;
   overflow-wrap:anywhere;
 }
-.blocks { display:grid; gap:30px; }
+.blocks { display:grid; gap:22px; }
 .block {
   position:relative;
   background:var(--paper);
   border:1px solid var(--line);
   border-radius:2px;
-  padding:40px 56px 50px;
-  box-shadow:0 16px 38px rgba(65,48,26,.075);
+  padding:30px 44px 38px;
+  box-shadow:0 10px 24px rgba(40,40,40,.055);
 }
 .block:after {
   content:'';
   position:absolute;
-  inset:10px;
-  border:1px solid rgba(214,204,186,.42);
+  inset:8px;
+  border:1px solid rgba(217,214,207,.46);
   pointer-events:none;
 }
 .block-head {
@@ -1808,8 +2107,8 @@ body {
   gap:10px;
   align-items:start;
   border-bottom:1px solid var(--rule);
-  padding-bottom:13px;
-  margin-bottom:23px;
+  padding-bottom:11px;
+  margin-bottom:18px;
 }
 .block h1,
 .block h2,
@@ -1822,10 +2121,18 @@ body {
 }
 .block-title {
   margin:0;
-  font-size:31px;
+  font-size:26px;
+}
+.block[data-type="reading-guide"] {
+  background:#fbfbfa;
+}
+.block[data-type="reading-guide"] .body {
+  color:#272521;
+  font-size:14px;
+  line-height:1.58;
 }
 .location {
-  margin-top:7px;
+  margin-top:5px;
   color:var(--muted);
   font-family:var(--mono);
   font-size:10px;
@@ -1834,33 +2141,82 @@ body {
 }
 
 .paper-figure {
+  break-inside:avoid;
+  page-break-inside:avoid;
   position:relative;
   z-index:1;
-  margin:18px auto 26px;
-  max-width:760px;
-  border:1px solid #d8cebd;
-  background:#fbf7ef;
-  padding:12px;
+  margin:16px auto 22px;
+  max-width:700px;
+  border:1px solid #d9d6cf;
+  background:#ffffff;
+  padding:10px;
+  box-shadow:0 8px 18px rgba(40,40,40,.045);
 }
 .paper-figure img {
   display:block;
-  width:100%;
+  width:auto;
+  max-width:100%;
+  max-height:min(440px, 50vh);
+  margin:0 auto;
   height:auto;
   object-fit:contain;
 }
 .paper-figure figcaption {
   margin-top:10px;
-  color:#3e3830;
-  font-size:13.5px;
-  line-height:1.55;
+  padding:12px 14px 14px;
+  border-top:1px solid #ddd9d2;
+  background:#fafafa;
+  color:#2c2c2a;
+  font-size:13px;
+  line-height:1.64;
+  text-wrap:pretty;
 }
-.paper-figure figcaption p { margin:6px 0; }
-.paper-figure figcaption strong { color:var(--ink); font-weight:720; }
+.figure-title {
+  margin:0 0 9px;
+  color:var(--ink);
+  font-size:13.5px;
+  font-weight:740;
+  letter-spacing:-.012em;
+}
+.figure-brief {
+  margin:0;
+  display:grid;
+  gap:0;
+}
+.figure-brief-row {
+  break-inside:avoid;
+  page-break-inside:avoid;
+  display:grid;
+  grid-template-columns:minmax(116px, 0.34fr) minmax(0, 1fr);
+  gap:16px;
+  padding:7px 0;
+  border-top:1px solid rgba(217,214,207,.74);
+}
+.figure-brief-row:first-child { border-top:0; padding-top:0; }
+.figure-brief dt {
+  margin:0;
+  color:#68645d;
+  font-size:11px;
+  line-height:1.45;
+  font-weight:780;
+  letter-spacing:.015em;
+}
+.figure-brief dd {
+  margin:0;
+  min-width:0;
+  color:#25221e;
+}
+.figure-brief mjx-container {
+  max-width:100%;
+  overflow-x:auto;
+  overflow-y:hidden;
+  padding-bottom:2px;
+}
 
 .user-question {
   position:relative;
   z-index:1;
-  max-width:760px;
+  max-width:700px;
   margin:0 auto 22px;
   padding:14px 16px;
   border-left:3px solid var(--accent);
@@ -1881,34 +2237,36 @@ body {
   line-height:1.55;
 }
 .latex {
+  break-inside:avoid;
+  page-break-inside:avoid;
   position:relative;
   z-index:1;
   margin:18px 0 24px;
   padding:18px 20px;
   overflow-x:auto;
-  border:1px solid #d8cebd;
-  background:#f8f2e8;
-  font-size:16px;
+  border:1px solid #d9d6cf;
+  background:#f5f5f3;
+  font-size:15px;
 }
 .body {
   position:relative;
   z-index:1;
-  max-width:760px;
+  max-width:700px;
   margin:0 auto;
   color:#1d1d1d;
-  font-size:16px;
-  line-height:1.68;
+  font-size:15px;
+  line-height:1.64;
 }
-.body h1 { font-size:28px; margin:26px 0 12px; }
-.body h2 { font-size:24px; margin:26px 0 12px; }
-.body h3 { font-size:20px; margin:22px 0 10px; }
+.body h1 { font-size:24px; margin:22px 0 10px; }
+.body h2 { font-size:21px; margin:22px 0 10px; }
+.body h3 { font-size:18px; margin:18px 0 8px; }
 .body h3.ladder-heading {
-  margin:26px 0 12px;
-  padding:14px 16px 12px;
+  margin:20px 0 10px;
+  padding:12px 14px 10px;
   border:1px solid var(--line);
   border-left:4px solid var(--rule);
-  background:linear-gradient(135deg, #fffdf7, #f4efe6);
-  box-shadow:0 8px 18px rgba(65,48,26,.045);
+  background:#fafafa;
+  box-shadow:0 6px 14px rgba(40,40,40,.04);
 }
 .body h3.ladder-heading + p,
 .body h3.ladder-heading + ul,
@@ -1917,7 +2275,7 @@ body {
 }
 .body .ladder-meta {
   border:1px solid var(--line);
-  background:#fffaf1;
+  background:#fafafa;
   padding:12px 14px;
   border-radius:2px;
 }
@@ -1930,8 +2288,8 @@ body {
   margin:18px 0;
   border-collapse:collapse;
   border:1px solid var(--line);
-  background:#fffbf3;
-  font-size:14px;
+  background:#ffffff;
+  font-size:13px;
 }
 .body th,
 .body td {
@@ -1941,12 +2299,12 @@ body {
   vertical-align:top;
 }
 .body th {
-  background:#f0eadf;
+  background:#f1f1ef;
   font-weight:740;
 }
 .body code {
-  background:#f0eadf;
-  border:1px solid #d4cab8;
+  background:#f1f1ef;
+  border:1px solid #d7d4ce;
   padding:1px 5px;
   color:#111;
   font-family:var(--mono);
@@ -1961,9 +2319,146 @@ body {
 :lang(ko) .body,
 :lang(ko) .paper-figure figcaption {
   word-break:keep-all;
-  overflow-wrap:anywhere;
+  overflow-wrap:normal;
+  line-break:strict;
   line-height:1.72;
 }
+:lang(ko) .figure-brief dt { letter-spacing:0; }
+:lang(ko) .figure-brief dd { word-break:keep-all; overflow-wrap:normal; }
+
+html.papermentor-print-preview .page { width:100%; padding:0; }
+html.papermentor-print-preview .paper-title {
+  max-width:100%;
+  margin:0 auto 12px;
+  padding:10px 14px 12px;
+  border-top:2px solid var(--rule);
+  border-bottom:1px solid var(--line);
+}
+html.papermentor-print-preview .paper-title h1 { font-size:25px; line-height:1.05; letter-spacing:-.035em; }
+html.papermentor-print-preview .paper-authors { font-size:10.5px; line-height:1.35; margin-top:5px; }
+html.papermentor-print-preview .blocks { gap:14px; }
+html.papermentor-print-preview .block { padding:18px 28px 22px; box-shadow:none; }
+html.papermentor-print-preview .block:after { inset:5px; }
+html.papermentor-print-preview .block-head { padding-bottom:8px; margin-bottom:12px; }
+html.papermentor-print-preview .block-title { font-size:19px; }
+html.papermentor-print-preview .location { font-size:8.5px; margin-top:3px; }
+html.papermentor-print-preview .body { max-width:100%; font-size:11.8px; line-height:1.42; }
+html.papermentor-print-preview .block[data-type="reading-guide"] { padding:12px 22px 13px; }
+html.papermentor-print-preview .block[data-type="reading-guide"] .block-head { padding-bottom:5px; margin-bottom:7px; }
+html.papermentor-print-preview .block[data-type="reading-guide"] .block-title { font-size:15px; }
+html.papermentor-print-preview .block[data-type="reading-guide"] .location { display:none; }
+html.papermentor-print-preview .block[data-type="reading-guide"] .body { font-size:9.8px; line-height:1.28; }
+html.papermentor-print-preview .block[data-type="reading-guide"] .body p { margin:3px 0; }
+html.papermentor-print-preview .body h1 { font-size:19px; margin:13px 0 7px; }
+html.papermentor-print-preview .body h2 { font-size:15.5px; margin:10px 0 5px; }
+html.papermentor-print-preview .body h3 { font-size:15px; margin:11px 0 6px; }
+html.papermentor-print-preview .body p { margin:5px 0; }
+html.papermentor-print-preview .body ul,
+html.papermentor-print-preview .body ol { margin:7px 0; }
+html.papermentor-print-preview .body li { margin:3px 0; }
+html.papermentor-print-preview .paper-figure { max-width:600px; margin:8px auto 10px; padding:7px; }
+html.papermentor-print-preview .block[data-type="start-here"] .paper-figure { max-width:var(--papermentor-start-figure-max-width, 600px); }
+html.papermentor-print-preview .paper-figure img { max-height:238px; }
+html.papermentor-print-preview .block[data-type="start-here"] .paper-figure img { max-height:var(--papermentor-start-image-max-height, 260px); }
+html.papermentor-print-preview .paper-figure figcaption { margin-top:7px; padding:7px 9px 8px; font-size:9.8px; line-height:1.28; }
+html.papermentor-print-preview .figure-title { font-size:10.5px; margin-bottom:4px; }
+html.papermentor-print-preview .figure-brief-row { grid-template-columns:102px minmax(0,1fr); gap:8px; padding:3px 0; }
+html.papermentor-print-preview .figure-brief dt { font-size:7.8px; line-height:1.2; }
+html.papermentor-print-preview .latex { font-size:12px; padding:10px 12px; margin:10px 0 12px; }
+
+@media print {
+  @page { size:A4; margin:10mm 10mm 12mm; }
+  :root { --papermentor-start-image-max-height: 260px; --papermentor-start-figure-max-width: 600px; }
+  html, body { background:var(--field); }
+  .page { width:100%; padding:0; }
+  .paper-title {
+    max-width:100%;
+    margin:0 auto 12px;
+    padding:10px 14px 12px;
+    border-top:2px solid var(--rule);
+    border-bottom:1px solid var(--line);
+  }
+  .paper-title h1 {
+    font-size:25px;
+    line-height:1.05;
+    letter-spacing:-.035em;
+  }
+  .paper-authors { font-size:10.5px; line-height:1.35; margin-top:5px; }
+  .blocks { gap:14px; }
+  .block {
+    padding:18px 28px 22px;
+    box-shadow:none;
+    break-inside:auto;
+    page-break-inside:auto;
+    /* Re-draw the card border on every page fragment so a block that spans a
+       page break closes cleanly at the bottom of one page and the top of the
+       next, instead of leaving an open-looking edge. */
+    -webkit-box-decoration-break:clone;
+    box-decoration-break:clone;
+  }
+  /* The decorative inset frame is position:absolute, so it cannot fragment
+     across pages and would otherwise leave a clipped stray rectangle on the
+     trailing blank space. The cloned outer border already frames each page. */
+  .block:after { display:none; }
+  .block-head { padding-bottom:8px; margin-bottom:12px; }
+  .block-title { font-size:19px; }
+  .location { font-size:8.5px; margin-top:3px; }
+  .body { max-width:100%; font-size:11.8px; line-height:1.42; }
+  .block[data-type="reading-guide"] {
+    padding:12px 22px 13px;
+  }
+  .block[data-type="reading-guide"] .block-head {
+    padding-bottom:5px;
+    margin-bottom:7px;
+  }
+  .block[data-type="reading-guide"] .block-title { font-size:15px; }
+  .block[data-type="reading-guide"] .location { display:none; }
+  .block[data-type="reading-guide"] .body {
+    font-size:9.8px;
+    line-height:1.28;
+  }
+  .block[data-type="reading-guide"] .body p { margin:3px 0; }
+  .body h1 { font-size:19px; margin:13px 0 7px; }
+  .body h2 { font-size:15.5px; margin:10px 0 5px; }
+  .body h3 { font-size:15px; margin:11px 0 6px; }
+  .body p { margin:5px 0; }
+  .body ul, .body ol { margin:7px 0; }
+  .body li { margin:3px 0; break-inside:avoid; page-break-inside:avoid; }
+  /* Keep a ladder/section heading attached to the content beneath it so a
+     heading never strands alone at the bottom of a page. */
+  .body h1, .body h2, .body h3 { break-after:avoid; page-break-after:avoid; }
+  .paper-figure {
+    max-width:600px;
+    margin:8px auto 10px;
+    padding:7px;
+    break-inside:avoid;
+    page-break-inside:avoid;
+  }
+  .block[data-type="start-here"] .paper-figure {
+    max-width:var(--papermentor-start-figure-max-width, 600px);
+    break-after:page;
+    page-break-after:always;
+  }
+  .paper-figure img { max-height:238px; }
+  .block[data-type="start-here"] .paper-figure img { max-height:var(--papermentor-start-image-max-height, 260px); }
+  .paper-figure figcaption {
+    margin-top:7px;
+    padding:7px 9px 8px;
+    font-size:9.8px;
+    line-height:1.28;
+  }
+  .figure-title { font-size:10.5px; margin-bottom:4px; }
+  .figure-brief-row {
+    grid-template-columns:102px minmax(0,1fr);
+    gap:8px;
+    padding:3px 0;
+    break-inside:avoid;
+    page-break-inside:avoid;
+  }
+  .figure-brief dt { font-size:7.8px; line-height:1.2; }
+  .latex { font-size:12px; padding:10px 12px; margin:10px 0 12px; }
+}
+
 @media (max-width: 640px) {
   .page { width:min(100% - 24px, 900px); padding:24px 0 52px; }
   .paper-title { padding:18px 14px 20px; margin-bottom:22px; }
@@ -1972,6 +2467,7 @@ body {
   .block-head { grid-template-columns:1fr; gap:10px; }
   .block-title { font-size:26px; }
   .body { font-size:15px; }
+  .figure-brief-row { grid-template-columns:1fr; gap:4px; }
 }
 </style>
 </head>
@@ -1985,6 +2481,79 @@ body {
     ${(cards.cards || []).map((card, index) => renderCardArticle(card, index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
+<script>
+(() => {
+  function paperMentorCssPxPerMm() {
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:absolute;left:-10000px;top:-10000px;width:100mm;height:1mm;visibility:hidden;';
+    document.body.appendChild(probe);
+    const px = probe.getBoundingClientRect().width / 100;
+    probe.remove();
+    return px || 3.78;
+  }
+
+  function fitPaperMentorStartFigure() {
+    const figure = document.querySelector('.block[data-type="start-here"] .paper-figure');
+    const image = figure && figure.querySelector('img');
+    if (!figure || !image) return;
+    const pxPerMm = paperMentorCssPxPerMm();
+    const pageContentHeight = 275 * pxPerMm; // A4 height minus @page top/bottom margins: 297mm - 10mm - 12mm.
+    const bodyTop = document.body.getBoundingClientRect().top;
+    const figureRect = figure.getBoundingClientRect();
+    const imageRect = image.getBoundingClientRect();
+    const nonImageHeight = Math.max(0, figureRect.height - imageRect.height);
+    const usedBeforeFigure = figureRect.top - bodyTop;
+    const bottomBreathingRoom = 4 * pxPerMm;
+    const rawTargetHeight = Math.floor(pageContentHeight - usedBeforeFigure - nonImageHeight - bottomBreathingRoom);
+    let targetHeight = rawTargetHeight;
+    let targetWidth = 600;
+    if (image.naturalWidth && image.naturalHeight) {
+      const page = document.querySelector('.page');
+      const availableFigureWidth = Math.max(600, Math.min(720, Math.floor((page?.clientWidth || 760) - 70)));
+      const widthNeededForHeight = Math.floor(rawTargetHeight * image.naturalWidth / image.naturalHeight);
+      targetWidth = Math.max(600, Math.min(availableFigureWidth, widthNeededForHeight));
+      const widthLimitedHeight = image.naturalHeight * (targetWidth / image.naturalWidth);
+      targetHeight = Math.min(rawTargetHeight, Math.floor(widthLimitedHeight));
+    }
+    targetHeight = Math.max(180, Math.min(targetHeight, 640));
+    document.documentElement.style.setProperty('--papermentor-start-figure-max-width', targetWidth + 'px');
+    document.documentElement.style.setProperty('--papermentor-start-image-max-height', targetHeight + 'px');
+    document.documentElement.dataset.paperMentorStartFigureWidth = String(targetWidth);
+    document.documentElement.dataset.paperMentorStartImageHeight = String(targetHeight);
+  }
+
+  function queuePaperMentorFigureFit() {
+    requestAnimationFrame(() => requestAnimationFrame(fitPaperMentorStartFigure));
+  }
+
+  window.addEventListener('load', queuePaperMentorFigureFit);
+  window.addEventListener('beforeprint', fitPaperMentorStartFigure);
+  window.addEventListener('resize', queuePaperMentorFigureFit);
+  if (document.readyState !== 'loading') queuePaperMentorFigureFit();
+  if (window.MathJax && window.MathJax.startup && window.MathJax.startup.promise) {
+    window.MathJax.startup.promise.then(queuePaperMentorFigureFit).catch(() => {});
+  }
+})();
+
+(() => {
+  const initialUpdatedAt = ${JSON.stringify(Number(Date.parse(state.updatedAt || '')) || 0)};
+  if (!initialUpdatedAt || window.__paperMentorAutoRefresh) return;
+  window.__paperMentorAutoRefresh = true;
+  async function checkForPaperMentorUpdate() {
+    if (document.hidden) return;
+    try {
+      const response = await fetch('state.json?papermentor=' + Date.now(), { cache: 'no-store' });
+      if (!response.ok) return;
+      const latest = await response.json();
+      const latestUpdatedAt = Number(Date.parse(latest && latest.updatedAt ? latest.updatedAt : '')) || 0;
+      if (latestUpdatedAt && latestUpdatedAt !== initialUpdatedAt) window.location.reload();
+    } catch (_) {
+      // Some browsers block file:// polling. In that case the reading guide tells users to reload manually.
+    }
+  }
+  window.setInterval(checkForPaperMentorUpdate, 2200);
+})();
+</script>
 </body>
 </html>`;
   writeFileSync(indexPath(slug), html);
@@ -1995,7 +2564,8 @@ function renderCardArticle(card, index) {
   const figureSourceBody = card.figure ? bodyWithoutFigureExplanation(card.body || '') : (card.body || '');
   const baseBody = htmlExplanationOnly(figureSourceBody);
   const figure = renderFigure(card.figure, figureExplanationMarkdown(card));
-  const head = `<article id="${escapeHtml(card.id)}" class="block" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
+  const typeAttr = slugify(card.type || 'note');
+  const head = `<article id="${escapeHtml(card.id)}" class="block" data-type="${escapeHtml(typeAttr)}" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
 $$</div>` : ''}`;
   if (card.type === 'start-here' && figure) {
@@ -2014,8 +2584,42 @@ function renderUserQuestion(card) {
 function renderFigure(figure, explanation = '') {
   if (!figure || !figure.src) return '';
   const captionMarkdown = String(explanation || figure.caption || '').trim();
-  const caption = captionMarkdown ? `<figcaption>${markdownToHtml(captionMarkdown)}</figcaption>` : '';
+  const caption = captionMarkdown ? `<figcaption>${figureCaptionHtml(captionMarkdown)}</figcaption>` : '';
   return `<figure class="paper-figure"><img src="${escapeHtml(figure.src)}" alt="${escapeHtml(figure.alt || 'Paper figure')}" decoding="sync" fetchpriority="high" />${caption}</figure>`;
+}
+
+function cleanFigureCaptionValue(value) {
+  return String(value || '')
+    .replace(/(\$\$[\s\S]*?\$\$)[.。]\s*$/g, '$1')
+    .replace(/\s+([.,;:!?。])/g, '$1')
+    .trim();
+}
+
+function figureCaptionHtml(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  let title = '';
+  const rows = [];
+  const prose = [];
+  for (const line of lines) {
+    const titleMatch = line.match(/^\*\*(.+)\*\*$/);
+    if (titleMatch && !title) {
+      title = titleMatch[1].trim();
+      continue;
+    }
+    const rowMatch = line.match(/^-\s+\*\*([^*:]+):\*\*\s*([\s\S]+)$/);
+    if (rowMatch) {
+      rows.push({ label: rowMatch[1].trim(), value: cleanFigureCaptionValue(rowMatch[2]) });
+      continue;
+    }
+    prose.push(line);
+  }
+  const titleHtml = title ? `<p class="figure-title">${formatInline(escapeHtml(title))}</p>` : '';
+  if (rows.length) {
+    const rowHtml = rows.map(({ label, value }) => `<div class="figure-brief-row"><dt>${escapeHtml(label)}</dt><dd>${formatInline(escapeHtml(value))}</dd></div>`).join('');
+    const proseHtml = prose.length ? `<div class="figure-caption-prose">${markdownToHtml(prose.join('\n'))}</div>` : '';
+    return `${titleHtml}<dl class="figure-brief">${rowHtml}</dl>${proseHtml}`;
+  }
+  return markdownToHtml(markdown);
 }
 
 function displayCardTitle(card) {
@@ -2061,7 +2665,7 @@ function bodyWithoutFigureExplanation(markdown) {
 
 function isStartHereLeadHeading(title) {
   const normalized = normalizeHeading(title);
-  return /^(one[-\s]?sentence\s+(paper\s+)?model|one[-\s]?sentence\s+summary|what\s+this\s+(paper|source|note|deck)\s+does|(paper|source|note|deck)\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
+  return /^(one[-\s]?sentence\s+(paper\s+)?model|one[-\s]?sentence\s+summary|one[-\s]?sentence\s+orientation|what\s+this\s+(paper|source|note|deck)\s+does|(paper|source|note|deck)\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
     || /^(한\s*문장\s*(논문\s*)?(요약|모델)|이\s*논문이\s*하는\s*일)$/.test(normalized);
 }
 
@@ -2129,19 +2733,53 @@ function figureExplanationMarkdown(card) {
     || facts['그림 위치']
     || facts['위치']
     || '';
-  const what = facts['what it shows']
+  const role = facts['concept / method role']
+    || facts['concept / architecture role']
+    || facts['architecture / method role']
+    || facts['method role']
+    || facts['what it shows']
     || facts['why this is the representative figure']
     || facts['why this figure matters']
+    || facts['개념 / 방법 역할']
+    || facts['아키텍처 / 방법 역할']
+    || facts['방법 역할']
     || facts['무엇을 보여주는가']
     || facts['보여주는 것']
     || facts['왜 대표 그림인가']
     || facts['왜 이 그림이 중요한가']
     || '';
+  const how = facts['how to read it']
+    || facts['how to read']
+    || facts['reading guide']
+    || facts['보는 법']
+    || facts['읽는 법']
+    || facts['해석 방법']
+    || '';
+  const partsGuide = facts['parts to identify']
+    || facts['component guide']
+    || facts['components']
+    || facts['parts']
+    || facts['각 부분']
+    || facts['구성요소']
+    || facts['구성 요소']
+    || '';
+  const math = facts['in-figure math / symbols']
+    || facts['in-figure math']
+    || facts['figure math / symbols']
+    || facts['figure math']
+    || facts['math / symbols']
+    || facts['math in the figure']
+    || facts['equations in the figure']
+    || facts['그림 속 수식 / 기호']
+    || facts['그림 속 수식']
+    || facts['그림 내 수식 / 기호']
+    || facts['그림 내 수식']
+    || facts['수식 / 기호']
+    || '';
   const flow = facts['flow / sequence']
     || facts['flow or sequence']
     || facts['흐름 / 순서']
     || facts['흐름 또는 순서']
-    || facts['읽는 법']
     || facts['해석 순서']
     || '';
   const observe = facts['what to observe']
@@ -2158,17 +2796,36 @@ function figureExplanationMarkdown(card) {
     || '';
   const parts = [];
   if (identity) parts.push(`**${sentence(identity)}**`);
-  if (what) parts.push(sentence(what));
-  const reading = [
-    flow && (korean ? `읽는 법: ${sentence(flow)}` : `Read it by ${sentence(flow).replace(/^./, (ch) => ch.toLowerCase())}`),
-    observe && (korean ? `핵심 관찰: ${sentence(observe)}` : `The key observation is that ${sentence(observe).replace(/^the\s+/i, '')}`)
-  ]
-    .filter(Boolean)
-    .join(' ');
-  if (reading) parts.push(reading);
-  if (supports) parts.push(korean ? `연결되는 내용: ${sentence(supports)}` : `This visual anchors ${sentence(supports).replace(/^the\s+/i, '')}`);
-  if (parts.length) return parts.join('\n\n');
-  if (section.trim()) return section.trim();
+  const labels = korean
+    ? {
+        role: '개념 / 방법 역할',
+        how: '보는 법',
+        parts: '각 부분',
+        math: '그림 속 수식 / 기호',
+        flow: '흐름 / 순서',
+        observe: '관찰할 점',
+        supports: '연결되는 수식 / 주장'
+      }
+    : {
+        role: 'Concept / method role',
+        how: 'How to read it',
+        parts: 'Parts to identify',
+        math: 'In-figure math / symbols',
+        flow: 'Flow / sequence',
+        observe: 'What to observe',
+        supports: 'Equations / claims it supports'
+      };
+  // Render only what the reader actually wrote. Do not synthesise generic "name the
+  // parts then follow the arrows" filler when a slot is missing — an empty slot means
+  // the figure has not been read at that depth yet, and fake advice hides that gap.
+  if (role) parts.push(`- **${labels.role}:** ${sentence(role)}`);
+  if (how) parts.push(`- **${labels.how}:** ${sentence(how)}`);
+  if (partsGuide) parts.push(`- **${labels.parts}:** ${sentence(partsGuide)}`);
+  if (math) parts.push(`- **${labels.math}:** ${sentence(math)}`);
+  if (flow) parts.push(`- **${labels.flow}:** ${sentence(flow)}`);
+  if (observe) parts.push(`- **${labels.observe}:** ${sentence(observe)}`);
+  if (supports) parts.push(`- **${labels.supports}:** ${sentence(supports)}`);
+  if (parts.length) return parts.join('\n');
   return semanticCaption;
 }
 
@@ -2308,7 +2965,7 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
     console.log('\nChoose next');
     (state.nextChoices || []).forEach((choice, index) => console.log(`  ${index === 0 ? '◆' : '◇'} [${index + 1}] ${choice}`));
   }
-  console.log(`\nBlocks in HTML: ${(cards.cards || []).length} · Runner: node scripts/papermentor-session.mjs run --session ${state.slug} --index <n>`);
+  console.log(`\nBlocks in HTML: ${(cards.cards || []).length} · Runner: ${cliCommand()} run --session ${state.slug} --index <n>`);
 }
 
 const ansi = {
@@ -2445,7 +3102,7 @@ function buildActionPrompt(state, action) {
   const equations = insight.equations?.length ? insight.equations.map((n) => `Eq. (${n})`).join(', ') : 'none detected yet';
   const concepts = insight.concepts?.length ? insight.concepts.join(', ') : 'none detected yet';
   const citations = insight.citations?.length ? insight.citations.join(', ') : 'none detected yet';
-  const command = `node scripts/papermentor-session.mjs card --session ${shellQuote(state.slug)} --type ${shellQuote(type)} --title ${shellQuote(action)} --body-file <your-markdown-file>`;
+  const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type ${shellQuote(type)} --title ${shellQuote(action)} --body-file <your-markdown-file>`;
   return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview. Use the attached source/paper text available in context.'}\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Show every non-trivial equation in LaTeX before explaining it.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
 }
 
@@ -2586,6 +3243,79 @@ function renderSession(args) {
   if (!readJson(statePath(slug), null)) throw new Error(`session not found: ${slug}`);
   renderHtml(slug);
   console.log(`Rendered .papermentor/sessions/${slug}/index.html`);
+}
+
+function chromeCommand() {
+  return commandPath('google-chrome')
+    || commandPath('chrome')
+    || commandPath('chromium')
+    || commandPath('chromium-browser')
+    || commandPath('Microsoft Edge')
+    || (process.platform === 'darwin' && existsSync('/Applications/Google Chrome.app/Contents/MacOS/Google Chrome') ? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' : '')
+    || (process.platform === 'darwin' && existsSync('/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge') ? '/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge' : '');
+}
+
+function exportSession(args) {
+  const slug = args.session || args.slug;
+  if (!slug) throw new Error('export requires --session <slug>');
+  const state = readJson(statePath(slug), null);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  renderHtml(slug);
+  const exportRoot = join(root, '.papermentor', 'exports');
+  mkdirSync(exportRoot, { recursive: true });
+  const requestedOutput = args.output || args.out || '';
+  const format = String(args.format || (requestedOutput.toLowerCase().endsWith('.pdf') ? 'pdf' : 'zip')).toLowerCase();
+  const extension = format === 'pdf' ? 'pdf' : 'zip';
+  const output = resolve(requestedOutput || join(exportRoot, `${slug}-report.${extension}`));
+  mkdirSync(dirname(output), { recursive: true });
+  if (existsSync(output) && !args.overwrite) throw new Error(`export already exists: ${output}; pass --overwrite or choose --output`);
+  if (existsSync(output)) rmSync(output, { force: true });
+  const dir = sessionDir(slug);
+  if (format === 'pdf') {
+    const chrome = chromeCommand();
+    if (!chrome) throw new Error('PDF export requires Chrome/Chromium/Edge on PATH, or Google Chrome installed on macOS');
+    execFileSync(chrome, [
+      '--headless=new',
+      '--disable-gpu',
+      '--no-first-run',
+      '--disable-extensions',
+      '--virtual-time-budget=5000',
+      '--no-pdf-header-footer',
+      '--print-to-pdf-no-header',
+      `--print-to-pdf=${output}`,
+      `${pathToFileURL(indexPath(slug)).href}?papermentor-print=1`
+    ], { stdio: 'pipe' });
+    console.log(`Exported PaperMentor PDF:
+- PDF: ${output}`);
+    return;
+  }
+  const entries = ['index.html', 'assets', 'cards.json', 'notes.md', 'state.json', 'turns.jsonl']
+    .filter((entry) => existsSync(join(dir, entry)));
+  const zip = commandPath('zip');
+  if (zip) {
+    execFileSync(zip, ['-qry', output, ...entries], { cwd: dir, stdio: 'pipe' });
+  } else {
+    const code = `
+import os, sys, zipfile
+out = sys.argv[1]
+entries = sys.argv[2:]
+with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
+    for entry in entries:
+        if os.path.isdir(entry):
+            for root, dirs, files in os.walk(entry):
+                dirs[:] = [d for d in dirs if not d.startswith('preview-tmp-')]
+                for name in files:
+                    path = os.path.join(root, name)
+                    z.write(path, path)
+        elif os.path.isfile(entry):
+            z.write(entry, entry)
+`;
+    execFileSync('python3', ['-c', code, output, ...entries], { cwd: dir, stdio: 'pipe' });
+  }
+  console.log(`Exported PaperMentor report bundle:
+- ZIP: ${output}
+- Open after unzip: index.html
+- Includes: ${entries.join(', ')}`);
 }
 
 function showState(args) {
@@ -2778,42 +3508,149 @@ function updateLaunchNavigation({ slug, source, args, text }) {
   return { state: nextState, sourceMode, sections };
 }
 
-function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body }) {
+
+function detectRepresentativeFigure(text, sourceMode = 'paper') {
+  const mode = normalizeSourceMode(sourceMode);
+  const fullText = String(text || '').replace(/\r/g, '');
+  const findSectionSegment = (startAt, regex) => {
+    const slice = fullText.slice(startAt);
+    let offset = startAt;
+    for (const line of slice.split('\n')) {
+      const segments = line.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
+      for (const segment of segments) {
+        if (regex.test(segment)) return offset + Math.max(0, line.indexOf(segment));
+      }
+      offset += line.length + 1;
+    }
+    return -1;
+  };
+  const methodStart = mode === 'paper'
+    ? findSectionSegment(0, /^(?:\d+(?:\.\d+)*\.?\s+)?Methods?$/i)
+    : -1;
+  const methodEnd = methodStart >= 0
+    ? (() => {
+      const next = findSectionSegment(methodStart + 1, /^(?:\d+(?:\.\d+)*\.?\s+)?(?:Related Work|Experiments?|Evaluation|Results?|Analysis|Discussion|Conclusion|References|Appendix)(?:\s+.*)?$/i);
+      return next >= 0 ? next : fullText.length;
+    })()
+    : -1;
+  const pages = fullText.split('\f');
+  const candidates = [];
+  const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[.:]?\s*([^\n]{0,220})/i;
+  let pageBase = 0;
+  pages.forEach((pageText, pageIndex) => {
+    const lines = pageText.split(/\n/);
+    let lineOffset = 0;
+    lines.forEach((line, lineIndex) => {
+      const match = line.match(captionRegex);
+      if (!match) {
+        lineOffset += line.length + 1;
+        return;
+      }
+      const label = match[1];
+      const globalIndex = pageBase + lineOffset + Math.max(0, match.index || 0);
+      const inMethod = methodStart >= 0 && globalIndex >= methodStart && globalIndex < methodEnd;
+      const continuation = [];
+      for (let cursor = lineIndex + 1; cursor < Math.min(lines.length, lineIndex + 4); cursor += 1) {
+        const next = lines[cursor].trim();
+        if (!next || /^(?:abstract|introduction|background|related work|method|experiments?|conclusion|references)\b/i.test(next)) break;
+        if (/\b(?:Figure|Fig\.)\s*\d{1,3}[A-Za-z]?\b/i.test(next)) break;
+        continuation.push(next);
+      }
+      const caption = `${match[2] || ''} ${continuation.join(' ')}`.replace(/\s+/g, ' ').trim().slice(0, 420);
+      const lower = caption.toLowerCase();
+      let score = 0;
+      if (/\b(method|architecture|objective|pipeline|framework|algorithm|model|overview|system|mechanism|training|pretrain|pre-training|masking|context|target|predict|representation|encoder|decoder)\b/.test(lower)) score += 8;
+      if (/\b(overall|proposed|main|our|approach|workflow|procedure|schematic|illustration)\b/.test(lower)) score += 4;
+      if (mode === 'paper' && inMethod) score += 30;
+      if (mode === 'slide-deck') score += /\b(flow|overview|pipeline|architecture|system)\b/.test(lower) ? 4 : 0;
+      if (/\b(evaluation|accuracy|benchmark|ablation|results?|comparison|gpu hours?|imagenet|linear|classification|table)\b/.test(lower)) score -= 6;
+      const number = Number(String(label).match(/\d+/)?.[0] || 0);
+      score += Math.max(0, 3 - Math.min(number, 3)) * 0.2;
+      candidates.push({ label, auto: `figure${label}`, page: pageIndex + 1, caption, score, inMethod });
+      lineOffset += line.length + 1;
+    });
+    pageBase += pageText.length + 1;
+  });
+  if (!candidates.length) return null;
+  candidates.sort((a, b) => b.score - a.score || a.page - b.page || Number(String(a.label).match(/\d+/)?.[0] || 999) - Number(String(b.label).match(/\d+/)?.[0] || 999));
+  return candidates[0];
+}
+
+function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure }) {
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   if (canExtractVisual && !args['no-figure']) {
+    const requestedPage = args.page || args.slide;
+    const requestedAuto = args.auto || args.figure || args['figure-number'];
+    const auto = requestedAuto || (extension === '.pdf' ? (requestedPage ? 'figure1' : representativeFigure?.auto) : undefined);
+    const page = requestedPage || representativeFigure?.page || 1;
+    const representativeCaption = representativeFigure && !requestedAuto && !requestedPage
+      ? semanticRepresentativeFigureCaption({ representativeFigure, sourceMode })
+      : '';
+    const state = readJson(statePath(slug), {});
+    if (representativeFigure && !requestedAuto && !requestedPage) {
+      state.representativeFigure = representativeFigure;
+      state.updatedAt = now();
+      writeJson(statePath(slug), state);
+    }
     try {
       extractFigure({
         ...args,
         session: slug,
         source,
-        page: args.page || 1,
-        auto: args.auto || (extension === '.pdf' ? 'figure1' : undefined),
+        page,
+        auto,
         type: 'start-here',
         title: args['card-title'] || 'Start Here',
         location: 'Start Here',
         body,
-        caption: args.caption || args['figure-caption'] || '',
-        quiet: true
+        caption: args.caption || args['figure-caption'] || representativeCaption,
+        quiet: true,
+        noPath: true
       });
     } catch (error) {
       const state = readJson(statePath(slug), {});
       state.figureExtractionWarning = error.message;
       state.updatedAt = now();
       writeJson(statePath(slug), state);
-      addCard({
-        ...args,
-        session: slug,
-        type: 'start-here',
-        title: args['card-title'] || 'Start Here',
-        location: 'Start Here',
-        body: `${body}\n\n## Representative figure\n\nPaperMentor could not auto-attach the representative figure. Run crop preview and recrop manually:\n\n\`\`\`sh\nnode scripts/papermentor-session.mjs preview-crops --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, source))} --page ${shellQuote(args.page || 1)}\n\`\`\`\n`,
-        choices: sections.join('|'),
-        quiet: true
-      });
+      try {
+        extractFigure({
+          ...args,
+          session: slug,
+          source,
+          page,
+          auto: undefined,
+          figure: undefined,
+          'figure-number': undefined,
+          crop: undefined,
+          type: 'start-here',
+          title: args['card-title'] || 'Start Here',
+          location: 'Start Here',
+          body,
+          caption: args.caption || args['figure-caption'] || `Page ${page}. Full-page visual fallback; run ${cliCommand()} preview-crops for a tighter figure crop if needed.`,
+          choices: sections.join('|'),
+          quiet: true,
+          noPath: true
+        });
+      } catch (fallbackError) {
+        state.figureExtractionFallbackWarning = fallbackError.message;
+        state.updatedAt = now();
+        writeJson(statePath(slug), state);
+        addCard({
+          ...args,
+          session: slug,
+          type: 'start-here',
+          title: args['card-title'] || 'Start Here',
+          location: 'Start Here',
+          body,
+          choices: sections.join('|'),
+          quiet: true,
+          noPath: true
+        });
+      }
     }
   } else {
-    addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true });
+    addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
   }
   return canExtractVisual;
 }
@@ -2836,7 +3673,18 @@ function launchSession(args) {
   const { text, orientationText } = extractLaunchTexts(source, args);
   const { state, sourceMode, sections } = updateLaunchNavigation({ slug, source, args, text });
   const body = args.body || launchStartBody({ sourceMode, text: orientationText });
-  const canExtractVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body });
+  addReadingGuideBlock({ slug, sourceMode, sections, args });
+  const representativeFigure = detectRepresentativeFigure(text || orientationText, sourceMode);
+  const canExtractVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure });
+  const startHereScaffolded = !args.body;
+  const figureScaffoldShipped = canExtractVisual && !args.body && !args['no-figure'];
+  if (startHereScaffolded) {
+    const pendingState = readJson(statePath(slug), {});
+    pendingState.startHerePending = true;
+    if (figureScaffoldShipped) pendingState.figureReadingPending = true;
+    pendingState.updatedAt = now();
+    writeJson(statePath(slug), pendingState);
+  }
   maybeWriteCropPreview({ slug, source, args, canExtractVisual });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
@@ -2844,33 +3692,35 @@ function launchSession(args) {
   printConsole(finalState);
   console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
-- TUI:  node scripts/papermentor-session.mjs tui --session ${slug}
-${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}` : ''}`);
+- TUI:  ${cliCommand()} tui --session ${slug}
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: read the source and replace the Start Here scaffold with real content — the one-sentence model, the figure reading (every box, arrow, line, and in-figure equation), and a beginner-facing preliminary ladder that teaches each prerequisite from zero with concrete numeric examples (see prompts/prerequisite-analyzer.md).` : ''}`);
 }
 
 function usage() {
   console.log(`PaperMentor session helper
 
 Usage:
-  node scripts/papermentor-session.mjs launch <paper-url-or-file> [--open] [--slug <slug>]
-  node scripts/papermentor-session.mjs start --title <title> [--authors <names>] [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
-  node scripts/papermentor-session.mjs analyze --session <slug> --mode auto --paper-text-file source.txt
-  node scripts/papermentor-session.mjs tui --session <slug>
-  node scripts/papermentor-session.mjs run --session <slug> --index <n>
-  node scripts/papermentor-session.mjs extract-figure --session <slug> --source paper.pdf --page 1 [--auto figure1|--crop x,y,w,h] [--title <title>]
-  node scripts/papermentor-session.mjs sections --session <slug> --sections "1 Intro|2 Method"
-  node scripts/papermentor-session.mjs section --session <slug> --index 2
-  node scripts/papermentor-session.mjs mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
-  node scripts/papermentor-session.mjs diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
-  node scripts/papermentor-session.mjs preview-crops --session <slug> --source paper.pdf --page 1
-  node scripts/papermentor-session.mjs card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]
-  node scripts/papermentor-session.mjs turn --session <slug> --role user --text <text> [--promote|--no-promote]
-  node scripts/papermentor-session.mjs promote --session <slug> --title <title> --user-question <text> --body-file <path>
-  node scripts/papermentor-session.mjs pause --session <slug> --question <text> [--answer <text>] [--missing-dependency <text>]
-  node scripts/papermentor-session.mjs resume --session <slug> [--repaired <text>]
-  node scripts/papermentor-session.mjs render --session <slug>
-  node scripts/papermentor-session.mjs state --session <slug>
-  node scripts/papermentor-session.mjs status --session <slug>
+  papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
+  papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
+  papermentor analyze --session <slug> --mode auto --paper-text-file source.txt
+  papermentor tui --session <slug>
+  papermentor run --session <slug> --index <n>
+  ${cliCommand()} extract-figure --session <slug> --source paper.pdf --page 1 [--auto figure1|--crop x,y,w,h] [--title <title>]
+  papermentor sections --session <slug> --sections "1 Intro|2 Method"
+  papermentor section --session <slug> --index 2
+  papermentor mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
+  papermentor diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
+  papermentor preview-crops --session <slug> --source paper.pdf --page 1
+  papermentor card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]
+  papermentor turn --session <slug> --role user --text <text> [--promote|--no-promote]
+  papermentor promote --session <slug> --title <title> --user-question <text> --body-file <path>
+  papermentor pause --session <slug> --question <text> [--answer <text>] [--missing-dependency <text>]
+  papermentor resume --session <slug> [--repaired <text>]
+  papermentor render --session <slug>
+  papermentor export --session <slug> [--format zip|pdf] [--output report.zip|report.pdf] [--overwrite]
+  papermentor state --session <slug>
+  papermentor status --session <slug>
+  papermentor doctor [--json]
 `);
 }
 
@@ -2935,6 +3785,8 @@ try {
     resumeReading(args);
   } else if (command === 'render') {
     renderSession(args);
+  } else if (command === 'export' || command === 'bundle') {
+    exportSession(args);
   } else if (command === 'state') {
     showState(args);
   } else if (command === 'status') {
@@ -2942,6 +3794,8 @@ try {
     if (!slug) throw new Error('status requires --session <slug>');
     renderHtml(slug);
     printConsole(readJson(statePath(slug), {}));
+  } else if (command === 'doctor') {
+    runDoctor(args);
   } else {
     usage();
     process.exit(command ? 1 : 0);

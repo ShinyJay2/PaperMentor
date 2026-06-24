@@ -5,20 +5,125 @@ import { execFileSync, spawn } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','docs/ci/github-actions-ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','.npmignore','docs/ci/github-actions-ci.yml','.github/workflows/ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
   'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/lecture-note-scanner.md','prompts/slide-deck-scanner.md','prompts/prerequisite-analyzer.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/start_here.md','templates/lecture_note_start_here.md','templates/slide_deck_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
-  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md',
+  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md','examples/golden_quality_contracts.md',
   'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/lecture_note_mode_checklist.md','tests/slide_deck_mode_checklist.md','tests/prerequisite_depth_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/report/index.html','demo/report/assets/drifting-method-demo.svg','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
 
 const failures = [];
 
+function writeTinyPdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (Tiny Retrieval Method) Tj',
+    '/F1 11 Tf 0 -24 Td (Ada Researcher) Tj',
+    '/F1 12 Tf 0 -34 Td (Abstract) Tj',
+    '0 -18 Td (This paper builds a retrieval encoder with a margin objective and a calibration metric.) Tj',
+    '0 -32 Td (1. Introduction) Tj',
+    '0 -18 Td (The method maps queries to vectors and compares them with document vectors.) Tj',
+    '0 -32 Td (2. Method) Tj',
+    '0 -18 Td (The encoder h: tokens -> vectors and Equation 1 defines a margin objective.) Tj',
+    '0 -32 Td (Figure 1. Encoder pipeline.) Tj',
+    '0 -18 Td (3. Evaluation) Tj',
+    '0 -18 Td (Accuracy and calibration error evaluate retrieval quality.) Tj',
+    'ET',
+    '0.2 0.37 0.62 RG 72 452 420 74 re S',
+    'BT /F1 12 Tf 92 492 Td (query) Tj 108 0 Td (encoder) Tj 128 0 Td (ranking score) Tj ET'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
+function writeTinyPptxFixture(path) {
+  const code = String.raw`
+import sys
+from pptx import Presentation
+from pptx.util import Inches, Pt
+from pptx.enum.shapes import MSO_SHAPE
+prs = Presentation()
+slide = prs.slides.add_slide(prs.slide_layouts[5])
+slide.shapes.title.text = "Slide 1: Retrieval Encoder Pipeline"
+left = Inches(0.9)
+top = Inches(1.65)
+for i, label in enumerate(["query", "encoder", "ranking score"]):
+    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left + Inches(i * 2.15), top, Inches(1.55), Inches(0.75))
+    shape.text = label
+    shape.text_frame.paragraphs[0].font.size = Pt(16)
+tx = slide.shapes.add_textbox(Inches(0.9), Inches(3.0), Inches(6.2), Inches(0.6))
+tx.text_frame.text = "Figure 1. The slide shows how tokens become retrieval scores."
+slide2 = prs.slides.add_slide(prs.slide_layouts[5])
+slide2.shapes.title.text = "Slide 2: Evaluation"
+body = slide2.shapes.add_textbox(Inches(1), Inches(1.6), Inches(6), Inches(1.2))
+body.text_frame.text = "Accuracy and calibration error test the retrieval model."
+prs.save(sys.argv[1])
+`;
+  execFileSync('python3', ['-c', code, path], { stdio: 'pipe' });
+}
+
+
+function writeRepresentativeChoicePdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (Representative Figure Choice) Tj',
+    '/F1 12 Tf 0 -36 Td (Abstract) Tj',
+    '0 -18 Td (This paper proposes a retrieval method with an encoder pipeline.) Tj',
+    '0 -36 Td (Figure 1. Linear Evaluation. Accuracy results on a benchmark.) Tj',
+    '0 -32 Td (1. Method) Tj',
+    '0 -18 Td (The objective trains the encoder to score relevant documents higher.) Tj',
+    '0 -36 Td (Figure 2. Overall method pipeline. The encoder maps queries to vectors and ranks documents.) Tj',
+    'ET',
+    '0.6 0.2 0.2 RG 72 610 260 32 re S',
+    '0.2 0.37 0.62 RG 72 520 420 52 re S'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
 function readJson(path, fallback) {
   try { return JSON.parse(readFileSync(path, 'utf8')); }
   catch { return fallback; }
+}
+
+function markdownSection(markdown, heading) {
+  const start = markdown.indexOf(`## ${heading}`);
+  const next = start === -1 ? -1 : markdown.indexOf('\n## ', start + 4);
+  return start === -1 ? '' : markdown.slice(start, next === -1 ? undefined : next).trim();
 }
 
 for (const rel of required) {
@@ -70,6 +175,23 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
+if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
+  failures.push('session helper must not use a paper-specific I-JEPA preliminary ladder branch');
+}
+for (const phrase of ['Concept / method role', 'How to read it', 'Parts to identify', 'In-figure math / symbols', 'Equations / claims it supports']) {
+  if (!sessionScript.includes(phrase)) failures.push(`session helper missing fixed figure explanation schema phrase: ${phrase}`);
+}
+for (const phrase of ['follow the visual objects and arrows before reading', 'First name each box/object, then read arrows in order', 'then follow the flow / sequence item in order']) {
+  if (sessionScript.includes(phrase)) failures.push(`session helper still ships generic "move your eyes" figure meta-advice instead of a concrete reading: ${phrase}`);
+}
+if (!sessionScript.includes('Transcribe in LaTeX every equation')) failures.push('session helper figure scaffold should force in-figure math transcription, not generic advice');
+
+// Source-derived explanations (figure reading, one-sentence model, preliminary ladder)
+// must be authored by the model/prompt, never synthesised from text by the script.
+for (const phrase of ['preliminaryLadderFromText', 'prerequisiteConceptSpecs', 'modePrimitiveLayer', 'detectNotationCandidates', 'abstractSnippet']) {
+  if (sessionScript.includes(phrase)) failures.push(`session helper should not synthesise source-derived Start Here content: ${phrase}`);
+}
+if (!sessionScript.includes('preliminaryLadderScaffold') || !sessionScript.includes('Not built yet')) failures.push('session helper should ship a preliminary-ladder scaffold for the model to fill, not a synthesised ladder');
 
 
 const mathjaxReadme = readFileSync(join(root, 'assets/mathjax/README.md'), 'utf8');
@@ -111,6 +233,9 @@ for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermento
   for (const phrase of ['exact', 'crop', 'figure', 'method', 'algorithm', 'what to observe', 'mermaid']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
   }
+  for (const phrase of ['concept / method role', 'how to read it', 'parts to identify', 'in-figure math / symbols', 'equations / claims it supports']) {
+    if (!text.includes(phrase)) failures.push(`${rel} missing fixed figure schema phrase: ${phrase}`);
+  }
 }
 
 const commandCoverage = [
@@ -134,17 +259,45 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote']) {
+for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote', 'doctor']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
 const packageJson = readJson(join(root, 'package.json'), {});
 if (packageJson.bin?.papermentor !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a papermentor CLI bin');
 if (!packageJson.scripts?.launch?.includes('papermentor-session.mjs launch')) failures.push('package.json should expose npm run launch');
+const npmIgnore = readFileSync(join(root, '.npmignore'), 'utf8');
+for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-skill-*.tgz']) {
+  if (!npmIgnore.includes(phrase)) failures.push(`.npmignore should exclude local source/package artifact: ${phrase}`);
+}
 
-const ci = readFileSync(join(root, 'docs/ci/github-actions-ci.yml'), 'utf8');
-for (const phrase of ['poppler-utils', 'libreoffice', 'python-pptx', 'npm test', 'npm pack --dry-run']) {
-  if (!ci.includes(phrase)) failures.push(`CI template missing phrase: ${phrase}`);
+for (const rel of ['docs/ci/github-actions-ci.yml', '.github/workflows/ci.yml']) {
+  const ci = readFileSync(join(root, rel), 'utf8');
+  for (const phrase of ['poppler-utils', 'libreoffice', 'imagemagick', 'python3-pptx', 'npm test', 'npm pack --dry-run']) {
+    if (!ci.includes(phrase)) failures.push(`${rel} missing phrase: ${phrase}`);
+  }
+}
+
+const golden = readFileSync(join(root, 'examples/golden_quality_contracts.md'), 'utf8');
+for (const phrase of ['Golden equation card', 'Golden derivation trace', 'Golden dependency trace', 'Golden confusion repair', 'Golden Korean explanation', 'Symbol table', 'Backward dependencies', 'Missing dependency', 'Reconnection to original text']) {
+  if (!golden.includes(phrase)) failures.push(`golden quality contracts missing phrase: ${phrase}`);
+}
+const goldenContracts = {
+  'Golden equation card': ['### Equation', '### Role', '### Symbol table', '### Reconstruction checkpoint', '| Symbol | Meaning | Domain / codomain | Notes |'],
+  'Golden derivation trace': ['### Previous equation', '### Next equation', '**What changed:**', '**Operation applied:**', '**Property / theorem / definition used:**', '**Assumption invoked:**', '**Why valid:**'],
+  'Golden dependency trace': ['### Backward dependencies', '### Forward dependencies', '### Missing dependency check', '### Recommended explanation order'],
+  'Golden confusion repair': ['User question:', 'Paused location:', '### Direct answer', '### Missing dependency', '### Minimal example', '### Reconnection to original text', '### Resume point'],
+  'Golden Korean explanation': ['사용자가 한국어로 질문하면', '$\\mathbb{E}$', '원래 논문 위치']
+};
+for (const [heading, requiredPhrases] of Object.entries(goldenContracts)) {
+  const section = markdownSection(golden, heading);
+  for (const phrase of requiredPhrases) {
+    if (!section.includes(phrase)) failures.push(`${heading} contract missing structural phrase: ${phrase}`);
+  }
+}
+
+for (const forbidden of ['Compare training-time drifting with inference-time diffusion', 'Explain Proposition 3.1 and why anti-symmetry gives zero drift', 'Connect implementation choices back to the drifting objective']) {
+  if (sessionScript.includes(forbidden)) failures.push(`session helper retains paper-specific hardcoded action: ${forbidden}`);
 }
 
 function expectedInstalledResources() {
@@ -174,11 +327,16 @@ function validateInstalledArtifact() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-validate-'));
   try {
     const codexHome = join(temp, '.codex');
-    execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome }, stdio: 'pipe' });
+    const binDir = join(temp, 'bin');
+    execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
     assertInstalledArtifact(join(codexHome, 'skills', 'papermentor'), 'codex');
+    const installedHelp = execFileSync('papermentor', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
+    if (!installedHelp.includes('papermentor launch <paper-url-or-file>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor commands, not development node script paths');
+    const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
+    if (!installedDoctor.includes('"status": "ok"') || !installedDoctor.includes('"python3-pptx"')) failures.push('installed papermentor doctor should run through the installed CLI shim');
 
     const claudeHome = join(temp, '.claude');
-    execFileSync(join(root, 'install.sh'), ['claude'], { cwd: root, env: { ...process.env, CLAUDE_HOME: claudeHome }, stdio: 'pipe' });
+    execFileSync(join(root, 'install.sh'), ['claude'], { cwd: root, env: { ...process.env, CLAUDE_HOME: claudeHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
     assertInstalledArtifact(join(claudeHome, 'skills', 'papermentor'), 'claude');
   } catch (error) {
     failures.push(`install smoke failed: ${error.message}`);
@@ -193,6 +351,12 @@ function validateSessionHelper() {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
     if (!helpOutput.includes('Usage:')) failures.push('start --help should print usage');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
+    const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
+    for (const phrase of ['PaperMentor dependency doctor', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
+      if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
+    }
+    const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
+    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 4) failures.push('doctor --json should report four passing local extraction checks in validation environment');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -206,7 +370,7 @@ function validateSessionHelper() {
     // This is a test fixture for attachment/copy/render behavior only. Product guidance rejects
     // Mermaid/redrawn schematics for real papers; real sessions must pass an actual PDF crop.
     writeFileSync(figurePath, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 720 280"><rect width="720" height="280" fill="#fbfaf6"/><rect x="26" y="24" width="668" height="210" rx="2" fill="#fff" stroke="#d8d0c3"/><text x="50" y="58" font-family="Times New Roman, serif" font-size="18" fill="#1f2937">Exact PDF crop fixture — replace with actual paper figure in real sessions</text><path d="M68 190 C150 88, 260 92, 338 170 S520 226, 626 112" fill="none" stroke="#222" stroke-width="2.5"/><circle cx="68" cy="190" r="4" fill="#222"/><circle cx="338" cy="170" r="4" fill="#222"/><circle cx="626" cy="112" r="4" fill="#222"/><line x1="68" y1="216" x2="626" y2="216" stroke="#222"/><line x1="68" y1="86" x2="68" y2="216" stroke="#222"/><text x="330" y="254" font-family="Times New Roman, serif" font-size="14" fill="#374151">Figure 1: fixture crop region</text></svg>');
-    writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
+    writeFileSync(mapPath, '## One-sentence paper model\n\nThe paper trains a generator by moving samples with a drifting field.\n\n## Figure explanation under image\n\n- Figure / location: Figure 1.\n- Why this is the representative figure: it shows the training-time generator-to-drift-target loop rather than experiment results.\n- What it shows: the generator, generated samples, real samples, and the drift field.\n- Components: prior samples, generator, generated distribution, target distribution.\n- How to read it: three boxes — prior samples on the left, the generator $f$ in the middle, the data target on the right.\n- In-figure math / symbols: the pushforward $q=f_{\\#}p_{\\epsilon}$ labels the generator output and the drift field $V_{p,q}(x)$ labels the arrows.\n- Flow or sequence: sample, generate, drift, train.\n- What to observe: the field points generated samples toward data structure.\n- Equations or claims it supports: Eq. (6).\n\n## Preliminary ladder\n\n| Prerequisite | Minimal explanation | Used in |\n| --- | --- | --- |\n| Pushforward | $q=f_{\\#}p_{\\epsilon}$ is the generated distribution. | Eq. (1) |\n| Drift field | $V_{p,q}(x)$ moves samples during training. | Eq. (2) |\n\n## CLI-only likely confusion points\n\n- This should stay in CLI/state, not rendered HTML.\n');
     writeFileSync(equationPath, '- **Symbol:** $V_{p,q}$ is the drifting field.\n- **Checkpoint:** explain the update target.\n\n## Likely blockers\n\n- This should also stay in CLI/state, not rendered HTML.\n');
     writeFileSync(paperTextPath, '1. Introduction\nGenerative modeling learns a mapping f such that the pushforward distribution matches the data distribution. The paper proposes Drifting Models, a training-time drifting field, one-step inference, and a contrast with diffusion/flow models.\n\n2. Related Work\nDiffusion-/Flow-based Models. Sohl-Dickstein et al., 2015 and Lipman et al., 2022 formulate iterative mappings. Generative Adversarial Networks. Goodfellow et al., 2014 train a generator adversarially. Variational Autoencoders. Kingma & Welling, 2013 optimize ELBO.\n\n3. Drifting Models for Generation\nWe denote the pushforward distribution as q = f# p epsilon. (1) A sample drifts as xi+1 = xi + Vp,q(xi). (2) Proposition 3.1 uses an anti-symmetric drifting field. The training objective uses stopgrad. (6)\n');
     const launchTextPath = join(temp, 'launch-source.txt');
@@ -230,7 +394,7 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', slideLaunchPath, '--slug', 'slide-launch-smoke', '--mode', 'slide-deck', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
     const slideLaunchState = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'state.json'), {});
     const slideLaunchCards = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'cards.json'), { cards: [] });
-    if (slideLaunchCards.cards?.[0]?.type !== 'start-here') failures.push('slide-deck launch should store the initial block as start-here, not slide-explanation');
+    if (slideLaunchCards.cards?.[0]?.type !== 'reading-guide' || slideLaunchCards.cards?.[1]?.type !== 'start-here') failures.push('slide-deck launch should store reading guide first and Start Here second, not slide-explanation');
     if (slideLaunchState.readingPath?.find((item) => item.key === 'narration')?.status === 'current') failures.push('slide-deck launch should not skip key-slide explanation and jump to narration');
     const launchDir = join(temp, '.papermentor', 'sessions', 'launch-smoke');
     const launchState = readJson(join(launchDir, 'state.json'), {});
@@ -238,7 +402,152 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     if (launchState.title !== 'TurboQuant: Extreme Quantization for Vector Search' || launchState.authors !== 'Jane Researcher, John Vector') failures.push('launch should infer title and authors from source text');
     if (!launchState.paperSections?.some((section) => section.includes('Problem Definition'))) failures.push('launch should detect source sections from one command');
     if (!launchHtml.includes('Jane Researcher, John Vector') || launchHtml.includes(launchTextPath)) failures.push('launch report should show authors and hide source paths');
-    if (!launchHtml.includes('One-sentence orientation')) failures.push('launch should create an initial Start Here block');
+    if (!launchHtml.includes('How to use this reading room') || !launchHtml.includes('One-sentence orientation') || !(launchHtml.indexOf('How to use this reading room') < launchHtml.indexOf('Start Here'))) failures.push('launch should create a reading guide block before Start Here');
+    if (!launchHtml.includes('Preliminary ladder') || !launchHtml.includes('List the prerequisites in order') || (launchHtml.match(/class="ladder-heading"/g) || []).length) failures.push('launch Start Here should ship a preliminary-ladder scaffold for the model to fill, not a script-synthesized ladder');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'launch-smoke', '--paper-text-file', launchTextPath], { cwd: temp, stdio: 'pipe' });
+    const genericLaunchState = readJson(join(launchDir, 'state.json'), {});
+    const genericLaunchActions = JSON.stringify(genericLaunchState.sectionActions || {});
+    for (const forbidden of ['drifting', 'pushforward', 'stopgrad', 'anti-symmetric', 'diffusion-time', 'inference-time diffusion']) {
+      if (launchHtml.toLowerCase().includes(forbidden) || genericLaunchActions.toLowerCase().includes(forbidden)) failures.push(`generic TurboQuant launch/analyze leaked Drifting-specific helper text: ${forbidden}`);
+    }
+
+    const noisySourcePath = join(temp, 'noisy-source.txt');
+    writeFileSync(noisySourcePath, `Noisy OCR Robustness Fixture
+Anonymous Copy
+
+Abstract
+This document has sparse OCR and no reliable method claim.
+
+COPYRIGHT ALL RIGHTS RESERVED. This page intentionally blank.
+Generated by Scanner 0.0. Downloaded from Example Conference Proceedings.
+HEADER HEADER HEADER 12 12 12
+1. Notes
+The source gives too little technical evidence for confident concept extraction.`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', noisySourcePath, '--slug', 'noisy-launch-smoke', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const noisyHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'noisy-launch-smoke', 'index.html'), 'utf8');
+    const noisyLadderRows = (noisyHtml.match(/class="ladder-heading"/g) || []).length;
+    if (noisyLadderRows !== 0 || !noisyHtml.includes('Preliminary ladder')) failures.push(`noisy/malformed launch should ship a static ladder scaffold with no script-synthesized rows, got ${noisyLadderRows} ladder rows`);
+    for (const forbidden of ['All Rights Reserved', 'Generated by Scanner', 'Example Conference Proceedings', 'page intentionally blank']) {
+      if (noisyHtml.includes(`<h3 class="ladder-heading">`) && noisyHtml.includes(forbidden)) failures.push(`noisy/malformed launch should not promote boilerplate into concept ladder: ${forbidden}`);
+    }
+
+    const brokenMathPath = join(temp, 'broken-pdf-math.txt');
+    writeFileSync(brokenMathPath, `Self-Supervised Learning from Images with a Joint-Embedding Predictive Architecture
+Jane Vision
+
+Abstract
+Compared to generative methods that predict in pixel/token space, I-JEPA predicts abstract target representations and learns semantic features.
+
+1. Method
+The objective uses M_{i=1} fragments from PDF layout and broken text such as i = 1} {D}\\left and i = 1}\\sum _{j \\in B_i} \\lVert \\hat {\\vs }_{
+The clean notation B_i and y_j identify target blocks and representations.
+We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', brokenMathPath, '--slug', 'broken-math-launch', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const brokenMathHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'broken-math-launch', 'index.html'), 'utf8');
+    for (const forbidden of ['i is defined by', '{D}\\left', '\\lVert \\hat', 'M_{i=1}', 'vit-h']) {
+      if (brokenMathHtml.includes(forbidden)) failures.push(`broken PDF math should not leak malformed notation/concept into Start Here: ${forbidden}`);
+    }
+    for (const expected of ['One-sentence orientation', 'Preliminary ladder', 'List the prerequisites in order']) {
+      if (!brokenMathHtml.includes(expected)) failures.push(`broken PDF launch should still ship the Start Here scaffold: ${expected}`);
+    }
+
+    const representativeChoicePdfPath = join(temp, 'representative-choice-paper.pdf');
+    writeRepresentativeChoicePdfFixture(representativeChoicePdfPath);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-pdf', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const representativeChoiceDir = join(temp, '.papermentor', 'sessions', 'representative-choice-pdf');
+    const representativeChoiceState = readJson(join(representativeChoiceDir, 'state.json'), {});
+    const representativeChoiceCards = readJson(join(representativeChoiceDir, 'cards.json'), { cards: [] });
+    if (representativeChoiceState.representativeFigure?.label !== '2') failures.push(`representative figure selection should prefer method Figure 2 over evaluation Figure 1, got ${representativeChoiceState.representativeFigure?.label}`);
+    const representativeChoiceStartCard = representativeChoiceCards.cards?.find((card) => card.type === 'start-here');
+    if (!/Figure 2/.test(representativeChoiceStartCard?.figure?.caption || '')) failures.push('representative figure selection should pass the selected Figure 2 into Start Here extraction');
+    if (representativeChoiceStartCard?.figure?.caption !== 'Figure 2. Representative method figure from the Method section.') failures.push('representative figure selection should use a semantic caption instead of raw PDF text');
+    if (representativeChoiceStartCard?.figure?.caption?.includes('encoder maps queries')) failures.push('representative figure visible caption should not reuse raw pdftotext caption text');
+
+    const realPdfPath = join(temp, 'tiny-method-paper.pdf');
+    writeTinyPdfFixture(realPdfPath);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPdfPath, '--slug', 'real-pdf-launch', '--page', '1'], { cwd: temp, stdio: 'pipe' });
+    const realPdfDir = join(temp, '.papermentor', 'sessions', 'real-pdf-launch');
+    const realPdfState = readJson(join(realPdfDir, 'state.json'), {});
+    const realPdfCards = readJson(join(realPdfDir, 'cards.json'), { cards: [] });
+    const realPdfHtml = readFileSync(join(realPdfDir, 'index.html'), 'utf8');
+    if (realPdfState.sourceMode !== 'paper') failures.push(`real PDF launch should detect paper mode, got ${realPdfState.sourceMode}`);
+    if (!realPdfState.paperSections?.some((section) => section.includes('Method'))) failures.push('real PDF launch should detect Method section from extracted PDF text');
+    if (!realPdfState.cropPreview || !existsSync(join(realPdfDir, 'crop-preview.html'))) failures.push('real PDF launch should write crop preview evidence');
+    const realPdfStartCard = realPdfCards.cards?.find((card) => card.type === 'start-here');
+    if (!realPdfStartCard?.figure?.src?.endsWith('.png')) failures.push('real PDF launch should attach a rendered/cropped PNG figure to Start Here');
+    for (const phrase of ['Tiny Retrieval Method', 'Preliminary ladder', 'List the prerequisites in order', 'Figure 1. Representative method figure.']) {
+      if (!realPdfHtml.includes(phrase)) failures.push(`real PDF launch report missing ${phrase}`);
+    }
+    for (const forbidden of ['Drifting Models', 'pushforward distribution', 'anti-symmetric drifting field', 'stop-gradient target']) {
+      if (realPdfHtml.includes(forbidden)) failures.push(`real PDF Start Here should not leak paper-specific helper concept: ${forbidden}`);
+    }
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'real-pdf-launch', '--source', realPdfPath, '--page', '1', '--overwrite'], { cwd: temp, stdio: 'pipe' });
+    const realPdfPreviews = readJson(join(realPdfDir, 'crop-previews.json'), { previews: [] });
+    if (!realPdfPreviews.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('real PDF preview-crops should include full-page candidate');
+    if (!realPdfPreviews.previews?.some((preview) => /Auto Figure/.test(preview.label))) failures.push('real PDF preview-crops should include auto Figure candidate');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'real-pdf-launch', '--source', realPdfPath, '--page', '1', '--auto', 'figure1', '--title', 'PDF method figure', '--body', '## Extracted visual explanation\n\n- **Question:** What does the retrieval pipeline show?\n- **Concept:** encoder scoring pipeline.\n- **What to observe:** query tokens become ranking scores.\n- **Conclusion:** the method figure anchors the objective explanation.'], { cwd: temp, stdio: 'pipe' });
+    const realPdfAfterExtract = readJson(join(realPdfDir, 'cards.json'), { cards: [] });
+    if (!realPdfAfterExtract.cards?.some((card) => card.title === 'PDF method figure' && card.figure?.src?.endsWith('.png'))) failures.push('real PDF extract-figure should append a PNG figure card');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPdfPath, '--slug', 'real-pdf-layout-fallback', '--page', '1', '--force-layout-crop', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const layoutFallbackDir = join(temp, '.papermentor', 'sessions', 'real-pdf-layout-fallback');
+    const layoutFallbackState = readJson(join(layoutFallbackDir, 'state.json'), {});
+    const layoutFallbackCards = readJson(join(layoutFallbackDir, 'cards.json'), { cards: [] });
+    if (layoutFallbackState.figureExtractionWarning || layoutFallbackState.figureExtractionFallbackWarning) failures.push('layout fallback crop should avoid visible figure extraction warnings');
+    const layoutFallbackStartCard = layoutFallbackCards.cards?.find((card) => card.type === 'start-here');
+    if (!layoutFallbackStartCard?.figure?.src?.endsWith('.png')) failures.push('layout fallback crop should attach a Start Here PNG when bbox extraction is unavailable');
+
+    const realPptxPath = join(temp, 'tiny-slide-deck.pptx');
+    writeTinyPptxFixture(realPptxPath);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-launch', '--mode', 'slide-deck', '--page', '1'], { cwd: temp, stdio: 'pipe' });
+    const realPptxDir = join(temp, '.papermentor', 'sessions', 'real-pptx-launch');
+    const realPptxState = readJson(join(realPptxDir, 'state.json'), {});
+    const realPptxCards = readJson(join(realPptxDir, 'cards.json'), { cards: [] });
+    const realPptxHtml = readFileSync(join(realPptxDir, 'index.html'), 'utf8');
+    if (realPptxState.sourceMode !== 'slide-deck') failures.push(`real PPTX launch should preserve slide-deck mode, got ${realPptxState.sourceMode}`);
+    if (!realPptxState.cropPreview || !existsSync(join(realPptxDir, 'crop-preview.html'))) failures.push('real PPTX launch should write crop preview evidence');
+    const realPptxStartCard = realPptxCards.cards?.find((card) => card.type === 'start-here');
+    if (!realPptxStartCard?.figure?.src?.endsWith('.png')) failures.push('real PPTX launch should attach a rendered slide PNG to Start Here');
+    if (!realPptxHtml.includes('Preliminary ladder') || !realPptxHtml.includes('into the next slide')) failures.push('real PPTX launch report should render slide-deck Start Here scaffold (ladder + slide-specific figure reading)');
+    for (const forbidden of ['Drifting Models', 'pushforward distribution', 'anti-symmetric drifting field', 'stop-gradient target']) {
+      if (realPptxHtml.includes(forbidden)) failures.push(`real PPTX Start Here should not leak paper-specific helper concept: ${forbidden}`);
+    }
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'real-pptx-launch', '--source', realPptxPath, '--page', '1', '--overwrite'], { cwd: temp, stdio: 'pipe' });
+    const realPptxPreviews = readJson(join(realPptxDir, 'crop-previews.json'), { previews: [] });
+    if (!realPptxPreviews.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('real PPTX preview-crops should include full-slide candidate');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'real-pptx-launch', '--source', realPptxPath, '--page', '1', '--title', 'PPTX slide visual', '--body', '## Extracted visual explanation\n\n- **Question:** What does this slide show?\n- **Concept:** retrieval encoder pipeline.\n- **What to observe:** the slide flows from query to score.\n- **Conclusion:** this is source slide evidence, not a generated diagram.'], { cwd: temp, stdio: 'pipe' });
+    const realPptxAfterExtract = readJson(join(realPptxDir, 'cards.json'), { cards: [] });
+    if (!realPptxAfterExtract.cards?.some((card) => card.title === 'PPTX slide visual' && card.figure?.src?.endsWith('.png'))) failures.push('real PPTX extract-figure should append a PNG slide card');
+
+    const goldenFiles = {
+      equation: join(temp, 'golden-equation-card.md'),
+      derivation: join(temp, 'golden-derivation-trace.md'),
+      dependency: join(temp, 'golden-dependency-trace.md'),
+      confusion: join(temp, 'golden-confusion-repair.md'),
+      korean: join(temp, 'golden-korean-explanation.md')
+    };
+    writeFileSync(goldenFiles.equation, markdownSection(golden, 'Golden equation card'));
+    writeFileSync(goldenFiles.derivation, markdownSection(golden, 'Golden derivation trace'));
+    writeFileSync(goldenFiles.dependency, markdownSection(golden, 'Golden dependency trace'));
+    writeFileSync(goldenFiles.confusion, markdownSection(golden, 'Golden confusion repair'));
+    writeFileSync(goldenFiles.korean, markdownSection(golden, 'Golden Korean explanation'));
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Golden Quality Structural Smoke', '--slug', 'golden-quality-smoke'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'golden-quality-smoke', '--type', 'equation', '--title', 'Golden equation card', '--latex', '\\mathcal{R}(f)=\\mathbb{E}_{(x,y)\\sim\\mathcal{D}}[\\ell(f(x),y)]', '--body-file', goldenFiles.equation, '--choices', 'Trace derivation|Map dependencies'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'golden-quality-smoke', '--type', 'derivation', '--title', 'Golden derivation trace', '--body-file', goldenFiles.derivation], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'golden-quality-smoke', '--type', 'dependency', '--title', 'Golden dependency trace', '--body-file', goldenFiles.dependency], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'golden-quality-smoke', '--type', 'confusion', '--title', 'Golden confusion repair', '--user-question', 'Why is the expectation outside the loss?', '--body-file', goldenFiles.confusion], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'golden-quality-smoke', '--type', 'note', '--title', 'Golden Korean explanation', '--body-file', goldenFiles.korean], { cwd: temp, stdio: 'pipe' });
+    const goldenDir = join(temp, '.papermentor', 'sessions', 'golden-quality-smoke');
+    const goldenHtml = readFileSync(join(goldenDir, 'index.html'), 'utf8');
+    const goldenCards = readJson(join(goldenDir, 'cards.json'), { cards: [] });
+    if ((goldenHtml.match(/class="block"/g) || []).length !== 5) failures.push('golden quality generated report should render five structural blocks');
+    if ((goldenHtml.match(/<table>/g) || []).length < 1 || !goldenHtml.includes('<th>Symbol</th>')) failures.push('golden quality generated report should render the equation symbol table as HTML table structure');
+    if ((goldenHtml.match(/<ol>/g) || []).length < 1 || (goldenHtml.match(/<ul>/g) || []).length < 3) failures.push('golden quality generated report should render dependency and explanation lists structurally');
+    for (const phrase of ['<h3>Equation</h3>', '<h3>Role</h3>', '<h3>Previous equation</h3>', '<h3>Next equation</h3>', '<h3>Backward dependencies</h3>', '<h3>Forward dependencies</h3>', '<h3>Direct answer</h3>', '<h3>Missing dependency</h3>', '<h3>Reconnection to original text</h3>', 'class="user-question"', '가능한 sample들에 대한 평균']) {
+      if (!goldenHtml.includes(phrase)) failures.push(`golden quality generated report missing structural output: ${phrase}`);
+    }
+    const goldenTypes = (goldenCards.cards || []).map((card) => card.type).join('|');
+    if (goldenTypes !== 'equation|derivation|dependency|confusion|note') failures.push(`golden quality cards should preserve ordered block types, got ${goldenTypes}`);
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Figure Failure Render', '--slug', 'figure-failure-render'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'figure-failure-render', '--type', 'start-here', '--title', 'Start Here', '--body', '## One-sentence orientation\n\nA paper shell.\n\n## Representative figure\n\nPaperMentor could not auto-attach the representative figure. Run crop preview and recrop manually.'], { cwd: temp, stdio: 'pipe' });
@@ -248,15 +557,15 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     const failureLaunchDir = join(temp, '.papermentor', 'sessions', 'figure-failure-launch');
     const failureLaunchHtml = readFileSync(join(failureLaunchDir, 'index.html'), 'utf8');
     const failureLaunchState = readJson(join(failureLaunchDir, 'state.json'), {});
-    if (!failureLaunchHtml.includes('could not auto-attach the representative figure') || !failureLaunchHtml.includes('Run crop preview')) failures.push('launch should render sanitized recrop guidance after an extraction failure');
+    if (!failureLaunchHtml.includes('class="paper-figure"') || !failureLaunchHtml.includes('Full-page visual fallback')) failures.push('launch should attach a visual fallback after an extraction failure instead of rendering a broken recrop block');
     if (failureLaunchHtml.includes(temp) || failureLaunchHtml.includes(figurePath) || failureLaunchHtml.includes(String(failureLaunchState.figureExtractionWarning || '___never___'))) failures.push('launch extraction failure guidance should hide absolute paths and raw diagnostic messages from HTML');
-    if (!failureLaunchHtml.includes("--source &#39;")) failures.push('launch extraction failure guidance should shell-quote the recrop source path');
+    if (!failureLaunchHtml.includes('papermentor preview-crops')) failures.push('launch extraction fallback should point users to the installed preview-crops command');
 
     const spacedFigurePath = join(temp, 'source with spaces.svg');
     writeFileSync(spacedFigurePath, readFileSync(figurePath, 'utf8'));
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', spacedFigurePath, '--slug', 'spaced-source-failure', '--crop', '1,1,999999,999999', '--no-preview'], { cwd: temp, stdio: 'pipe' });
     const spacedFailureHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'spaced-source-failure', 'index.html'), 'utf8');
-    if (!spacedFailureHtml.includes("--source &#39;") || !spacedFailureHtml.includes('source with spaces.svg') && !spacedFailureHtml.includes('source-with-spaces-')) failures.push('launch extraction failure recrop command should shell-quote source paths derived from names with spaces');
+    if (!spacedFailureHtml.includes('class="paper-figure"') || spacedFailureHtml.includes('node scripts/papermentor-session.mjs')) failures.push('launch extraction fallback should render a figure and never show development script paths for sources with spaces');
 
     const serverScript = join(temp, 'serve-once.cjs');
     const portFile = join(temp, 'server-port.txt');
@@ -287,7 +596,7 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (!navState.sectionActions?.['1-introduction']?.some((choice) => choice.includes('pushforward distribution'))) failures.push('analyze should generate Introduction actions from section concepts');
     if (!navState.sectionActions?.['2-related-work']?.some((choice) => choice.includes('Sohl-Dickstein et al., 2015'))) failures.push('analyze should generate Related Work actions from citations');
-    if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Eq. (6) training objective'))) failures.push('analyze should generate method equation actions from section equations');
+    if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Eq. (6)'))) failures.push('analyze should generate method equation actions from section equations');
     if (!navState.sectionActions?.['3-drifting-models-for-generation']?.some((choice) => choice.includes('Map equation dependencies'))) failures.push('analyze should suggest visual repair diagram actions for equation-heavy method sections');
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor Live', 'Claude-like start surface', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
@@ -323,9 +632,10 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
       if (html.includes(phrase)) failures.push(`session paper map should move the figure explanation under the image and remove the body heading: ${phrase}`);
     }
     if (!html.includes('class="paper-figure"') || !html.includes('<img src="assets/')) failures.push('session paper map should render the actual method figure image');
+    if (!html.includes('fitPaperMentorStartFigure') || !html.includes('--papermentor-start-image-max-height') || !html.includes('--papermentor-start-figure-max-width')) failures.push('session report should include dynamic first-page figure fitting for PDF export');
     if (html.includes('loading="lazy"')) failures.push('session report figures should load eagerly for reliable browser screenshots and first-open rendering');
     if (!(html.indexOf('One-sentence paper model') < html.indexOf('class="paper-figure"') && html.indexOf('class="paper-figure"') < html.indexOf('Preliminary ladder'))) failures.push('Start Here should render one-sentence model first, then representative figure, then preliminaries');
-    for (const phrase of ['Figure 1', 'Read it by', 'The key observation', 'This visual anchors']) {
+    for (const phrase of ['Figure 1', 'Concept / method role', 'How to read it', 'Parts to identify', 'In-figure math / symbols', 'Flow / sequence', 'What to observe', 'Equations / claims it supports']) {
       if (!html.includes(phrase)) failures.push(`session paper map should render figure explanation under image: ${phrase}`);
     }
     for (const phrase of ['Exact crop of Figure 1 from the paper.', 'Figure from the paper.']) {
@@ -416,7 +726,7 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
 
     const koreanMapPath = join(temp, 'korean-map.md');
     const koreanEquationPath = join(temp, 'korean-equation.md');
-    writeFileSync(koreanMapPath, '## 이 논문이 하는 일\n\n이 논문은 생성 분포 $q_i$가 학습 중에 데이터 분포 $p_{\\mathrm{data}}$ 쪽으로 이동하도록 generator $f$를 훈련한다.\n\n## 그림 설명\n\n- 그림 / 위치: Figure 1, Drifting Model.\n- 무엇을 보여주는가: 주황색 생성 분포 $q_i$가 학습 반복마다 파란색 데이터 분포 $p_{\\mathrm{data}}$에 가까워지는 과정을 보여준다.\n- 흐름 / 순서: prior에서 샘플을 뽑고 → $f$로 pushforward 분포를 만들고 → drift field로 이동 방향을 정하고 → $f$를 업데이트한다.\n- 관찰할 점: inference 때 반복 샘플러를 돌리는 것이 아니라, 학습 중 $f$ 자체가 반복적으로 바뀐다는 점이다.\n- 연결되는 수식 / 주장: $q=f_{\\#}p_{\\mathrm{prior}}$, 분포열 $\\{q_i\\}$, 그리고 drift가 0에 가까워지게 만드는 training objective.\n\n## 핵심 객체\n\n- $p_{\\mathrm{prior}}$ — 생성 전에 샘플링하는 source distribution.\n- $f$ — prior sample을 데이터 공간으로 보내는 generator.\n- $V_{p,q}(x)$ — 현재 샘플 $x$를 어느 방향으로 움직일지 알려주는 drift field.\n\n## 의존성 체인\n\n1. pushforward $q=f_{\\#}p_{\\mathrm{prior}}$를 이해한다.\n2. 학습을 분포열 $q_1,q_2,\\ldots$의 변화로 본다.\n3. drift field $V_{p,q}(x)$가 왜 필요한지 연결한다.\n');
+    writeFileSync(koreanMapPath, '## 이 논문이 하는 일\n\n이 논문은 생성 분포 $q_i$가 학습 중에 데이터 분포 $p_{\\mathrm{data}}$ 쪽으로 이동하도록 generator $f$를 훈련한다.\n\n## 그림 설명\n\n- 그림 / 위치: Figure 1, Drifting Model.\n- 무엇을 보여주는가: 주황색 생성 분포 $q_i$가 학습 반복마다 파란색 데이터 분포 $p_{\\mathrm{data}}$에 가까워지는 과정을 보여준다.\n- 보는 법: 왼쪽 prior, 가운데 generator $f$, 오른쪽 데이터 분포 $p_{\\mathrm{data}}$ 세 부분으로 읽는다.\n- 그림 속 수식 / 기호: 그림 안에 pushforward $q=f_{\\#}p_{\\mathrm{prior}}$와 화살표 위의 drift field $V_{p,q}(x)$가 적혀 있다.\n- 흐름 / 순서: prior에서 샘플을 뽑고 → $f$로 pushforward 분포를 만들고 → drift field로 이동 방향을 정하고 → $f$를 업데이트한다.\n- 관찰할 점: inference 때 반복 샘플러를 돌리는 것이 아니라, 학습 중 $f$ 자체가 반복적으로 바뀐다는 점이다.\n- 연결되는 수식 / 주장: $q=f_{\\#}p_{\\mathrm{prior}}$, 분포열 $\\{q_i\\}$, 그리고 drift가 0에 가까워지게 만드는 training objective.\n\n## 핵심 객체\n\n- $p_{\\mathrm{prior}}$ — 생성 전에 샘플링하는 source distribution.\n- $f$ — prior sample을 데이터 공간으로 보내는 generator.\n- $V_{p,q}(x)$ — 현재 샘플 $x$를 어느 방향으로 움직일지 알려주는 drift field.\n\n## 의존성 체인\n\n1. pushforward $q=f_{\\#}p_{\\mathrm{prior}}$를 이해한다.\n2. 학습을 분포열 $q_1,q_2,\\ldots$의 변화로 본다.\n3. drift field $V_{p,q}(x)$가 왜 필요한지 연결한다.\n');
     writeFileSync(koreanEquationPath, '## 수식이 하는 일\n\n이 블록은 training objective이 왜 등장하는지 설명한다. $V_{p,q}(x)$는 이동 목표를 만들고, $\\operatorname{stopgrad}$는 그 목표 쪽으로 gradient가 새지 않도록 고정한다.\n\n## 기호 역할\n\n- $x$ — 현재 generator가 만든 sample.\n- $V_{p,q}(x)$ — sample을 이동시키는 drift vector.\n- $\\|\\cdot\\|_2^2$ — 이동 목표와 현재 sample 사이의 제곱 거리.\n');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', '드리프팅을 통한 생성 모델링', '--source', 'https://arxiv.org/pdf/2602.04770', '--slug', 'korean-report'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'korean-report', '--type', 'paper-map', '--title', '논문 지도', '--figure-file', figurePath, '--figure-caption', 'Figure 1. Drifting Model.', '--body-file', koreanMapPath, '--choices', '수식 (6) 설명|stopgrad 설명|의존성 추적'], { cwd: temp, stdio: 'pipe' });
@@ -438,13 +748,21 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     for (const phrase of ['그림 설명', 'Figure explanation under image', `Main ${'method'} figure`, awkwardObjective, `목적${'식'} — Eq. (6)`]) {
       if (koreanHtml.includes(phrase)) failures.push(`Korean report should remove headings/provenance/awkward terms: ${phrase}`);
     }
-    for (const phrase of ['주황색 생성 분포', '읽는 법:', '핵심 관찰:', '연결되는 내용:', 'Training objective — Eq. (6)', 'training objective', 'gradient']) {
+    for (const phrase of ['주황색 생성 분포', '개념 / 방법 역할', '보는 법', '그림 속 수식 / 기호', '흐름 / 순서', '관찰할 점', '연결되는 수식 / 주장', 'Training objective — Eq. (6)', 'training objective', 'gradient']) {
       if (!koreanHtml.includes(phrase)) failures.push(`Korean report should keep structured Korean explanation content and standard English terms: ${phrase}`);
     }
     if ((koreanHtml.match(/class="block"/g) || []).length !== 2) failures.push('Korean report should render two ordered report blocks');
     if ((koreanHtml.match(/<ol>/g) || []).length < 1) failures.push('Korean report should render ordered dependency lists structurally');
     if (koreanCards.cards?.length !== 2 || koreanCards.cards?.[0]?.type !== 'paper-map' || koreanCards.cards?.[1]?.type !== 'equation') failures.push('Korean cards.json should keep ordered structured card types');
-    if (!koreanNotes.includes('읽는 법:') || koreanNotes.includes('## 그림 설명')) failures.push('Korean notes.md should mirror figure explanation under the image without the heading');
+    if (!koreanNotes.includes('보는 법') || koreanNotes.includes('## 그림 설명')) failures.push('Korean notes.md should mirror figure explanation under the image without the heading');
+    const exportZip = join(temp, 'korean-report-export.zip');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'export', '--session', 'korean-report', '--output', exportZip, '--overwrite'], { cwd: temp, stdio: 'pipe' });
+    if (!existsSync(exportZip) || statSync(exportZip).size < 1000) failures.push('export command should write a non-empty portable report zip');
+    const zipList = execFileSync('python3', ['-c', 'import sys,zipfile; print("\\n".join(zipfile.ZipFile(sys.argv[1]).namelist()))', exportZip], { encoding: 'utf8' });
+    for (const rel of ['index.html', 'assets/mathjax/tex-svg.js', 'assets/fonts/pretendard/PretendardVariable.woff2', 'cards.json', 'notes.md', 'state.json']) {
+      if (!zipList.includes(rel)) failures.push(`export zip missing ${rel}`);
+    }
+    if (zipList.includes('paper.pdf') || zipList.includes('source.pdf')) failures.push('export zip should not include original source PDF by default');
   } catch (error) {
     failures.push(`session helper smoke failed: ${error.message}`);
   } finally {
