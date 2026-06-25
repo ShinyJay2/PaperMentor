@@ -23,6 +23,7 @@ pm "paper-or-slides.pdf"
 pm open
 pm go
 pm ask "What is confusing here?"
+pm qa
 pm export
 papermentor launch "https://arxiv.org/pdf/2602.04770" --open
 papermentor start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
@@ -37,6 +38,7 @@ User-facing surface:
 - `pm open` opens the latest/current HTML.
 - `pm go` resumes the arrow-key palette.
 - `pm ask "..."` creates a pending HTML answer prompt for the current topic.
+- `pm qa` scores generated HTML blocks for teaching quality and flags shallow/missing structure.
 - `pm export` exports the latest/current room.
 
 Advanced `papermentor ...` commands remain available for agents and scripts, but normal users should not need to memorize them.
@@ -159,6 +161,25 @@ papermentor preview-crops --session drifting-models --source paper.pdf --page 1
 papermentor extract-figure --session drifting-models --source paper.pdf --page 1 --crop 120,80,900,360 --title "Figure 1 — Method"
 ```
 
+
+## `/papermentor qa`
+
+Purpose: score the current reading room's generated HTML blocks for teaching quality before export or handoff.
+
+Behavior:
+
+- evaluates each promoted block in `cards.json`;
+- flags shallow summaries, unresolved scaffolds, missing equation/proof anchors, weak proof-line coverage, weak dependency chains, and missing reconstruction checkpoints;
+- writes `.papermentor/sessions/<slug>/quality-report.json`;
+- exits non-zero when `--min <score>` is supplied and the room is below threshold.
+
+Example:
+
+```bash
+papermentor qa --session drifting-models
+papermentor qa --session drifting-models --min 82
+```
+
 ## `/papermentor export`
 
 Purpose: create a one-file PDF or portable HTML report bundle for download, sharing, or archiving.
@@ -174,6 +195,7 @@ Behavior:
 Example:
 
 ```bash
+papermentor qa --session drifting-models --min 82
 papermentor export --session drifting-models --format pdf --output drifting-papermentor-report.pdf --overwrite
 papermentor export --session drifting-models --format zip --output drifting-papermentor-report.zip --overwrite
 ```

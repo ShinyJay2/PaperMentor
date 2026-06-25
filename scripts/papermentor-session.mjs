@@ -1140,6 +1140,66 @@ function cropImage(sourceImage, outImage, crop) {
   throw new Error('cropping requires ImageMagick (`magick`/`convert`) or macOS `sips`; rerun without --crop to attach the full rendered page');
 }
 
+function imageDimensions(file) {
+  const absolute = resolve(file);
+  if (!existsSync(absolute)) return null;
+  if (/\.svg$/i.test(absolute)) {
+    const svg = readFileSync(absolute, 'utf8');
+    const viewBox = svg.match(/viewBox=["']\s*[-0-9.]+\s+[-0-9.]+\s+([0-9.]+)\s+([0-9.]+)\s*["']/i);
+    if (viewBox) return { width: Number(viewBox[1]), height: Number(viewBox[2]) };
+    const width = svg.match(/\bwidth=["']([0-9.]+)/i);
+    const height = svg.match(/\bheight=["']([0-9.]+)/i);
+    if (width && height) return { width: Number(width[1]), height: Number(height[1]) };
+  }
+  const magick = commandPath('magick');
+  if (magick) {
+    try {
+      const out = execFileSync(magick, ['identify', '-format', '%w %h', absolute], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      const [width, height] = out.split(/\s+/).map(Number);
+      if (width && height) return { width, height };
+    } catch {
+      // fall through
+    }
+  }
+  const identify = commandPath('identify');
+  if (identify) {
+    try {
+      const out = execFileSync(identify, ['-format', '%w %h', absolute], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
+      const [width, height] = out.split(/\s+/).map(Number);
+      if (width && height) return { width, height };
+    } catch {
+      // fall through
+    }
+  }
+  const fileCmd = commandPath('file');
+  if (fileCmd) {
+    try {
+      const out = execFileSync(fileCmd, [absolute], { encoding: 'utf8' });
+      const match = out.match(/(?:PNG|JPEG|GIF|Web\/P).*?(\d+)\s*x\s*(\d+)/i) || out.match(/,\s*(\d+)\s*x\s*(\d+)/);
+      if (match) return { width: Number(match[1]), height: Number(match[2]) };
+    } catch {
+      // fall through
+    }
+  }
+  return null;
+}
+
+function figureQualityHints({ extracted, rendered, crop, autoCrop }) {
+  const dims = imageDimensions(extracted);
+  const renderedDims = rendered ? imageDimensions(rendered) : null;
+  const warnings = [];
+  if (!dims) warnings.push('Could not read extracted figure dimensions; inspect crop-preview.html before trusting the figure block.');
+  else {
+    if (dims.width < 220 || dims.height < 140) warnings.push(`Extracted figure is small (${dims.width}x${dims.height}); recrop from crop preview if labels are unreadable.`);
+    const aspect = dims.width / Math.max(1, dims.height);
+    if (aspect > 6 || aspect < 0.18) warnings.push(`Extracted figure has unusual aspect ratio (${aspect.toFixed(2)}); inspect before using it as the representative figure.`);
+  }
+  if (!crop && !autoCrop) warnings.push('A full-page/full-slide visual was attached; run preview-crops and recrop before writing final figure reading.');
+  if (dims && renderedDims && dims.width * dims.height > renderedDims.width * renderedDims.height * 0.82) {
+    warnings.push('Extracted visual covers most of the page; this is probably a fallback, not a tight representative figure crop.');
+  }
+  return { dimensions: dims, renderedDimensions: renderedDims, warnings };
+}
 
 function parsePdfBbox(xml) {
   const pageMatch = String(xml || '').match(/<page[^>]*width="([0-9.]+)"[^>]*height="([0-9.]+)"/);
@@ -1298,6 +1358,8 @@ function extractFigure(args) {
   const tempDir = mkdtempSync(join(assetDir(slug), 'extract-tmp-'));
   let rendered = absoluteSource;
   let renderedPdf = extension === '.pdf' ? absoluteSource : '';
+  let autoCrop = null;
+  let figureQuality = null;
   try {
     if (['.pdf'].includes(extension)) {
       const pageImage = join(tempDir, `${slugify(basename(absoluteSource, extension))}-page-${page}.png`);
@@ -1313,15 +1375,26 @@ function extractFigure(args) {
       throw new Error(`unsupported extraction source extension ${extension}; expected PDF, PPT/PPTX, or image`);
     }
     const requestedAutoCrop = Boolean(args.auto || args.figure || args['figure-number']);
-    const autoCrop = requestedAutoCrop && renderedPdf ? autoFigureCropFromPdf(renderedPdf, page, { ...args, dpi }) : null;
+    autoCrop = requestedAutoCrop && renderedPdf ? autoFigureCropFromPdf(renderedPdf, page, { ...args, dpi }) : null;
     if (requestedAutoCrop && renderedPdf && !autoCrop) {
       throw new Error(`auto crop could not locate Figure ${String(args.auto || args.figure || args['figure-number']).replace(/^fig(?:ure)?\.?\s*/i, '') || '1'} on page/slide ${page}; rerun with an explicit --crop x,y,width,height`);
     }
     cropImage(rendered, extracted, args.crop || autoCrop);
+    figureQuality = figureQualityHints({ extracted, rendered, crop: args.crop, autoCrop });
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
   const type = args.type || (normalizeSourceMode(state.sourceMode) === 'slide' ? 'slide-explanation' : 'paper-map');
+  if (figureQuality?.warnings?.length) {
+    state.figureQualityWarning = figureQuality.warnings.join(' ');
+    state.figureQuality = figureQuality;
+    state.nextChoices = unique([
+      `Review crop preview / recrop representative figure`,
+      ...(state.nextChoices || [])
+    ]).slice(0, 12);
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+  }
   addCard({
     ...args,
     session: slug,
@@ -1331,7 +1404,7 @@ function extractFigure(args) {
     body: readBody(args) || visualExplanationBody(args, state),
     'figure-file': extracted,
     'figure-caption': args['figure-caption'] || args.caption || (normalizeSourceMode(state.sourceMode) === 'slide' ? `Slide ${page}. Representative visual.` : `Figure ${String(args.auto || args.figure || args['figure-number'] || page).replace(/^fig(?:ure)?\.?\s*/i, '')}. Representative method figure.`),
-    choices: args.choices || `Explain this visual|Connect it to the next equation|Ask anything about ${state.currentSection || state.title}`
+    choices: args.choices || `${figureQuality?.warnings?.length ? 'Review crop preview / recrop figure|' : ''}Explain this visual|Connect it to the next equation|Ask anything about ${state.currentSection || state.title}`
   });
   if (!args.quiet) console.log(`Extracted visual saved to .papermentor/sessions/${slug}/assets/${basename(extracted)}`);
 }
@@ -3539,6 +3612,10 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
   if (state.pendingBlockPrompt) console.log(`│  Prompt ${trim(state.pendingBlockPrompt, width - 11).padEnd(width - 9)}│`);
   console.log(`╰${line(width)}╯`);
   console.log('\nOpen the HTML first. Use the CLI for navigation, section choices, and questions.');
+  if (state.figureQualityWarning) {
+    console.log(`\nFigure QA: ${state.figureQualityWarning}`);
+    console.log(`  Run: ${cliCommand()} preview-crops --session ${state.slug}`);
+  }
   if ((state.paperSections || []).length && !state.currentSection) {
     console.log(`\n${sectionListHeading(state.sourceMode)}`);
     (state.paperSections || []).forEach((section, index) => console.log(`  ${index === 0 ? '◆' : '◇'} [${index + 1}] ${section}`));
@@ -3793,6 +3870,151 @@ function stageQualityRules(type) {
   return [...shared, ...(byType[type] || [])].join('\n');
 }
 
+function markdownPlainText(value) {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' math ')
+    .replace(/\\\[[\s\S]*?\\\]/g, ' math ')
+    .replace(/\$[^$\n]+\$/g, ' math ')
+    .replace(/!\[[^\]]*]\([^)]+\)/g, ' image ')
+    .replace(/\[[^\]]+]\([^)]+\)/g, (match) => match.replace(/^\[|\]\([^)]+\)$/g, ''))
+    .replace(/[#>*_`|[\]()-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function includesAny(value, patterns) {
+  const text = String(value || '');
+  return patterns.some((pattern) => pattern instanceof RegExp ? pattern.test(text) : text.toLowerCase().includes(String(pattern).toLowerCase()));
+}
+
+function addQualityCheck(result, condition, points, issue) {
+  result.maxScore += points;
+  if (condition) result.score += points;
+  else result.issues.push(issue);
+}
+
+function evaluateCardQuality(card) {
+  const type = String(card.type || 'note');
+  const body = String(card.body || '');
+  const plain = markdownPlainText(body);
+  const result = { id: card.id, type, title: card.title, score: 0, maxScore: 0, issues: [] };
+  addQualityCheck(result, plain.length >= 420, 12, 'body is too short for a production teaching block');
+  addQualityCheck(result, !/Not read yet|Not built yet|Not written yet|placeholder|TODO/i.test(body), 10, 'body still contains scaffold/placeholder text');
+  addQualityCheck(result, includesAny(body, [/checkpoint/i, /reconstruct/i, /resume point/i, /what.*now.*able/i]), 8, 'missing reconstruction/resume checkpoint');
+  addQualityCheck(result, includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/]), 8, 'missing LaTeX/math anchor where paper teaching usually needs notation');
+  addQualityCheck(result, includesAny(body, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /line\s+\d+/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
+
+  const typeChecks = {
+    'start-here': [
+      [/One-sentence orientation|One-sentence/i, 8, 'Start Here should include one-sentence orientation'],
+      [/Preliminary/i, 8, 'Start Here should include Preliminary'],
+      [/flow:/i, 6, 'Start Here should include a flow line when dependencies are linear enough']
+    ],
+    prerequisite: [
+      [/flow:/i, 10, 'prerequisite ladder should include dependency flow when appropriate'],
+      [/###\s*\d+\./, 10, 'prerequisites should be taught as numbered concept blocks'],
+      [/\d+(?:\.\d+)?|00|01|10|11|example/i, 8, 'prerequisites should include a concrete numeric example']
+    ],
+    method: [
+      [/Input|output|contract/i, 8, 'method block should state input/output contract'],
+      [/Algorithm|step|walk-through|pipeline/i, 10, 'method block should walk algorithm steps'],
+      [/training|inference|preprocessing|online|stored/i, 8, 'method block should separate runtime phases or stored objects']
+    ],
+    equation: [
+      [/Equation first|Equation role|Role/i, 8, 'equation block should state equation role'],
+      [/Symbol|operator|constant|domain|codomain|random|fixed/i, 10, 'equation block should define symbols/operators/domains/randomness'],
+      [/wrong reading|common confusion|misconception/i, 8, 'equation block should name a likely wrong interpretation']
+    ],
+    derivation: [
+      [/Previous equation/i, 8, 'derivation should show previous equation'],
+      [/Next equation/i, 8, 'derivation should show next equation'],
+      [/Operation|Dependency|Assumption|Why valid|What changed/i, 12, 'derivation should justify each transition']
+    ],
+    dependency: [
+      [/Backward dependencies/i, 8, 'dependency block should include backward dependencies'],
+      [/Forward dependencies/i, 8, 'dependency block should include forward dependencies'],
+      [/breaks|risk|misunderstood|missing dependency/i, 12, 'dependency block should say what breaks if misunderstood']
+    ],
+    proof: [
+      [/Claim statement|Claim/i, 8, 'proof block should restate the claim'],
+      [/line-by-line|Proof line|\|.*Operation.*Dependency/i, 12, 'proof block should walk lines with operations/dependencies'],
+      [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present']
+    ],
+    confusion: [
+      [/Direct answer/i, 10, 'confusion block should answer directly'],
+      [/Missing dependency/i, 10, 'confusion block should name missing dependency'],
+      [/Reconnection|Resume point|Paused location/i, 10, 'confusion block should reconnect and resume']
+    ],
+    'recursive-why': [
+      [/Layer|Why question|Root dependency/i, 12, 'recursive why should expose why layers and root dependency'],
+      [/Paper reconnection|Reconnection/i, 8, 'recursive why should reconnect to paper text'],
+      [/Stop\?/i, 6, 'recursive why should indicate a stop condition']
+    ],
+    visualization: [
+      [/Question|Concept|Visual encoding|What to observe|Limitation/i, 12, 'visualization should include required diagram explanation fields'],
+      [/node|arrow|edge|group|label|encoding/i, 8, 'visualization should specify drawable visual encoding'],
+      [/Not a figure from the paper|conceptual aid|not.*proof/i, 8, 'visualization should state limitation']
+    ],
+    'final-insight': [
+      [/One-sentence final insight|One-sentence model/i, 8, 'final insight should include one-sentence insight'],
+      [/Equation map/i, 10, 'final insight should include equation map'],
+      [/Dependency chain|Assumptions|breakpoints|Reconstruction checklist/i, 12, 'final insight should include dependency chain, breakpoints, and checklist']
+    ]
+  };
+  for (const [pattern, points, issue] of (typeChecks[type] || [])) {
+    addQualityCheck(result, pattern.test(body), points, issue);
+  }
+  if (card.figure) {
+    addQualityCheck(result, /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports/i.test(body), 12, 'figure block should contain the fixed element-by-element figure reading schema');
+  }
+  result.score = result.maxScore ? Math.round((result.score / result.maxScore) * 100) : 0;
+  result.score = Math.max(0, Math.min(100, result.score));
+  result.status = result.score >= 82 && result.issues.length <= 2 ? 'pass' : result.score >= 68 ? 'review' : 'fail';
+  return result;
+}
+
+function qualityReportForSession(slug) {
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const results = (cards.cards || [])
+    .filter((card) => !['reading-guide'].includes(card.type))
+    .map(evaluateCardQuality);
+  const overall = results.length
+    ? Math.round(results.reduce((sum, item) => sum + item.score, 0) / results.length)
+    : 0;
+  const failed = results.filter((item) => item.status === 'fail').length;
+  const review = results.filter((item) => item.status === 'review').length;
+  return {
+    schema: 'papermentor.quality.v1',
+    session: slug,
+    overall,
+    status: overall < 68 ? 'fail' : failed || review || overall < 82 ? 'review' : 'pass',
+    cards: results
+  };
+}
+
+function runQualityQa(args = {}) {
+  const slug = requireSessionSlug(args, 'qa');
+  const report = qualityReportForSession(slug);
+  writeJson(safeSessionPath(slug, 'quality-report.json'), report);
+  if (args.json) {
+    console.log(JSON.stringify(report, null, 2));
+  } else {
+    console.log(`PaperMentor content QA: ${report.overall}/100 (${report.status})`);
+    for (const card of report.cards) {
+      const icon = card.status === 'pass' ? '✓' : card.status === 'review' ? '↺' : '!';
+      console.log(`${icon} ${String(card.score).padStart(3)}  ${card.type}  ${card.title}`);
+      card.issues.slice(0, 3).forEach((issue) => console.log(`    - ${issue}`));
+    }
+    console.log(`\nReport: .papermentor/sessions/${slug}/quality-report.json`);
+  }
+  const min = Number(args.min || args.threshold || 0);
+  if (min && report.overall < min) {
+    throw new Error(`content QA score ${report.overall} is below threshold ${min}`);
+  }
+  return report;
+}
+
 function buildActionPrompt(state, action) {
   const type = actionType(action, state);
   const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
@@ -3990,26 +4212,42 @@ function sessionSummary(slug) {
   };
 }
 
-function defaultPaletteItems(slug) {
+function sessionQualitySummary(slug) {
+  if (!slug) return null;
+  const existing = readJson(safeSessionPath(slug, 'quality-report.json'), null);
+  if (existing) return existing;
+  try {
+    return qualityReportForSession(slug);
+  } catch {
+    return null;
+  }
+}
+
+function defaultPaletteItems(slug, summary = null) {
   const hasSession = Boolean(slug);
-  return [
-    hasSession ? 'Continue current reading room' : 'New reading room from file / URL',
+  const state = summary?.state || {};
+  const items = [
+    hasSession ? (state.pendingBlockPrompt ? 'Continue pending HTML block' : 'Continue current reading room') : 'New reading room from file / URL',
     hasSession ? 'Open current HTML' : 'Show recent reading rooms',
     hasSession ? 'Ask about current topic' : 'Paste or pass a source path',
-    hasSession ? 'Regenerate Start Here prompt' : 'Doctor / check setup',
-    hasSession ? 'Export PDF report' : 'Advanced help',
+    hasSession ? 'Run content quality check' : 'Doctor / check setup',
+    hasSession && state.figureQualityWarning ? 'Review / recrop representative figure' : '',
+    hasSession ? 'Regenerate Start Here prompt' : 'Advanced help',
+    hasSession ? 'Export PDF report' : '',
     'New reading room from file / URL',
     'Doctor / check setup',
     'Advanced help'
   ];
+  return items.filter(Boolean);
 }
 
 function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) {
   const width = 96;
   const summary = sessionSummary(slug);
   const state = summary?.state || {};
+  const quality = summary ? sessionQualitySummary(slug) : null;
   const recent = loadRecentSessions();
-  const items = defaultPaletteItems(summary ? slug : '').filter((item, index, arr) => arr.indexOf(item) === index);
+  const items = defaultPaletteItems(summary ? slug : '', summary).filter((item, index, arr) => arr.indexOf(item) === index);
   const top = `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const title = summary ? state.title : 'No reading room selected';
@@ -4018,14 +4256,19 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
   const startHere = summary
     ? summary.startHereStatus === 'complete' ? `${ansi.green}complete${ansi.reset}` : summary.startHereStatus === 'pending' ? `${ansi.amber}pending${ansi.reset}` : `${ansi.dim}not started${ansi.reset}`
     : `${ansi.dim}none${ansi.reset}`;
+  const qualityText = summary
+    ? quality ? `${quality.status === 'pass' ? ansi.green : quality.status === 'review' ? ansi.amber : ansi.magenta}${quality.overall}/100 ${quality.status}${ansi.reset}` : `${ansi.dim}not run${ansi.reset}`
+    : `${ansi.dim}none${ansi.reset}`;
+  const figureText = state.figureQualityWarning ? `${ansi.amber}review crop${ansi.reset}` : `${ansi.dim}ok/no figure warning${ansi.reset}`;
   const rows = [
     top,
     boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}Claude/Codex-style command palette${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open HTML · n new source · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open · v QA · c crop · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
     `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(title, 70)}${ansi.reset}`, width, ansi.magenta),
     boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${trim(html, 78)}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 56)}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Quality:${ansi.reset} ${qualityText}   ${ansi.dim}Figure:${ansi.reset} ${figureText}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 76)}`, width, ansi.magenta),
     `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.magenta)
   ];
@@ -4040,7 +4283,7 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
     rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 3).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.magenta));
   }
   rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm export`, width, ansi.magenta));
+  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm qa · pm export`, width, ansi.magenta));
   rows.push(bottom);
   return { screen: rows.join('\n'), items };
 }
@@ -4049,6 +4292,8 @@ function executePaletteItem(item, slug) {
   if (/continue/i.test(item)) return runTui({ session: slug });
   if (/open current html/i.test(item)) return openLatestSession({ session: slug });
   if (/ask/i.test(item)) return askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
+  if (/quality check/i.test(item)) return runQualityQa({ session: slug });
+  if (/recrop|crop/i.test(item)) return previewCrops({ session: slug, overwrite: true });
   if (/regenerate start/i.test(item)) return regenerateStartHere({ session: slug });
   if (/export pdf/i.test(item)) return exportSession({ session: slug, format: 'pdf', overwrite: true });
   if (/doctor/i.test(item)) return runDoctor({});
@@ -4111,6 +4356,16 @@ function runPalette(args = {}) {
       if (!slug) exitForMissingSession();
       cleanup();
       askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
+      process.exit(0);
+    } else if (key === 'v') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      runQualityQa({ session: slug });
+      process.exit(0);
+    } else if (key === 'c') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      previewCrops({ session: slug, overwrite: true });
       process.exit(0);
     } else if (key === 'r') {
       if (!slug) exitForMissingSession();
@@ -4731,6 +4986,7 @@ User commands:
   pm open                    open the latest/current HTML
   pm go                      continue in the arrow-key palette
   pm ask "question"          ask about the current topic
+  pm qa                      score current HTML blocks for teaching quality
   pm export                  export the latest/current room as PDF
   pm recent                  list recent reading rooms
   pm doctor                  check local PDF/PPT extraction tools
@@ -4757,6 +5013,7 @@ Usage:
   papermentor mode --session <slug> --mode equations --items "Explain Eq. (1)|Explain Eq. (6)"
   papermentor diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
   papermentor preview-crops --session <slug> --source paper.pdf --page 1
+  papermentor qa --session <slug> [--json] [--min 82]
   papermentor card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]
   papermentor turn --session <slug> --role user --text <text> [--promote|--no-promote]
   papermentor promote --session <slug> --title <title> --user-question <text> --body-file <path>
@@ -4835,6 +5092,8 @@ try {
     addDiagram(args);
   } else if (command === 'preview-crops' || command === 'preview') {
     previewCrops(args);
+  } else if (command === 'qa' || command === 'quality' || command === 'check') {
+    runQualityQa(args);
   } else if (command === 'extract-figure') {
     extractFigure(args);
   } else if (command === 'card') {

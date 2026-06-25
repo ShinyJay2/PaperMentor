@@ -175,7 +175,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
-for (const phrase of ['renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'Claude/Codex-style command palette']) {
+for (const phrase of ['renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa', 'Claude/Codex-style command palette']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified palette phrase: ${phrase}`);
 }
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
@@ -272,7 +272,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'render', 'state', 'pause', 'resume', 'turn', 'promote', 'doctor']) {
+for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'qa', 'render', 'state', 'pause', 'resume', 'turn', 'promote', 'doctor']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -1268,6 +1268,130 @@ The final insight is that calibration is not a post-processing trick; it is enfo
   }
 }
 
+function validateContentQualityQa() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-quality-qa-'));
+  try {
+    const highBodies = {
+      method: `## Input / output contract
+
+Input: a vector $x\\in\\mathbb{R}^d$ and bit-width $b$. Output: an index vector $\\mathrm{idx}\\in[2^b]^d$ plus a reconstruction $\\tilde{x}$.
+
+## Stored objects, variables, and randomness
+
+Algorithm 1 stores a random rotation $\\Pi$ and centroids $c_1,\\ldots,c_{2^b}$. The online input is $x$; the carried quantity is $y=\\Pi x$.
+
+## Algorithm walk-through
+
+| Step | Paper line / equation | Quantity carried | Operation | Output of the step |
+| --- | --- | --- | --- | --- |
+| 1 | Algorithm 1 line 5 | $x$ | rotate | $y=\\Pi x$ |
+| 2 | Algorithm 1 line 6 | $y_j$ | nearest centroid | $\\mathrm{idx}_j$ |
+| 3 | Algorithm 1 lines 9--10 | $c_{\\mathrm{idx}_j}$ | rotate back | $\\tilde{x}=\\Pi^\\top\\tilde{y}$ |
+
+## Training vs inference / preprocessing vs online use
+
+The centroids are precomputed; the online path only rotates, indexes, and reconstructs. This is why the method is online rather than dataset-trained.
+
+## Equation dependencies
+
+Eq. (4) defines the scalar centroid cost used in line 6. Theorem 1 turns this scalar cost into vector MSE.
+
+## Reconstruction checkpoint
+
+You should now be able to run Algorithm 1 on one coordinate: rotate, choose nearest centroid, store the index, and rotate back.`,
+      proof: `## Claim statement
+
+Theorem 2 has two subclaims: the estimator is unbiased, $\\mathbb{E}[\\langle y,\\tilde{x}\\rangle]=\\langle y,x\\rangle$, and the distortion is bounded by a variance term.
+
+## Proof strategy
+
+Condition on $\\tilde{x}_{\\mathrm{mse}}$, prove the QJL residual is unbiased, then use the QJL variance bound to control distortion.
+
+## Line-by-line proof
+
+| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
+| --- | --- | --- | --- | --- |
+| $\\tilde{x}=\\tilde{x}_{\\mathrm{mse}}+\\tilde{x}_{\\mathrm{qjl}}$ | substitute Algorithm 2 line 12 | Algorithm 2 | dimensions match | splits reconstruction into MSE part and residual part |
+| $\\mathbb{E}[\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle\\mid\\tilde{x}_{\\mathrm{mse}}]=\\langle y,r\\rangle$ | condition and apply unbiasedness | Lemma 4 | $r$ is fixed under conditioning | closes the expectation subclaim |
+| $\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle+\\langle y,r\\rangle=\\langle y,x\\rangle$ | substitute $r=x-\\tilde{x}_{\\mathrm{mse}}$ | residual definition | same inner product space | proves unbiasedness |
+| $\\operatorname{Var}(\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle)\\le \\frac{\\pi}{2d}\\|r\\|_2^2\\|y\\|_2^2$ | apply variance bound | Lemma 4 | QJL randomness independent after conditioning | starts the distortion bound |
+
+## Expectation / conditioning audit
+
+Conditioning fixes $\\tilde{x}_{\\mathrm{mse}}$ and therefore fixes $r$. The remaining randomness is QJL. The law of total expectation then removes the conditioning.
+
+## Inequality / bound audit
+
+The inequality direction comes from the QJL variance upper bound; it upper-bounds squared inner-product error by residual norm times query norm.
+
+## Closure
+
+The first three lines prove unbiasedness, while the final variance line proves the error/distortion part of Theorem 2.
+
+## Reconstruction checkpoint
+
+You should be able to say what is fixed under conditioning, which lemma gives unbiasedness, and which lemma gives the variance bound.`,
+      final: `## One-sentence final insight
+
+TurboQuant is not merely a better reconstruction quantizer; rather, it separates reconstruction quality from unbiased inner-product estimation and repairs the latter with a residual QJL stage.
+
+## Problem
+
+VQ must compress $x\\in\\mathbb{R}^d$ while preserving both $\\|x-\\tilde{x}\\|_2^2$ and $\\langle y,x\\rangle$.
+
+## Core intuition
+
+Random rotation makes coordinates scalar-quantizable; residual QJL adds back the part MSE quantization misses.
+
+## Equation map
+
+| Equation / claim | Role | Dependency it closes |
+| --- | --- | --- |
+| Eq. (1) | MSE distortion | reconstruction goal |
+| Eq. (4) | scalar centroid cost | Algorithm 1 |
+| Theorem 2 | unbiased inner product and bound | residual QJL |
+
+## Dependency chain
+
+random rotation $\\Pi$ → coordinate density $f_X$ → scalar centroids → small residual $r$ → QJL residual estimator → unbiased inner-product estimate.
+
+## Assumptions and breakpoints
+
+If random rotation does not regularize coordinates, Eq. (4) is not reusable. If QJL is not unbiased, Theorem 2's expectation claim breaks.
+
+## Reconstruction checklist
+
+Restate why MSE optimality is insufficient, where $r$ comes from, and how QJL closes the inner-product gap.`
+    };
+    const weakProof = `## Proof strategy
+
+The proof is intuitive. Since QJL is good, the theorem follows.
+`;
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Quantization QA Fixture', '--slug', 'quantization-qa'], { cwd: temp, stdio: 'pipe' });
+    for (const [type, body] of Object.entries(highBodies)) {
+      const file = join(temp, `${type}.md`);
+      writeFileSync(file, body);
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'quantization-qa', '--type', type === 'final' ? 'final-insight' : type, '--title', `${type} quality block`, '--body-file', file], { cwd: temp, stdio: 'pipe' });
+    }
+    const qa = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'qa', '--session', 'quantization-qa', '--json'], { cwd: temp, encoding: 'utf8' }));
+    if (qa.overall < 82 || qa.status !== 'pass') failures.push(`content QA should pass high-quality multi-stage fixture, got ${qa.overall}/${qa.status}`);
+    if (!qa.cards?.some((card) => card.type === 'proof' && card.score >= 82)) failures.push('content QA should recognize proof blocks that cover expectation and variance/bound');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Weak Proof QA Fixture', '--slug', 'weak-proof-qa'], { cwd: temp, stdio: 'pipe' });
+    const weakFile = join(temp, 'weak-proof.md');
+    writeFileSync(weakFile, weakProof);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'weak-proof-qa', '--type', 'proof', '--title', 'Weak proof', '--body-file', weakFile], { cwd: temp, stdio: 'pipe' });
+    const weakQa = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'qa', '--session', 'weak-proof-qa', '--json'], { cwd: temp, encoding: 'utf8' }));
+    if (weakQa.overall >= 68 || weakQa.status !== 'fail') failures.push(`content QA should fail shallow proof fixture, got ${weakQa.overall}/${weakQa.status}`);
+    const weakIssues = weakQa.cards?.[0]?.issues?.join(' ') || '';
+    if (!/too short|line|conditioning|bound|checkpoint/i.test(weakIssues)) failures.push(`weak proof QA should report actionable proof issues, got ${weakIssues}`);
+  } catch (error) {
+    failures.push(`content QA smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
+validateContentQualityQa();
 validatePaperStageRunnerPrompts();
 validateInstalledArtifact();
 validateSessionHelper();
