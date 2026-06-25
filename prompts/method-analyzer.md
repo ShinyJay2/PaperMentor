@@ -1,16 +1,19 @@
 # Method Analyzer Prompt
 
-Role: dissect method, algorithm, model, or experimental mechanism.
+Role: dissect method, algorithm, model, or experimental mechanism so the reader can run it mentally.
 
 Output:
 - input/output contract;
-- variables and parameters;
-- objective function;
-- algorithm steps;
-- training versus inference;
+- variables, parameters, stored global objects, and randomness;
+- objective function or target property;
+- algorithm steps in execution order;
+- training versus inference / preprocessing versus online use;
 - equations supporting each step;
 - assumptions required;
 - failure modes;
-- final insight.
+- method-level final insight.
 
-Connect method steps back to equations and claims.
+Quality bar:
+- Tie every method step to a line in the algorithm, an equation, or a claim in the selected text.
+- Explain what is stored, what is recomputed, what is learned, and what is random.
+- Do not describe a pipeline as a generic flow; name the quantities carried through it.

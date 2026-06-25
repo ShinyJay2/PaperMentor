@@ -2,18 +2,23 @@
 
 ## Input / output contract
 
-## Variables and parameters
+## Stored objects, variables, and randomness
 
-## Objective
+## Objective or target property
 
-## Algorithm steps
+## Algorithm walk-through
 
-## Training vs inference
+| Step | Paper line / equation | Quantity carried | Operation | Output of the step |
+| --- | --- | --- | --- | --- |
+
+## Training vs inference / preprocessing vs online use
 
 ## Equation dependencies
 
 ## Assumptions
 
-## Failure modes
+## Failure modes / what would break
 
 ## Method-level final insight
+
+## Reconstruction checkpoint

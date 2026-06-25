@@ -1,13 +1,23 @@
 # Dependency Trace
 
-Item: `<definition / lemma / theorem / algorithm / equation / claim>`
+Item: `<definition / lemma / theorem / algorithm line / equation / claim>`
 
 ## Backward dependencies
 
+| Dependency | Type | Where introduced | Why needed here | What breaks if misunderstood |
+| --- | --- | --- | --- | --- |
+
 ## Forward dependencies
 
-## Missing dependency check
+| Later object | How it reuses this item | Risk if skipped |
+| --- | --- | --- |
 
 ## Recommended explanation order
 
-## Risk if misunderstood
+Number the order in which to teach the objects.
+
+## Missing dependency check
+
+State the one missing idea most likely to block the reader.
+
+## Reconstruction checkpoint

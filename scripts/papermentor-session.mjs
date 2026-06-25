@@ -3732,6 +3732,67 @@ function promptTemplateForType(type) {
   return templates[type] || 'templates/method_dissection.md';
 }
 
+function stageQualityRules(type) {
+  const shared = [
+    '- Do not write a generic summary. Every substantive sentence must be anchored to the selected source excerpt, an equation, an algorithm line, a theorem/proof line, or a named paper object.',
+    '- Start from the reader\'s likely blocker: name the role of the object before expanding details.',
+    '- Prefer one precise toy numeric example over broad analogy when an abstract object would otherwise remain vague.',
+    '- End with a reconstruction checkpoint: what the reader should now be able to restate or derive.'
+  ];
+  const byType = {
+    prerequisite: [
+      '- Choose only prerequisites actually needed for this selected paper range; skip broad course labels and trivial basics unless the excerpt truly requires them.',
+      '- For each rung, teach the concept, give a real-number example, then point to the exact paper symbol/equation/claim it unlocks.'
+    ],
+    method: [
+      '- Make the method executable in the reader\'s head: input, output, state variables, one pass through the algorithm, and what is stored or learned.',
+      '- Tie every method step to the equation, algorithm line, or claim that justifies it.',
+      '- Separate training-time, inference-time, preprocessing, and stored global parameters when the paper distinguishes them.'
+    ],
+    equation: [
+      '- Show the equation before any prose, then explain its role: definition, objective, estimator, bound, update, or theorem statement.',
+      '- Define every symbol including domains, randomness, conditioning, indices, constants, norms, expectations, and maps.',
+      '- Explain what would be wrong if the reader interpreted the equation as a different object.'
+    ],
+    derivation: [
+      '- Trace only one transition at a time. If the paper skips algebra, insert reconstructed intermediate lines and label them as reconstructed.',
+      '- For every equality/inequality, name the operation and the dependency: substitution, definition, norm identity, expectation law, theorem, or assumption.',
+      '- State exactly what changed from the previous line to the next line; do not hide it under "therefore".'
+    ],
+    dependency: [
+      '- Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims; do not collapse them into one prose chain.',
+      '- For each dependency, explain why it is needed, what breaks without it, and where it is used next.',
+      '- Include both backward dependencies needed to understand the current item and forward dependencies that reuse it later.'
+    ],
+    proof: [
+      '- Walk the actual proof, not just the theorem intuition. Quote or rewrite each proof line before explaining it.',
+      '- Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims; do not stop after the first claim.',
+      '- For each line, state the algebraic/logical operation, dependency, hidden assumption, and why the line proves progress toward the claim.',
+      '- Close by explaining why the final line is sufficient for the theorem statement.'
+    ],
+    confusion: [
+      '- Answer the user\'s question directly in the first explanatory paragraph.',
+      '- Identify the missing dependency as a named concept, theorem, assumption, or equation role.',
+      '- Give a minimal example that targets that missing dependency, then reconnect to the exact paper location and resume.'
+    ],
+    'recursive-why': [
+      '- Make each why-layer strictly deeper than the previous one; do not repeat the same answer in different words.',
+      '- Stop at a root dependency the reader can actually study next, not at a vague philosophical statement.'
+    ],
+    visualization: [
+      '- Use visualization only for relationship, sequence, geometry, dependency, or flow confusion.',
+      '- Describe the visual encoding precisely enough that the generated SVG can be drawn deterministically.',
+      '- State the limitation: the diagram is a conceptual aid, not a paper figure or proof.'
+    ],
+    'final-insight': [
+      '- Synthesize only from dependencies already explained; do not introduce new unsupported claims.',
+      '- Use the form "not merely X; rather Y" when the paper\'s real contribution depends on a distinction.',
+      '- Include an equation map, dependency chain, assumption breakpoints, and a reconstruction checklist.'
+    ]
+  };
+  return [...shared, ...(byType[type] || [])].join('\n');
+}
+
 function buildActionPrompt(state, action) {
   const type = actionType(action, state);
   const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
@@ -3741,7 +3802,7 @@ function buildActionPrompt(state, action) {
   const citations = insight.citations?.length ? insight.citations.join(', ') : 'none detected yet';
   const sourceExcerpt = insight.sourceExcerpt || insight.preview || 'No extracted preview. Use the attached source/paper text available in context.';
   const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type ${shellQuote(type)} --title ${shellQuote(action)} --body-file <your-markdown-file>`;
-  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview yet.'}\n\n## Equation / notation preview from this selected range\n\n${equationSnippets}\n\n## Source excerpt for this selected range\n\n\`\`\`text\n${sourceExcerpt}\n\`\`\`\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Use the source excerpt above as the local evidence for the selected section / slide range; do not explain unrelated slides unless the action asks for temporal context.\n- Show every non-trivial equation in LaTeX before explaining it.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
+  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview yet.'}\n\n## Equation / notation preview from this selected range\n\n${equationSnippets}\n\n## Source excerpt for this selected range\n\n\`\`\`text\n${sourceExcerpt}\n\`\`\`\n\n## Stage-specific quality bar\n\n${stageQualityRules(type)}\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Use the source excerpt above as the local evidence for the selected section / slide range; do not explain unrelated slides unless the action asks for temporal context.\n- Show every non-trivial equation in LaTeX before explaining it.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
 }
 
 function writePendingActionPrompt(state, action) {

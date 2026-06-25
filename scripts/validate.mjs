@@ -1222,6 +1222,18 @@ The final insight is that calibration is not a post-processing trick; it is enfo
       ['Draw dependency diagram for Eq. (1) to Proposition 1', 'visualization', 'templates/visualization_card.md', 'Proposition 1', '3. Theory'],
       ['Extract final insight one-sentence', 'final-insight', 'templates/final_insight.md', 'final insight', '4. Discussion']
     ];
+    const qualityPhraseByType = {
+      prerequisite: 'For each rung, teach the concept, give a real-number example',
+      method: 'Make the method executable in the reader',
+      equation: 'Show the equation before any prose',
+      derivation: 'Trace only one transition at a time',
+      dependency: 'Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims',
+      proof: 'Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims',
+      confusion: 'Answer the user',
+      'recursive-why': 'Make each why-layer strictly deeper',
+      visualization: 'Use visualization only for relationship, sequence, geometry, dependency, or flow confusion',
+      'final-insight': 'Use the form "not merely X; rather Y"'
+    };
 
     for (const [action, expectedType, expectedTemplate, expectedLocalSignal, section] of cases) {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'paper-stage-runner', '--section', section], { cwd: temp, stdio: 'pipe' });
@@ -1239,6 +1251,9 @@ The final insight is that calibration is not a post-processing trick; it is enfo
         section,
         'Equation / notation preview from this selected range',
         'Source excerpt for this selected range',
+        'Stage-specific quality bar',
+        'Do not write a generic summary',
+        qualityPhraseByType[expectedType],
         'Show every non-trivial equation in LaTeX',
         expectedLocalSignal
       ]) {

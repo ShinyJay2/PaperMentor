@@ -1,26 +1,36 @@
 # Equation Card
 
-## Equation
+## Equation first
 
 \[
-% equation here
+% exact equation here before prose
 \]
 
-## Role
+## Role in the paper
 
-## Symbol table
+State whether this is a definition, objective, estimator, update, bound, theorem claim, or diagnostic quantity. Say what later step depends on it.
 
-| Symbol | Meaning | Domain / codomain | Notes |
-| --- | --- | --- | --- |
+## Symbol-by-symbol reading
 
-## Operators and constants
+| Symbol | Meaning | Domain / codomain | Random or fixed? | Notes |
+| --- | --- | --- | --- | --- |
 
-## Assumptions
+## Operators, constants, and indexing
+
+Explain expectations, norms, maps, inverses, conditioning, index sets, bit-widths, dimensions, constants, and scaling factors.
+
+## Assumptions / what is held fixed
 
 ## Plain-language reading
 
+One precise sentence.
+
 ## Minimal example
 
-## Common confusions
+Use real numbers if useful.
+
+## Common wrong reading
+
+Name a plausible misconception and correct it.
 
 ## Reconstruction checkpoint
