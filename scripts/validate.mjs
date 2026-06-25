@@ -1186,6 +1186,74 @@ function validateAllBlockTypes() {
   }
 }
 
+function validatePaperStageRunnerPrompts() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-paper-stages-'));
+  try {
+    const paperTextPath = join(temp, 'stage-paper.txt');
+    writeFileSync(paperTextPath, `Stage Runner Verification Paper
+Ada Verifier
+
+Abstract
+This paper learns a calibrated retrieval scorer with a margin objective, a projected update, and a proof that the margin gap decreases.
+
+1. Introduction
+The reader needs a map of why retrieval scoring, calibration, and a margin gap are connected.
+
+2. Method
+The encoder h_theta maps a query q and document d to vectors. Equation (1) defines the margin objective L(theta)=E[max(0, m - s(q,d+) + s(q,d-))]. Equation (2) updates theta_{t+1}=Pi_C(theta_t - eta grad L(theta_t)). Algorithm 1 alternates scoring positives and negatives, then applying the projected update.
+
+3. Theory
+Proposition 1 states that the projected update decreases the margin gap under a Lipschitz gradient assumption. Proof. By convexity, L(theta') >= L(theta)+grad L(theta)^T(theta'-theta). The projection step and the step-size bound give the one-step decrease.
+
+4. Discussion
+The final insight is that calibration is not a post-processing trick; it is enforced by the training objective and the proof assumptions.`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Stage Runner Verification Paper', '--source', 'stage-paper.pdf', '--slug', 'paper-stage-runner'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'paper-stage-runner', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
+    const sessionDir = join(temp, '.papermentor', 'sessions', 'paper-stage-runner');
+    const cases = [
+      ['Build concept ladder from first principles for the margin objective', 'prerequisite', 'templates/prerequisite_ladder.md', 'L(theta)=E', '2. Method'],
+      ['Explain the method pipeline in 2. Method', 'method', 'templates/method_dissection.md', 'Algorithm 1', '2. Method'],
+      ['Explain Eq. (1) margin objective symbol by symbol', 'equation', 'templates/equation_card.md', 'Eq. (1)', '2. Method'],
+      ['Trace derivation from Eq. (1) to Eq. (2)', 'derivation', 'templates/derivation_trace.md', 'Eq. (2)', '2. Method'],
+      ['Connect dependencies for Proposition 1', 'dependency', 'templates/dependency_trace.md', 'Proposition 1', '3. Theory'],
+      ['Walk through proof of Proposition 1 line by line', 'proof', 'templates/proof_walkthrough.md', 'Proof. By convexity', '3. Theory'],
+      ['Ask anything about why projection is allowed', 'confusion', 'templates/confusion_response.md', 'missing dependency', '3. Theory'],
+      ['Recursive why chain for the projection assumption', 'recursive-why', 'templates/recursive_why.md', 'projection', '3. Theory'],
+      ['Draw dependency diagram for Eq. (1) to Proposition 1', 'visualization', 'templates/visualization_card.md', 'Proposition 1', '3. Theory'],
+      ['Extract final insight one-sentence', 'final-insight', 'templates/final_insight.md', 'final insight', '4. Discussion']
+    ];
+
+    for (const [action, expectedType, expectedTemplate, expectedLocalSignal, section] of cases) {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'paper-stage-runner', '--section', section], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'paper-stage-runner', '--mode', expectedType, '--items', action], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'paper-stage-runner', '--index', '1'], { cwd: temp, stdio: 'pipe' });
+      const state = readJson(join(sessionDir, 'state.json'), {});
+      const prompt = readFileSync(join(sessionDir, 'pending-prompt.md'), 'utf8');
+      if (state.sourceMode !== 'paper') failures.push(`paper-stage runner should stay in paper mode for ${expectedType}`);
+      if (state.pendingBlockType !== expectedType) failures.push(`paper-stage runner mapped "${action}" to ${state.pendingBlockType}, expected ${expectedType}`);
+      for (const phrase of [
+        'PaperMentor HTML Block Runner Prompt',
+        `--type '${expectedType}'`,
+        expectedTemplate,
+        'Mode: Paper',
+        section,
+        'Equation / notation preview from this selected range',
+        'Source excerpt for this selected range',
+        'Show every non-trivial equation in LaTeX',
+        expectedLocalSignal
+      ]) {
+        if (!prompt.includes(phrase)) failures.push(`paper-stage pending prompt for ${expectedType} missing phrase: ${phrase}`);
+      }
+      if (prompt.includes('Mode: Slides') || prompt.includes('templates/slide_')) failures.push(`paper-stage pending prompt for ${expectedType} should not leak slide-mode templates`);
+    }
+  } catch (error) {
+    failures.push(`paper-stage runner prompt smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
+validatePaperStageRunnerPrompts();
 validateInstalledArtifact();
 validateSessionHelper();
 validateSourceModes();

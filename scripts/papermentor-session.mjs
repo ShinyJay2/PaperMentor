@@ -3654,19 +3654,61 @@ function shellQuote(value) {
   return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
+function actionTypeFromMode(currentMode, sourceMode = 'paper') {
+  const normalizedMode = String(currentMode || '').toLowerCase().trim().replace(/_/g, '-');
+  const paperModeMap = {
+    prerequisite: 'prerequisite',
+    prerequisites: 'prerequisite',
+    equation: 'equation',
+    equations: 'equation',
+    derivation: 'derivation',
+    derivations: 'derivation',
+    dependency: 'dependency',
+    dependencies: 'dependency',
+    proof: 'proof',
+    method: 'method',
+    confusion: 'confusion',
+    chat: 'confusion',
+    'recursive-why': 'recursive-why',
+    visualization: 'visualization',
+    visualizations: 'visualization',
+    'final-insight': 'final-insight',
+    final: 'final-insight'
+  };
+  const slideModeMap = {
+    slide: 'slide-explanation',
+    slides: 'slide-explanation',
+    narration: 'missing-narration',
+    flow: 'slide-transition',
+    transition: 'slide-transition',
+    transitions: 'slide-transition',
+    equation: 'equation',
+    equations: 'equation',
+    confusion: 'confusion',
+    chat: 'confusion',
+    visualization: 'visualization',
+    final: 'final-insight',
+    'final-insight': 'final-insight'
+  };
+  return (normalizeSourceMode(sourceMode) === 'slide' ? slideModeMap : paperModeMap)[normalizedMode] || '';
+}
+
 function actionType(action, state = {}) {
   const text = String(action || '').toLowerCase();
   const mode = normalizeSourceMode(state.sourceMode || 'paper');
   if (/concept ladder|prerequisite|from first principles|readiness/.test(text)) return 'prerequisite';
-  if (/eq\.|equation|symbol by symbol|notation/.test(text)) return 'equation';
+  if (/visualize|draw|diagram|graph|landscape/.test(text)) return 'visualization';
+  if (/recursive why|why chain|keep asking why|deeper why/.test(text)) return 'recursive-why';
+  if (/final insight|one-sentence/.test(text)) return 'final-insight';
+  if (/confusion|diagnostic|ask anything|chat|answer question/.test(text)) return 'confusion';
+  const modeType = actionTypeFromMode(state.currentMode, mode);
+  if (modeType) return modeType;
   if (/derivation|trace|transition/.test(text)) return 'derivation';
+  if (/eq\.|equation|symbol by symbol|notation/.test(text)) return 'equation';
   if (/dependenc|related-work|citation|contrast|connect/.test(text)) return mode === 'slide' ? 'slide-transition' : 'dependency';
   if (/proof|lemma|theorem|proposition/.test(text)) return 'proof';
   if (/method|pipeline|algorithm|visual element|slide/.test(text)) return mode === 'slide' ? 'slide-explanation' : 'method';
   if (/narration/.test(text)) return 'missing-narration';
-  if (/confusion|diagnostic|ask anything|chat|answer question/.test(text)) return 'confusion';
-  if (/final insight|one-sentence/.test(text)) return 'final-insight';
-  if (/visualize|draw|diagram|graph|landscape/.test(text)) return 'visualization';
   return mode === 'slide' ? 'slide-explanation' : 'note';
 }
 
@@ -3680,6 +3722,7 @@ function promptTemplateForType(type) {
     prerequisite: 'templates/prerequisite_ladder.md',
     'concept-ladder': 'templates/concept_ladder.md',
     confusion: 'templates/confusion_response.md',
+    'recursive-why': 'templates/recursive_why.md',
     visualization: 'templates/visualization_card.md',
     'slide-explanation': 'templates/slide_explanation.md',
     'missing-narration': 'templates/missing_narration.md',
@@ -3765,10 +3808,20 @@ function applyTuiChoice(state, selected) {
   } else {
     state.currentFocus = choice;
     state.selectedAction = choice;
-    if (/equation|eq\./i.test(choice)) state.currentMode = 'equations';
-    else if (/derivation|trace/i.test(choice)) state.currentMode = 'derivations';
-    else if (/dependenc|citation|related-work|contrast/i.test(choice)) state.currentMode = 'dependencies';
-    else if (/ask anything|chat about/i.test(choice)) state.currentMode = 'chat';
+    const selectedType = actionType(choice, state);
+    const nextMode = {
+      prerequisite: 'prerequisite',
+      equation: 'equations',
+      derivation: 'derivations',
+      dependency: 'dependencies',
+      proof: 'proof',
+      method: 'method',
+      confusion: 'chat',
+      'recursive-why': 'recursive-why',
+      visualization: 'visualization',
+      'final-insight': 'final'
+    }[selectedType];
+    if (nextMode) state.currentMode = nextMode;
     state.lastChoiceKind = 'action';
     writePendingActionPrompt(state, choice);
   }
