@@ -709,6 +709,22 @@ function representativeFigureExplanation({ sourceMode, text }) {
   ].join('\n');
 }
 
+function appendFigureFallbackNote(body, reason) {
+  const text = String(body || '');
+  if (/No representative figure attached|could not auto-attach|no figure|not present/i.test(text)) return text;
+  const note = [
+    '## Representative figure',
+    '',
+    `No representative figure attached: ${reason}`,
+    '',
+    'Use the crop preview to attach a real method/system figure if the source has one. Do not treat a full page, result plot, or placeholder as the representative method figure.'
+  ].join('\n');
+  if (/##\s+Representative figure explanation/i.test(text)) {
+    return text.replace(/##\s+Representative figure explanation[\s\S]*?(?=\n##\s+Preliminary|\n##\s+Topic timeline map|$)/i, `${note}\n`);
+  }
+  return `${text.trim()}\n\n${note}\n`;
+}
+
 function hasBalancedDelimiters(value) {
   const text = String(value || '');
   const pairs = { '{': '}', '[': ']', '(': ')' };
@@ -4113,11 +4129,16 @@ function figureAuditForSession(slug) {
         issues.push('figure reading still contains scaffold instructions');
       }
     } else if (card.type === 'start-here' && state?.sourceMode === 'paper') {
-      if (!/no figure|could not auto-attach|not present/i.test(card.body || '')) issues.push('paper Start Here has no figure and no explicit no-figure/fallback explanation');
+      if (!/no figure|no representative figure attached|could not auto-attach|not present/i.test(card.body || '')) issues.push('paper Start Here has no figure and no explicit no-figure/fallback explanation');
     }
     if (issues.length) findings.push({ cardId: card.id, type: card.type, title: card.title, dimensions, issues });
   }
-  const warning = state?.figureQualityWarning ? [state.figureQualityWarning] : [];
+  const warning = [
+    state?.figureSelectionWarning,
+    state?.figureExtractionWarning,
+    state?.figureExtractionFallbackWarning,
+    state?.figureQualityWarning
+  ].filter(Boolean);
   return {
     session: slug,
     title: state?.title || slug,
@@ -5011,19 +5032,42 @@ function detectRepresentativeFigure(text, sourceMode = 'paper') {
   });
   if (!candidates.length) return null;
   candidates.sort((a, b) => b.score - a.score || a.page - b.page || Number(String(a.label).match(/\d+/)?.[0] || 999) - Number(String(b.label).match(/\d+/)?.[0] || 999));
-  return candidates[0];
+  const best = candidates[0];
+  if (mode === 'paper' && best.score < 6 && !best.inMethod) return null;
+  return best;
 }
 
 function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure }) {
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
+  const sourceIsImage = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const isSlide = normalizeSourceMode(sourceMode) === 'slide';
   const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop);
+  const shouldAutoAttachPaperFigure = !isSlide && canExtractVisual && !args['no-figure'] && (explicitStartFigure || representativeFigure || sourceIsImage);
+  const addStartHereOnly = (startBody = body) => addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body: startBody, choices: sections.join('|'), quiet: true, noPath: true });
   if (isSlide && !explicitStartFigure) {
-    addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
+    addStartHereOnly(body);
     return { canExtractVisual, attachedVisual: false };
   }
-  if (canExtractVisual && !args['no-figure']) {
+  if (args['no-figure']) {
+    const state = readJson(statePath(slug), {});
+    state.figureSelectionWarning = 'Representative figure attachment was disabled with --no-figure.';
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    addStartHereOnly(appendFigureFallbackNote(body, 'figure attachment was disabled for this run.'));
+  } else if (!canExtractVisual) {
+    const state = readJson(statePath(slug), {});
+    state.figureSelectionWarning = `Source type ${extension || '(none)'} cannot be rendered as a figure crop.`;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    addStartHereOnly(appendFigureFallbackNote(body, 'this source type cannot be rendered as a figure crop.'));
+  } else if (!shouldAutoAttachPaperFigure) {
+    const state = readJson(statePath(slug), {});
+    state.figureSelectionWarning = 'No representative method/system figure caption was detected automatically.';
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    addStartHereOnly(appendFigureFallbackNote(body, 'no representative method/system figure caption was detected automatically.'));
+  } else {
     const requestedPage = args.page || args.slide;
     const requestedAuto = args.auto || args.figure || args['figure-number'];
     const auto = requestedAuto || (extension === '.pdf' ? (requestedPage ? 'figure1' : representativeFigure?.auto) : undefined);
@@ -5080,29 +5124,26 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
         state.figureExtractionFallbackWarning = fallbackError.message;
         state.updatedAt = now();
         writeJson(statePath(slug), state);
-        addCard({
-          ...args,
-          session: slug,
-          type: 'start-here',
-          title: args['card-title'] || 'Start Here',
-          location: 'Start Here',
-          body,
-          choices: sections.join('|'),
-          quiet: true,
-          noPath: true
-        });
+        addStartHereOnly(appendFigureFallbackNote(body, `automatic extraction failed (${error.message}); full-page fallback also failed (${fallbackError.message}).`));
       }
     }
-  } else {
-    addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
   }
-  return { canExtractVisual, attachedVisual: canExtractVisual && !args['no-figure'] };
+  return { canExtractVisual, attachedVisual: shouldAutoAttachPaperFigure };
 }
 
-function maybeWriteCropPreview({ slug, source, args, canExtractVisual }) {
+function maybeWriteCropPreview({ slug, source, args, canExtractVisual, representativeFigure = null }) {
   if (!canExtractVisual || args['no-preview']) return;
   try {
-    previewCrops({ ...args, session: slug, source, page: args.page || 1, title: args['figure-title'] || 'Representative figure', overwrite: true, quiet: true });
+    previewCrops({
+      ...args,
+      session: slug,
+      source,
+      page: args.page || representativeFigure?.page || 1,
+      auto: args.auto || representativeFigure?.auto,
+      title: args['figure-title'] || 'Representative figure',
+      overwrite: true,
+      quiet: true
+    });
   } catch (error) {
     console.error(`PaperMentor preview warning: ${error.message}`);
   }
@@ -5151,7 +5192,7 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
   }
-  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual });
+  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
   const finalState = readJson(statePath(slug), state);

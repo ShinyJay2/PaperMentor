@@ -115,6 +115,40 @@ function writeRepresentativeChoicePdfFixture(path) {
   writeFileSync(path, pdf);
 }
 
+function writeResultOnlyPdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (Result Only Figure Paper) Tj',
+    '/F1 12 Tf 0 -36 Td (Abstract) Tj',
+    '0 -18 Td (This paper analyzes a kernel but does not include a method diagram.) Tj',
+    '0 -36 Td (1. Introduction) Tj',
+    '0 -18 Td (The theory is proved with equations rather than an architecture figure.) Tj',
+    '0 -36 Td (Figure 1. Test accuracy results on benchmark tasks.) Tj',
+    '0 -32 Td (Figure 2. Ablation comparison for different learning rates.) Tj',
+    'ET',
+    '0.6 0.2 0.2 RG 72 560 300 42 re S',
+    '0.6 0.2 0.2 RG 72 500 300 42 re S'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
 function readJson(path, fallback) {
   try { return JSON.parse(readFileSync(path, 'utf8')); }
   catch { return fallback; }
@@ -506,6 +540,17 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     if (!/Figure 2/.test(representativeChoiceStartCard?.figure?.caption || '')) failures.push('representative figure selection should pass the selected Figure 2 into Start Here extraction');
     if (representativeChoiceStartCard?.figure?.caption !== 'Figure 2. Representative method figure from the Method section.') failures.push('representative figure selection should use a semantic caption instead of raw PDF text');
     if (representativeChoiceStartCard?.figure?.caption?.includes('encoder maps queries')) failures.push('representative figure visible caption should not reuse raw pdftotext caption text');
+
+    const resultOnlyPdfPath = join(temp, 'result-only-figures.pdf');
+    writeResultOnlyPdfFixture(resultOnlyPdfPath);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', resultOnlyPdfPath, '--slug', 'result-only-figures', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const resultOnlyDir = join(temp, '.papermentor', 'sessions', 'result-only-figures');
+    const resultOnlyState = readJson(join(resultOnlyDir, 'state.json'), {});
+    const resultOnlyCards = readJson(join(resultOnlyDir, 'cards.json'), { cards: [] });
+    const resultOnlyStartCard = resultOnlyCards.cards?.find((card) => card.type === 'start-here');
+    if (resultOnlyState.representativeFigure) failures.push(`result-only figures should not be selected as representative method figures, got ${JSON.stringify(resultOnlyState.representativeFigure)}`);
+    if (resultOnlyStartCard?.figure) failures.push('result-only figure launch should not attach a benchmark/result plot as Start Here representative figure');
+    if (!/No representative figure attached/i.test(resultOnlyStartCard?.body || '')) failures.push('result-only figure launch should write an explicit no-representative-figure fallback');
 
     const realPdfPath = join(temp, 'tiny-method-paper.pdf');
     writeTinyPdfFixture(realPdfPath);
