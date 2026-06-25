@@ -137,6 +137,11 @@ CODEX_HOME=/custom/codex CLAUDE_HOME=/custom/claude ./install.sh all
 
 Under the hood, `install.sh` / `install.ps1` clone or update `~/.papermentor/repo` when needed, then delegate to `node scripts/install.mjs`. The Node installer reads `papermentor.manifest.json`, copies only runtime skill files, and writes the `pm` / `papermentor` CLI wrappers.
 
+Korean user manual:
+
+- PDF: [`docs/PaperMentor_사용설명서_KO.pdf`](docs/PaperMentor_사용설명서_KO.pdf)
+- Markdown source: [`docs/papermentor-manual.ko.md`](docs/papermentor-manual.ko.md)
+
 ---
 
 ## Start in one command

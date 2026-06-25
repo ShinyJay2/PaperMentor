@@ -6,6 +6,7 @@ npm-debug.log*
 .papermentor/
 .omc/
 *.pdf
+!docs/PaperMentor_사용설명서_KO.pdf
 *.ppt
 *.pptx
 papermentor-skill-*.tgz
