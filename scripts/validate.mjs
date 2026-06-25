@@ -535,11 +535,13 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     const representativeChoiceDir = join(temp, '.papermentor', 'sessions', 'representative-choice-pdf');
     const representativeChoiceState = readJson(join(representativeChoiceDir, 'state.json'), {});
     const representativeChoiceCards = readJson(join(representativeChoiceDir, 'cards.json'), { cards: [] });
-    if (representativeChoiceState.representativeFigure?.label !== '2') failures.push(`representative figure selection should prefer method Figure 2 over evaluation Figure 1, got ${representativeChoiceState.representativeFigure?.label}`);
     const representativeChoiceStartCard = representativeChoiceCards.cards?.find((card) => card.type === 'start-here');
-    if (!/Figure 2/.test(representativeChoiceStartCard?.figure?.caption || '')) failures.push('representative figure selection should pass the selected Figure 2 into Start Here extraction');
-    if (representativeChoiceStartCard?.figure?.caption !== 'Figure 2. Representative method figure from the Method section.') failures.push('representative figure selection should use a semantic caption instead of raw PDF text');
-    if (representativeChoiceStartCard?.figure?.caption?.includes('encoder maps queries')) failures.push('representative figure visible caption should not reuse raw pdftotext caption text');
+    const representativePrompt = readFileSync(join(representativeChoiceDir, 'representative-figure-prompt.md'), 'utf8');
+    if (representativeChoiceState.representativeFigure) failures.push('representative figure selection should not be decided by script scoring');
+    if (!representativeChoiceState.representativeFigureCandidates?.some((candidate) => candidate.label === '2')) failures.push('representative figure prompt should include Figure 2 candidate');
+    if (representativeChoiceStartCard?.figure) failures.push('representative figure selection should not auto-attach a figure before model judgment');
+    if (!/selected: Figure <label>|selected: none|Do not choose from/i.test(representativePrompt)) failures.push('representative figure prompt should ask the model to choose or reject candidates');
+    if (!/Figure 1[\s\S]+Figure 2/.test(representativePrompt)) failures.push('representative figure prompt should include collected caption candidates in source order');
 
     const resultOnlyPdfPath = join(temp, 'result-only-figures.pdf');
     writeResultOnlyPdfFixture(resultOnlyPdfPath);

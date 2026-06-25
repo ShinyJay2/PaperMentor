@@ -960,17 +960,6 @@ function figureCaption(args) {
   return isProvenanceOnlyCaption(caption) ? '' : caption;
 }
 
-function semanticRepresentativeFigureCaption({ representativeFigure, sourceMode }) {
-  if (!representativeFigure?.label) return '';
-  const mode = normalizeSourceMode(sourceMode);
-  if (mode === 'paper' && representativeFigure.inMethod) {
-    return `Figure ${representativeFigure.label}. Representative method figure from the Method section.`;
-  }
-  if (mode === 'paper') return `Figure ${representativeFigure.label}. Representative figure from the paper.`;
-  if (mode === 'slide') return `Figure ${representativeFigure.label}. Representative visual from the slide.`;
-  return `Figure ${representativeFigure.label}. Representative visual.`;
-}
-
 function copyBundledReportAssets(slug) {
   mkdirSync(assetDir(slug), { recursive: true });
   const sourceFonts = join(bundledAssetsDir, 'fonts');
@@ -4968,82 +4957,112 @@ function updateLaunchNavigation({ slug, source, args, text }) {
 }
 
 
-function detectRepresentativeFigure(text, sourceMode = 'paper') {
-  const mode = normalizeSourceMode(sourceMode);
+function collectRepresentativeFigureCandidates(text, blocks = []) {
   const fullText = String(text || '').replace(/\r/g, '');
-  const findSectionSegment = (startAt, regex) => {
-    const slice = fullText.slice(startAt);
-    let offset = startAt;
-    for (const line of slice.split('\n')) {
-      const segments = line.split(/\s{2,}/).map((part) => part.trim()).filter(Boolean);
-      for (const segment of segments) {
-        if (regex.test(segment)) return offset + Math.max(0, line.indexOf(segment));
-      }
-      offset += line.length + 1;
-    }
-    return -1;
-  };
-  const methodStart = mode === 'paper'
-    ? findSectionSegment(0, /^(?:\d+(?:\.\d+)*\.?\s+)?Methods?$/i)
-    : -1;
-  const methodEnd = methodStart >= 0
-    ? (() => {
-      const next = findSectionSegment(methodStart + 1, /^(?:\d+(?:\.\d+)*\.?\s+)?(?:Related Work|Experiments?|Evaluation|Results?|Analysis|Discussion|Conclusion|References|Appendix)(?:\s+.*)?$/i);
-      return next >= 0 ? next : fullText.length;
-    })()
-    : -1;
   const pages = fullText.split('\f');
   const candidates = [];
-  const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[.:]?\s*([^\n]{0,220})/i;
-  let pageBase = 0;
+  const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[:.\-–—]\s*([^\n]{0,220})/i;
   pages.forEach((pageText, pageIndex) => {
     const lines = pageText.split(/\n/);
-    let lineOffset = 0;
     lines.forEach((line, lineIndex) => {
       const match = line.match(captionRegex);
-      if (!match) {
-        lineOffset += line.length + 1;
-        return;
-      }
+      if (!match) return;
       const label = match[1];
-      const globalIndex = pageBase + lineOffset + Math.max(0, match.index || 0);
-      const inMethod = methodStart >= 0 && globalIndex >= methodStart && globalIndex < methodEnd;
       const continuation = [];
       for (let cursor = lineIndex + 1; cursor < Math.min(lines.length, lineIndex + 4); cursor += 1) {
         const next = lines[cursor].trim();
-        if (!next || /^(?:abstract|introduction|background|related work|method|experiments?|conclusion|references)\b/i.test(next)) break;
+        if (!next) break;
+        if (/^(?:\d+(?:\.\d+)*\.?|[A-Z])\s+[A-Z][A-Za-z0-9 ,:;()/-]{2,80}$/.test(next)) break;
         if (/\b(?:Figure|Fig\.)\s*\d{1,3}[A-Za-z]?\b/i.test(next)) break;
         continuation.push(next);
       }
       const caption = `${match[2] || ''} ${continuation.join(' ')}`.replace(/\s+/g, ' ').trim().slice(0, 420);
-      const lower = caption.toLowerCase();
-      let score = 0;
-      if (/\b(method|architecture|objective|pipeline|framework|algorithm|model|overview|system|mechanism|training|pretrain|pre-training|masking|context|target|predict|representation|encoder|decoder)\b/.test(lower)) score += 8;
-      if (/\b(overall|proposed|main|our|approach|workflow|procedure|schematic|illustration)\b/.test(lower)) score += 4;
-      if (mode === 'paper' && inMethod) score += 30;
-      if (mode === 'slide') score += /\b(flow|overview|pipeline|architecture|system)\b/.test(lower) ? 4 : 0;
-      if (/\b(evaluation|accuracy|benchmark|ablation|results?|comparison|gpu hours?|imagenet|linear|classification|table)\b/.test(lower)) score -= 6;
-      const number = Number(String(label).match(/\d+/)?.[0] || 0);
-      score += Math.max(0, 3 - Math.min(number, 3)) * 0.2;
-      candidates.push({ label, auto: `figure${label}`, page: pageIndex + 1, caption, score, inMethod });
-      lineOffset += line.length + 1;
+      const nearbyLines = lines
+        .slice(Math.max(0, lineIndex - 4), Math.min(lines.length, lineIndex + 5))
+        .map((item) => item.trim())
+        .filter(Boolean);
+      const section = (blocks || []).find((block) => caption && String(block.body || '').includes(caption.slice(0, Math.min(80, caption.length))))?.title || '';
+      candidates.push({
+        label,
+        auto: `figure${label}`,
+        page: pageIndex + 1,
+        caption,
+        section,
+        nearbyText: nearbyLines.join(' ').replace(/\s+/g, ' ').slice(0, 700)
+      });
     });
-    pageBase += pageText.length + 1;
   });
-  if (!candidates.length) return null;
-  candidates.sort((a, b) => b.score - a.score || a.page - b.page || Number(String(a.label).match(/\d+/)?.[0] || 999) - Number(String(b.label).match(/\d+/)?.[0] || 999));
-  const best = candidates[0];
-  if (mode === 'paper' && best.score < 6 && !best.inMethod) return null;
-  return best;
+  return candidates.sort((a, b) => a.page - b.page || Number(String(a.label).match(/\d+/)?.[0] || 999) - Number(String(b.label).match(/\d+/)?.[0] || 999));
 }
 
-function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure }) {
+function representativeFigureSelectionPrompt({ state, source, candidates = [] }) {
+  const commandSource = commandSourcePath(state.slug, resolve(source));
+  const lines = [
+    '# PaperMentor Representative Figure Selection Prompt',
+    '',
+    'You are choosing the representative figure for the Start Here block.',
+    '',
+    'The script only collected `Figure` / `Fig.` caption candidates and nearby source text. It did not score, rank, or semantically classify them. Do the representative-figure judgment yourself from the caption, nearby text, section context, and the source goal.',
+    '',
+    'Choose exactly one candidate only if it is the figure that best explains the paper’s method, system, algorithm, architecture, mechanism, or central construction. If all candidates are result plots, ablations, benchmark tables, generic illustrations, or not actually representative of the method, choose **no representative figure** and keep the explicit fallback in Start Here.',
+    '',
+    'When judging, consider whether the candidate appears in or near a method-like section, but do not decide by keyword matching. Read the section/caption semantically: ask whether this figure teaches how the paper’s main object works, not merely what result it achieved.',
+    '',
+    'If you choose a candidate, inspect the crop preview or run `preview-crops`, then attach the crop with `extract-figure`. After attaching, replace any placeholder figure explanation with a real element-by-element reading from the pixels.',
+    '',
+    '## Source',
+    '',
+    `- Session: ${state.slug}`,
+    `- Title: ${state.title}`,
+    `- Source: ${commandSource}`,
+    '',
+    '## Candidates',
+    '',
+    ...(candidates.length ? candidates.flatMap((candidate, index) => [
+      `### ${index + 1}. Figure ${candidate.label} — page ${candidate.page}`,
+      '',
+      `- Auto selector: \`${candidate.auto}\``,
+      `- Section context: ${candidate.section || '(unknown; use nearby text)'}`,
+      `- Caption: ${candidate.caption || '(caption text unavailable)'}`,
+      `- Nearby text: ${candidate.nearbyText || '(none extracted)'}`,
+      `- Preview command: \`${cliCommand()} preview-crops --session ${shellQuote(state.slug)} --source ${shellQuote(commandSource)} --page ${candidate.page} --auto ${shellQuote(candidate.auto)} --overwrite\``,
+      `- Attach command after visual inspection: \`${cliCommand()} extract-figure --session ${shellQuote(state.slug)} --source ${shellQuote(commandSource)} --page ${candidate.page} --auto ${shellQuote(candidate.auto)} --type start-here --title 'Start Here' --body-file <finished-start-here.md>\``,
+      ''
+    ]) : ['No `Figure` / `Fig.` caption candidates were extracted.', '']),
+    '## Required decision',
+    '',
+    'Write one short decision note:',
+    '',
+    '- `selected: Figure <label>` or `selected: none`',
+    '- why this is or is not representative',
+    '- what crop/preview command to run next',
+    '- what the figure reading must verify from the pixels before it is trusted'
+  ];
+  return lines.join('\n');
+}
+
+function writeRepresentativeFigureSelectionPrompt({ slug, source, candidates = [] }) {
+  const state = readJson(statePath(slug), {});
+  const prompt = representativeFigureSelectionPrompt({ state, source, candidates });
+  const out = safeSessionPath(slug, 'representative-figure-prompt.md');
+  writeFileSync(out, prompt);
+  state.representativeFigureCandidates = candidates;
+  state.representativeFigurePrompt = `.papermentor/sessions/${slug}/representative-figure-prompt.md`;
+  if (candidates.length) {
+    state.figureSelectionWarning = 'Representative figure candidates require model selection; no script score was used.';
+  }
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  return out;
+}
+
+function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigureCandidates = [] }) {
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const sourceIsImage = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const isSlide = normalizeSourceMode(sourceMode) === 'slide';
-  const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop);
-  const shouldAutoAttachPaperFigure = !isSlide && canExtractVisual && !args['no-figure'] && (explicitStartFigure || representativeFigure || sourceIsImage);
+  const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop || args.page || args.slide);
+  const shouldAutoAttachPaperFigure = !isSlide && canExtractVisual && !args['no-figure'] && (explicitStartFigure || sourceIsImage);
   const addStartHereOnly = (startBody = body) => addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body: startBody, choices: sections.join('|'), quiet: true, noPath: true });
   if (isSlide && !explicitStartFigure) {
     addStartHereOnly(body);
@@ -5063,24 +5082,23 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
     addStartHereOnly(appendFigureFallbackNote(body, 'this source type cannot be rendered as a figure crop.'));
   } else if (!shouldAutoAttachPaperFigure) {
     const state = readJson(statePath(slug), {});
-    state.figureSelectionWarning = 'No representative method/system figure caption was detected automatically.';
+    state.figureSelectionWarning = representativeFigureCandidates.length
+      ? 'Representative figure candidates require model selection; no script score was used.'
+      : 'No Figure/Fig. caption candidates were detected for representative figure selection.';
     state.updatedAt = now();
     writeJson(statePath(slug), state);
-    addStartHereOnly(appendFigureFallbackNote(body, 'no representative method/system figure caption was detected automatically.'));
+    addStartHereOnly(appendFigureFallbackNote(
+      body,
+      representativeFigureCandidates.length
+        ? `representative figure selection is pending in .papermentor/sessions/${slug}/representative-figure-prompt.md.`
+        : 'no Figure/Fig. caption candidates were detected.'
+    ));
   } else {
     const requestedPage = args.page || args.slide;
     const requestedAuto = args.auto || args.figure || args['figure-number'];
-    const auto = requestedAuto || (extension === '.pdf' ? (requestedPage ? 'figure1' : representativeFigure?.auto) : undefined);
-    const page = requestedPage || representativeFigure?.page || 1;
-    const representativeCaption = representativeFigure && !requestedAuto && !requestedPage
-      ? semanticRepresentativeFigureCaption({ representativeFigure, sourceMode })
-      : '';
-    const state = readJson(statePath(slug), {});
-    if (representativeFigure && !requestedAuto && !requestedPage) {
-      state.representativeFigure = representativeFigure;
-      state.updatedAt = now();
-      writeJson(statePath(slug), state);
-    }
+    const auto = requestedAuto || (extension === '.pdf' ? (requestedPage ? 'figure1' : undefined) : undefined);
+    const page = requestedPage || 1;
+    const representativeCaption = '';
     try {
       extractFigure({
         ...args,
@@ -5156,7 +5174,7 @@ function launchSession(args) {
   const source = downloadSourceIfNeeded(input, sourceSeed);
   const { slug } = createLaunchShell({ input, source, args });
   const { text, orientationText } = extractLaunchTexts(source, args);
-  const { state, sourceMode, sections } = updateLaunchNavigation({ slug, source, args, text });
+  const { state, sourceMode, sections, blocks } = updateLaunchNavigation({ slug, source, args, text });
   addReadingGuideBlock({ slug, sourceMode, sections, args });
   const extension = extname(source).toLowerCase();
   const canExtractVisualForPreview = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
@@ -5179,8 +5197,13 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
     return;
   }
   const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
-  const representativeFigure = detectRepresentativeFigure(text || orientationText, sourceMode);
-  const launchVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure });
+  const representativeFigureCandidates = normalizeSourceMode(sourceMode) === 'paper'
+    ? collectRepresentativeFigureCandidates(text || orientationText, blocks)
+    : [];
+  if (representativeFigureCandidates.length && !args['no-figure'] && !args.auto && !args.figure && !args['figure-number'] && !args.crop && !args.page && !args.slide) {
+    writeRepresentativeFigureSelectionPrompt({ slug, source, candidates: representativeFigureCandidates });
+  }
+  const launchVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigureCandidates });
   const startHereCard = readJson(cardsPath(slug), { cards: [] }).cards.find((existing) => existing.type === 'start-here');
   const startHereIsScaffold = !startHereCard || /Not built yet|Not written yet/.test(startHereCard.body || '');
   const startHereScaffolded = !args.body && startHereIsScaffold;
@@ -5192,7 +5215,7 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
   }
-  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure });
+  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure: null });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
   const finalState = readJson(statePath(slug), state);
@@ -5201,6 +5224,9 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: read the source and replace the Start Here scaffold with real content — the one-sentence model, the figure reading (every box, arrow, line, and in-figure equation), and a beginner-facing preliminary ladder that teaches each prerequisite from zero with concrete numeric examples (see prompts/prerequisite-analyzer.md).` : ''}`);
+  if (finalState.representativeFigurePrompt) {
+    console.log(`- Representative figure selection prompt: ${finalState.representativeFigurePrompt}`);
+  }
 }
 
 function usage(options = {}) {
