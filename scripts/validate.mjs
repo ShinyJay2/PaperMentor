@@ -272,7 +272,7 @@ for (const [command, template, prompt] of commandCoverage) {
   if (!existsSync(join(root, prompt))) failures.push(`missing prompt for ${command}: ${prompt}`);
 }
 
-for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'qa', 'render', 'state', 'pause', 'resume', 'turn', 'promote', 'doctor']) {
+for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section', 'mode', 'choose', 'run', 'diagram', 'preview-crops', 'extract-figure', 'qa', 'qa-batch', 'figure-audit', 'proof-audit', 'render', 'state', 'pause', 'resume', 'turn', 'promote', 'doctor']) {
   if (!commandsText.includes(`/papermentor ${command}`)) failures.push(`commands.md missing /papermentor ${command}`);
 }
 
@@ -1391,7 +1391,149 @@ The proof is intuitive. Since QJL is good, the theorem follows.
   }
 }
 
+function validateProductGradeAudits() {
+  const temp = mkdtempSync(join(tmpdir(), 'papermentor-product-audits-'));
+  const script = join(root, 'scripts', 'papermentor-session.mjs');
+  const run = (args, options = {}) => execFileSync('node', [script, ...args], { cwd: temp, encoding: 'utf8', stdio: options.stdio || ['ignore', 'pipe', 'pipe'] });
+  const writeBody = (name, body) => {
+    const file = join(temp, name);
+    writeFileSync(file, body);
+    return file;
+  };
+  const start = (slug, title = slug) => run(['start', '--title', title, '--slug', slug, '--mode', 'paper']);
+  const addBlock = (slug, type, title, body, extra = []) => {
+    const file = writeBody(`${slug}-${type}.md`, body);
+    run(['card', '--session', slug, '--type', type, '--title', title, '--body-file', file, ...extra]);
+  };
+  const methodBody = `## Input / output contract
+
+Input: examples $x_i\\in\\mathbb{R}^d$, labels $y_i$, and a temperature $\\tau$. Output: a trained encoder $f_\\theta$ and calibrated score $s(q,d)=f_\\theta(q)^\\top f_\\theta(d)$.
+
+## Algorithm 1 walk-through
+
+| Step | Paper anchor | Quantity carried | Operation | Output |
+| --- | --- | --- | --- | --- |
+| 1 | Algorithm 1 line 2 | minibatch $B$ | encode queries and documents | vectors $z_q,z_d$ |
+| 2 | Eq. (1) | logits $z_q^\\top z_d/\\tau$ | softmax contrastive loss | $\\mathcal{L}_{\\mathrm{NCE}}$ |
+| 3 | Eq. (2) | validation scores | fit calibration map | probability $p(y=1\\mid q,d)$ |
+
+## Training vs inference / preprocessing vs online use
+
+Training updates $\\theta$ using Eq. (1). Inference stores document vectors once, then computes only an inner product and the calibration map. This separation prevents the reader from confusing the expensive training loop with the deployed retrieval path.
+
+## Reconstruction checkpoint
+
+You should now be able to reconstruct the method as: encode → compare with Eq. (1) → calibrate with Eq. (2) → retrieve.`;
+  const expectationProof = `## Claim statement
+
+Theorem 2 claims the estimator is unbiased, $\\mathbb{E}[\\hat{g}(x)]=g(x)$, and has bounded variance.
+
+## Line-by-line proof
+
+| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
+| --- | --- | --- | --- | --- |
+| $\\hat{g}(x)=\\frac{1}{m}\\sum_{j=1}^m h_j(x)$ | expand estimator | Definition 1 | samples are exchangeable | exposes the random terms |
+| $\\mathbb{E}[\\hat{g}(x)\\mid x]=\\frac{1}{m}\\sum_j\\mathbb{E}[h_j(x)\\mid x]$ | linearity of conditional expectation | probability preliminaries | $x$ is fixed under conditioning | reduces to one sample |
+| $\\mathbb{E}[h_j(x)\\mid x]=g(x)$ | apply Lemma 1 | Lemma 1 | sampling distribution matches the theorem | proves unbiasedness |
+| $\\operatorname{Var}(\\hat{g}(x))\\le \\sigma^2/m$ | independence variance bound | Lemma 2 | samples independent after conditioning | proves the bound part |
+
+## Expectation / conditioning audit
+
+Conditioning fixes $x$; the only randomness left is the sampling of $h_j$. The law of total expectation then removes conditioning.
+
+## Inequality / bound audit
+
+The variance inequality is an upper bound; it shrinks by $m$ because independent terms add variances and the average contributes $1/m^2$.
+
+## Reconstruction checkpoint
+
+You should be able to identify what is fixed, which lemma proves expectation, and which lemma gives the bound.`;
+  const convexProof = `## Claim statement
+
+Proposition 3 states that the objective in Eq. (4), $F(w)=\\sum_i \\ell(y_i x_i^\\top w)+\\lambda\\|w\\|_2^2$, is convex.
+
+## Line-by-line proof
+
+| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
+| --- | --- | --- | --- | --- |
+| $w\\mapsto y_i x_i^\\top w$ | identify affine map | linear algebra | $x_i,y_i$ are fixed data | affine maps preserve convexity under composition |
+| $\\ell(y_i x_i^\\top w)$ | compose convex nondecreasing loss | Lemma 2 | $\\ell$ is convex on its domain | each data term is convex |
+| $\\sum_i \\ell(y_i x_i^\\top w)$ | add terms | convexity closure | finite sum | sum remains convex |
+| $\\lambda\\|w\\|_2^2$ | add quadratic regularizer | norm facts | $\\lambda\\ge0$ | regularizer is convex |
+
+## Expectation / conditioning audit
+
+There is no stochastic conditioning in this proof; all $x_i,y_i$ are treated as fixed observed quantities.
+
+## Inequality / bound audit
+
+The key inequality is Jensen's definition of convexity: $F(\\alpha u+(1-\\alpha)v)\\le \\alpha F(u)+(1-\\alpha)F(v)$ for $\\alpha\\in[0,1]$.
+
+## Reconstruction checkpoint
+
+You should now be able to prove convexity by naming affine composition, finite-sum closure, and nonnegative quadratic regularization.`;
+  const inductionProof = `## Claim statement
+
+Lemma 4 proves by induction that after $t$ dynamic-programming updates, Eq. (7) satisfies the error bound $\\|V_t-V^\\star\\|_\\infty\\le \\gamma^t\\|V_0-V^\\star\\|_\\infty$.
+
+## Line-by-line proof
+
+| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
+| --- | --- | --- | --- | --- |
+| $t=0$ | base case | norm definition | no update applied | bound is equality |
+| $V_{t+1}=TV_t$ and $V^\\star=TV^\\star$ | substitute Bellman operator | Eq. (7), fixed point theorem | same operator $T$ | converts value error into operator error |
+| $\\|TV_t-TV^\\star\\|_\\infty\\le\\gamma\\|V_t-V^\\star\\|_\\infty$ | apply contraction inequality | Lemma 3 | $0\\le\\gamma<1$ | contracts the previous error |
+| $\\le\\gamma^{t+1}\\|V_0-V^\\star\\|_\\infty$ | use induction hypothesis | induction assumption | hypothesis holds for $t$ | closes the step |
+
+## Expectation / conditioning audit
+
+The Bellman expectation is already inside $T$; the proof does not resample trajectories, so the contraction is deterministic once the MDP is fixed.
+
+## Inequality / bound audit
+
+The only inequality is the contraction bound. Its direction matters: it upper-bounds the next error by $\\gamma$ times the previous error.
+
+## Reconstruction checkpoint
+
+You should now be able to reconstruct base case, fixed-point substitution, contraction, and induction closure.`;
+  try {
+    for (const [slug, body] of [
+      ['batch-method-paper', methodBody],
+      ['batch-proof-expectation', expectationProof],
+      ['batch-proof-convexity', convexProof]
+    ]) {
+      start(slug);
+      addBlock(slug, slug.includes('method') ? 'method' : 'proof', `${slug} block`, body);
+    }
+    const batch = JSON.parse(run(['qa-batch', '--sessions', 'batch-method-paper|batch-proof-expectation|batch-proof-convexity', '--json']));
+    if (batch.reports?.length !== 3 || batch.overall < 82 || batch.status !== 'pass') failures.push(`qa-batch should pass three high-quality paper fixtures, got ${batch.overall}/${batch.status}`);
+
+    start('figure-audit-bad');
+    const smallSvg = join(temp, 'small.svg');
+    writeFileSync(smallSvg, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60"><rect width="120" height="60" fill="#ddd"/></svg>');
+    addBlock('figure-audit-bad', 'start-here', 'Start Here', '## One-sentence orientation\n\nThis is a paper with a tiny unresolved representative figure placeholder.\n\n## Preliminary\n\nEq. (1) states $y=x+1$.\n\nplaceholder', ['--figure-file', smallSvg]);
+    const figureAudit = JSON.parse(run(['figure-audit', '--sessions', 'figure-audit-bad', '--json']));
+    const figureIssues = JSON.stringify(figureAudit);
+    if (figureAudit.status !== 'review' || !/small figure crop|schema|scaffold|placeholder/i.test(figureIssues)) failures.push(`figure-audit should collect crop/schema/scaffold failures, got ${figureIssues}`);
+
+    start('proof-induction-paper');
+    addBlock('proof-induction-paper', 'proof', 'Induction proof', inductionProof);
+    start('proof-weak-paper');
+    addBlock('proof-weak-paper', 'proof', 'Weak proof', '## Proof strategy\n\nTheorem 1 follows because the method is good.');
+    const proofAudit = JSON.parse(run(['proof-audit', '--sessions', 'batch-proof-expectation|batch-proof-convexity|proof-induction-paper|proof-weak-paper', '--json']));
+    const proofReports = proofAudit.reports || [];
+    const passingProofs = proofReports.filter((report) => report.status === 'pass').length;
+    const weakReport = proofReports.find((report) => report.session === 'proof-weak-paper');
+    if (passingProofs < 3 || proofAudit.status !== 'review' || weakReport?.status !== 'review') failures.push(`proof-audit should pass three proof shapes and review weak proof, got ${JSON.stringify(proofAudit)}`);
+  } catch (error) {
+    failures.push(`product-grade audit smoke failed: ${error.message}`);
+  } finally {
+    rmSync(temp, { recursive: true, force: true });
+  }
+}
+
 validateContentQualityQa();
+validateProductGradeAudits();
 validatePaperStageRunnerPrompts();
 validateInstalledArtifact();
 validateSessionHelper();

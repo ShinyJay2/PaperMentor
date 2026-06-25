@@ -4015,6 +4015,185 @@ function runQualityQa(args = {}) {
   return report;
 }
 
+function allSessionSlugs() {
+  if (!existsSync(baseDir)) return [];
+  return readdirSync(baseDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory() && existsSync(statePath(entry.name)))
+    .map((entry) => entry.name)
+    .sort((a, b) => {
+      const aState = readJson(statePath(a), {});
+      const bState = readJson(statePath(b), {});
+      return String(bState.updatedAt || bState.createdAt || '').localeCompare(String(aState.updatedAt || aState.createdAt || ''));
+    });
+}
+
+function resolveSessionList(args = {}, verb = 'batch command') {
+  const explicit = splitChoices(args.sessions || args.session || args.slug || args.slugs || args._?.slice(1).join('|') || '');
+  if (explicit.length) return unique(explicit);
+  if (args.all) return allSessionSlugs();
+  const recent = loadRecentSessions().map((item) => item.slug);
+  const count = Number(args.recent || args.limit || 0);
+  if (count > 0) return recent.slice(0, count);
+  const latest = latestSessionSlug();
+  if (latest) return [latest];
+  throw new Error(`${verb} needs --sessions "slugA|slugB", --recent <n>, or --all`);
+}
+
+function batchQualityQa(args = {}) {
+  const slugs = resolveSessionList(args, 'qa-batch');
+  const reports = [];
+  for (const slug of slugs) {
+    if (!readStateForSlug(slug)) {
+      reports.push({ session: slug, status: 'missing', overall: 0, error: 'session not found' });
+      continue;
+    }
+    try {
+      const report = qualityReportForSession(slug);
+      writeJson(safeSessionPath(slug, 'quality-report.json'), report);
+      reports.push(report);
+    } catch (error) {
+      reports.push({ session: slug, status: 'error', overall: 0, error: error.message });
+    }
+  }
+  const valid = reports.filter((item) => typeof item.overall === 'number' && !item.error && item.cards);
+  const overall = valid.length ? Math.round(valid.reduce((sum, item) => sum + item.overall, 0) / valid.length) : 0;
+  const summary = {
+    schema: 'papermentor.quality-batch.v1',
+    generatedAt: now(),
+    sessions: slugs,
+    overall,
+    status: valid.some((item) => item.status === 'fail') || reports.some((item) => item.error) ? 'review' : valid.some((item) => item.status === 'review') ? 'review' : 'pass',
+    reports
+  };
+  const output = args.output || join(papermentorDir(), 'quality-batch-report.json');
+  writeJson(output, summary);
+  if (args.json) console.log(JSON.stringify(summary, null, 2));
+  else {
+    console.log(`PaperMentor batch QA: ${overall}/100 across ${valid.length}/${slugs.length} session(s) (${summary.status})`);
+    for (const report of reports) {
+      const icon = report.error ? '!' : report.status === 'pass' ? '✓' : '↺';
+      console.log(`${icon} ${String(report.overall || 0).padStart(3)}  ${report.session}${report.error ? ` — ${report.error}` : ` (${report.status})`}`);
+    }
+    console.log(`\nReport: ${output}`);
+  }
+  const min = Number(args.min || args.threshold || 0);
+  if (min && overall < min) throw new Error(`batch QA score ${overall} is below threshold ${min}`);
+  return summary;
+}
+
+function figureAuditForSession(slug) {
+  const state = readStateForSlug(slug);
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const findings = [];
+  for (const card of cards.cards || []) {
+    const issues = [];
+    let dimensions = null;
+    if (card.figure?.src) {
+      const src = card.figure.src.startsWith('assets/')
+        ? safeSessionPath(slug, card.figure.src)
+        : resolve(card.figure.src);
+      dimensions = imageDimensions(src);
+      if (!dimensions) issues.push('could not read attached figure dimensions');
+      else {
+        if (dimensions.width < 220 || dimensions.height < 140) issues.push(`small figure crop: ${dimensions.width}x${dimensions.height}`);
+        const aspect = dimensions.width / Math.max(1, dimensions.height);
+        if (aspect > 6 || aspect < 0.18) issues.push(`unusual aspect ratio: ${aspect.toFixed(2)}`);
+      }
+      if (!/Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports/i.test(card.body || '')) {
+        issues.push('attached figure body does not contain the fixed element-by-element figure reading schema');
+      }
+      if (/Not read yet|replace every bullet|placeholder/i.test(card.body || '')) {
+        issues.push('figure reading still contains scaffold instructions');
+      }
+    } else if (card.type === 'start-here' && state?.sourceMode === 'paper') {
+      if (!/no figure|could not auto-attach|not present/i.test(card.body || '')) issues.push('paper Start Here has no figure and no explicit no-figure/fallback explanation');
+    }
+    if (issues.length) findings.push({ cardId: card.id, type: card.type, title: card.title, dimensions, issues });
+  }
+  const warning = state?.figureQualityWarning ? [state.figureQualityWarning] : [];
+  return {
+    session: slug,
+    title: state?.title || slug,
+    sourceMode: state?.sourceMode || 'paper',
+    status: findings.length || warning.length ? 'review' : 'pass',
+    warnings: warning,
+    findings
+  };
+}
+
+function runFigureAudit(args = {}) {
+  const slugs = resolveSessionList(args, 'figure-audit');
+  const reports = slugs.map((slug) => readStateForSlug(slug)
+    ? figureAuditForSession(slug)
+    : { session: slug, status: 'missing', warnings: ['session not found'], findings: [] });
+  const summary = {
+    schema: 'papermentor.figure-audit.v1',
+    generatedAt: now(),
+    status: reports.some((item) => item.status !== 'pass') ? 'review' : 'pass',
+    reports
+  };
+  const output = args.output || join(papermentorDir(), 'figure-audit-report.json');
+  writeJson(output, summary);
+  if (args.json) console.log(JSON.stringify(summary, null, 2));
+  else {
+    console.log(`PaperMentor figure audit: ${summary.status} across ${reports.length} session(s)`);
+    for (const report of reports) {
+      const count = (report.findings || []).reduce((sum, item) => sum + item.issues.length, 0) + (report.warnings || []).length;
+      console.log(`${report.status === 'pass' ? '✓' : '↺'} ${report.session} — ${count} issue(s)`);
+      [...(report.warnings || []), ...(report.findings || []).flatMap((item) => item.issues.map((issue) => `${item.title}: ${issue}`))].slice(0, 4)
+        .forEach((issue) => console.log(`    - ${issue}`));
+    }
+    console.log(`\nReport: ${output}`);
+  }
+  return summary;
+}
+
+function proofAuditForSession(slug) {
+  const state = readStateForSlug(slug);
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const proofCards = (cards.cards || []).filter((card) => {
+    if (card.type === 'proof') return true;
+    if (['reading-guide', 'start-here'].includes(card.type)) return false;
+    const text = `${card.title}\n${card.body || ''}`;
+    return /proof walkthrough|prove|proof of|line-by-line proof|claim statement|theorem\s+\d+|lemma\s+\d+|proposition\s+\d+/i.test(text);
+  });
+  const results = proofCards.map((card) => evaluateCardQuality({ ...card, type: 'proof' }));
+  return {
+    session: slug,
+    title: state?.title || slug,
+    proofBlocks: results.length,
+    status: results.length && results.every((item) => item.status === 'pass') ? 'pass' : results.length ? 'review' : 'missing',
+    results
+  };
+}
+
+function runProofAudit(args = {}) {
+  const slugs = resolveSessionList(args, 'proof-audit');
+  const reports = slugs.map((slug) => readStateForSlug(slug)
+    ? proofAuditForSession(slug)
+    : { session: slug, status: 'missing', proofBlocks: 0, results: [], error: 'session not found' });
+  const summary = {
+    schema: 'papermentor.proof-audit.v1',
+    generatedAt: now(),
+    status: reports.some((item) => item.status === 'review' || item.status === 'missing') ? 'review' : 'pass',
+    reports
+  };
+  const output = args.output || join(papermentorDir(), 'proof-audit-report.json');
+  writeJson(output, summary);
+  if (args.json) console.log(JSON.stringify(summary, null, 2));
+  else {
+    console.log(`PaperMentor proof audit: ${summary.status} across ${reports.length} session(s)`);
+    for (const report of reports) {
+      console.log(`${report.status === 'pass' ? '✓' : report.status === 'missing' ? '!' : '↺'} ${report.session} — ${report.proofBlocks} proof block(s)`);
+      (report.results || []).filter((item) => item.status !== 'pass').slice(0, 3).forEach((item) => {
+        console.log(`    - ${item.title}: ${item.score}/100; ${item.issues.slice(0, 2).join('; ')}`);
+      });
+    }
+    console.log(`\nReport: ${output}`);
+  }
+  return summary;
+}
+
 function buildActionPrompt(state, action) {
   const type = actionType(action, state);
   const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
@@ -5014,6 +5193,9 @@ Usage:
   papermentor diagram --session <slug> [--kind method-pipeline] [--nodes "A|B|C"]
   papermentor preview-crops --session <slug> --source paper.pdf --page 1
   papermentor qa --session <slug> [--json] [--min 82]
+  papermentor qa-batch --sessions "slugA|slugB" [--json] [--min 82]
+  papermentor figure-audit --sessions "slugA|slugB" [--json]
+  papermentor proof-audit --sessions "slugA|slugB" [--json]
   papermentor card --session <slug> --type equation --title <title> [--latex <tex>] [--user-question <text>] [--figure-file <path>] [--figure-caption <text>] [--body <text>|--body-file <path>] [--choices "A|B|C"]
   papermentor turn --session <slug> --role user --text <text> [--promote|--no-promote]
   papermentor promote --session <slug> --title <title> --user-question <text> --body-file <path>
@@ -5094,6 +5276,12 @@ try {
     previewCrops(args);
   } else if (command === 'qa' || command === 'quality' || command === 'check') {
     runQualityQa(args);
+  } else if (command === 'qa-batch' || command === 'batch-qa' || command === 'quality-batch') {
+    batchQualityQa(args);
+  } else if (command === 'figure-audit' || command === 'figures' || command === 'crop-audit') {
+    runFigureAudit(args);
+  } else if (command === 'proof-audit' || command === 'proofs') {
+    runProofAudit(args);
   } else if (command === 'extract-figure') {
     extractFigure(args);
   } else if (command === 'card') {

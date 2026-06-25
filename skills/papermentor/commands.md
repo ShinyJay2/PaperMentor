@@ -28,6 +28,9 @@ pm export
 papermentor launch "https://arxiv.org/pdf/2602.04770" --open
 papermentor start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
 papermentor status --session paper-title
+papermentor qa-batch --sessions "paper-a|paper-b|paper-c"
+papermentor figure-audit --recent 10
+papermentor proof-audit --sessions "proof-paper-a|proof-paper-b"
 papermentor doctor
 ```
 
@@ -178,6 +181,60 @@ Example:
 ```bash
 papermentor qa --session drifting-models
 papermentor qa --session drifting-models --min 82
+```
+
+## `/papermentor qa-batch`
+
+Purpose: run the same teaching-quality check across multiple paper rooms so product readiness is not based on one cherry-picked session.
+
+Behavior:
+
+- resolves sessions from `--sessions "slugA|slugB"`, `--recent <n>`, or `--all`;
+- writes each session's normal `quality-report.json`;
+- writes aggregate `.papermentor/quality-batch-report.json`;
+- reports aggregate status and exits non-zero when `--min <score>` is supplied and the average falls below threshold.
+
+Example:
+
+```bash
+papermentor qa-batch --sessions "turboquant|jepa|causal-graph" --min 82
+papermentor qa-batch --recent 8 --json
+```
+
+## `/papermentor figure-audit`
+
+Purpose: collect real figure-reading failure cases: tiny/wrong crops, unreadable dimensions, unresolved figure scaffolds, and missing fixed-schema figure readings.
+
+Behavior:
+
+- resolves sessions from `--sessions`, `--recent`, or `--all`;
+- inspects attached figure assets in promoted cards;
+- flags suspicious crop dimensions/aspect ratios and figure-reading bodies that do not follow the element-by-element schema;
+- writes `.papermentor/figure-audit-report.json`.
+
+Example:
+
+```bash
+papermentor figure-audit --recent 10
+papermentor figure-audit --sessions "paper-a|paper-b" --json
+```
+
+## `/papermentor proof-audit`
+
+Purpose: repeatedly verify proof-heavy generated blocks rather than trusting one easy proof example.
+
+Behavior:
+
+- resolves sessions from `--sessions`, `--recent`, or `--all`;
+- finds proof blocks plus theorem/lemma/proposition-like blocks;
+- applies the proof teaching-quality checks for claim restatement, line-by-line operations/dependencies, expectation/conditioning and bound/inequality coverage, and reconstruction checkpoints;
+- writes `.papermentor/proof-audit-report.json`.
+
+Example:
+
+```bash
+papermentor proof-audit --sessions "convex-proof|rl-proof|estimator-proof"
+papermentor proof-audit --recent 10 --json
 ```
 
 ## `/papermentor export`
