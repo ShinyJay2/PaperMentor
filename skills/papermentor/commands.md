@@ -97,21 +97,20 @@ Codex decides whether a turn belongs in the polished HTML report. Do not ask aft
 
 ## Source modes
 
-Use `--mode auto` unless the user explicitly chooses a mode. Supported modes are `paper`, `lecture-note`, and `slide-deck`. PaperMentor is optimized for concrete reading artifacts, not general webpages. Never attach unrelated local diagrams as evidence for a source.
+PaperMentor supports two modes: `paper` and `slide`. Omit `--mode` for normal use; the helper detects the mode from the file and extracted text. PaperMentor is optimized for concrete reading artifacts, not general webpages. Never attach unrelated local diagrams as evidence for a source.
 
 ```bash
-papermentor start --title "Source title" --source source.pdf --mode auto
-papermentor analyze --session source-title --mode auto --paper-text-file source.txt
+papermentor start --title "Source title" --source source.pdf
+papermentor analyze --session source-title --paper-text-file source.txt
 papermentor tui --session source-title
 ```
 
 Mode-specific dynamic menus:
 
 - `paper`: section actions expose equations, derivations, dependencies, method figures, experiments, ask/chat.
-- `lecture-note`: section actions expose concept ladders, definitions, worked examples, exercises, proofs, readiness checks, ask/chat.
-- `slide-deck`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
+- `slide`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
 
-If a slide PDF is protected or not text-extractable, stay in `slide-deck` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
+If a slide PDF is protected or not text-extractable, stay in `slide` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
 
 ## `/papermentor doctor`
 
@@ -137,7 +136,7 @@ Purpose: start a polished reading room from one URL or local source file.
 
 Required behavior:
 
-- accept arXiv PDF/abs URLs, local PDFs, lecture-note PDFs, PPT/PPTX decks, and text fixtures;
+- accept arXiv PDF/abs URLs, local PDFs, PPT/PPTX slides, and text fixtures;
 - download URL sources into `.papermentor/sources/` when needed;
 - extract title and authors from the first page when possible;
 - never display local source paths under the report title; show authors instead;
@@ -210,7 +209,6 @@ Recommended helper call after scanning the PDF:
 papermentor start \
   --title "<source title>" \
   --source "<pdf path or URL>" \
-  --mode auto \
   --sections "1. Introduction|2. Background|3. Methods|4. Experiments" \
   --body-file start-here.md \
   --figure-file figure-1-method-crop.png

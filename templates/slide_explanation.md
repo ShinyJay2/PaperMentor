@@ -2,7 +2,7 @@
 
 ## Slide role
 
-Explain why this slide exists in the deck.
+Explain why this slide exists in the slides.
 
 ## What is on the slide
 

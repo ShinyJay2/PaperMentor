@@ -1,4 +1,4 @@
-# Slide Deck Mode Checklist
+# Slide Mode Checklist
 
 - [ ] Slides are detected as sections.
 - [ ] Actions include missing narration, visual element explanation, slide transition, ask/chat.

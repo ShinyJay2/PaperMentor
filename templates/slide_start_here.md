@@ -13,7 +13,7 @@ The script only extracts slide text and folds obvious repeated-title/build slide
 Before writing the final Start Here body, read the detected topics as a teacher. If the navigator topics are too fragmented or wrongly grouped, first replace them with your own learner-facing grouping using:
 
 ```bash
-papermentor sections --session <slug> --mode slide-deck --sections "<topic A>|<topic B>|<topic C>"
+papermentor sections --session <slug> --mode slide --sections "<topic A>|<topic B>|<topic C>"
 ```
 
 Group by teaching dependency and conceptual phase. Do not rely on keyword matching.
@@ -22,7 +22,7 @@ Group by teaching dependency and conceptual phase. Do not rely on keyword matchi
 
 ### `## One-sentence orientation`
 
-Write exactly one natural sentence stating what these slides teach or argue. Name the topic, the learner's before/after state, and the central mechanism or timeline. Do not say “this deck”. Do not forecast later material unless it is explicitly visible in the slides.
+Write exactly one natural sentence stating what these slides teach or argue. Name the topic, the learner's before/after state, and the central mechanism or timeline. Do not say “this slides”. Do not forecast later material unless it is explicitly visible in the slides.
 
 ### `## Topic timeline map`
 
@@ -45,6 +45,6 @@ Use equations when they genuinely clarify the slide content. A good block may in
 - Do not output placeholder text such as “Not written yet”.
 - Do not leave internal labels or rubric fields in the final HTML body.
 - Do not use these field names: “Topic role”, “Build slides folded”, “Likely missing narration”, “Key visual/equation to read”.
-- Do not use “deck” in final user-facing prose; say “slides”, “lecture slides”, or “강의자료” when needed.
+- Do not use “slides” in final user-facing prose; say “slides”, “lecture slides”, or “강의자료” when needed.
 - Do not invent next-lecture claims or prerequisites not visible in the source.
 - Do not summarize slide titles mechanically; teach the conceptual path.

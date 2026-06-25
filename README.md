@@ -2,7 +2,7 @@
 
 # PaperMentor
 
-### Upload a paper, lecture note, or slide deck. Understand the hard part in 30 minutes.
+### Upload a paper or slides. Understand the hard part in 30 minutes.
 
 Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, slide narration, and conceptual confusion until you can reconstruct the source yourself.
 
@@ -147,8 +147,8 @@ Local files work the same way:
 
 ```bash
 pm ./paper.pdf
-pm ./lecture-notes.pdf --mode lecture-note
-pm ./slides.pptx --mode slide-deck
+pm ./paper.pdf --mode paper
+pm ./slides.pptx --mode slide
 ```
 
 Want to inspect the figure crop before committing it to the report?
@@ -162,15 +162,14 @@ papermentor preview-crops --session <paper-slug> --source paper.pdf --page 1
 
 ## Source modes
 
-PaperMentor runs one of three modes, selected automatically from the uploaded material:
+PaperMentor has two source modes. By default it detects the mode from the uploaded material:
 
 | Mode | Use it for | First thing rendered | CLI menus become |
 | --- | --- | --- | --- |
 | `paper` | arXiv papers, conference papers, technical reports | one-sentence paper model, representative method figure, preliminaries | detected sections → equations, derivations, dependencies, figures, ask/chat |
-| `lecture-note` | long-form notes, chapters, tutorials, arXiv teaching notes | one-sentence learning model and concept ladder | sections → concept ladder, definitions, examples, proofs, readiness checks, ask/chat |
-| `slide-deck` | PPT/PDF decks and lecture slides | deck map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
+| `slide` | PPT/PDF slides and lecture slides | slides map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
 
-PaperMentor is intentionally optimized for concrete reading artifacts: papers, lecture notes, and slide decks.
+PaperMentor is intentionally optimized for concrete reading artifacts: papers and slides.
 
 ---
 
@@ -253,8 +252,8 @@ Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation ca
 One-line starts:
 
 ```bash
-papermentor start --title "My source" --source source.pdf --mode auto
-papermentor analyze --session my-source --mode auto --paper-text-file source.txt
+papermentor start --title "My source" --source source.pdf
+papermentor analyze --session my-source --paper-text-file source.txt
 papermentor tui --session my-source
 ```
 

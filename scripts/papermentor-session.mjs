@@ -21,16 +21,8 @@ const pathItems = [
 
 const sourceModePathItems = {
   paper: pathItems,
-  'lecture-note': [
-    ['map', 'Map the lecture note'],
-    ['prerequisites', 'Build concept ladder'],
-    ['notation', 'Decode notation and examples'],
-    ['derivations', 'Trace derivations / proofs'],
-    ['confusion', 'Resolve confusion'],
-    ['final', 'Extract final insight']
-  ],
-  'slide-deck': [
-    ['map', 'Map the slide deck'],
+  'slide': [
+    ['map', 'Map the slide'],
     ['slides', 'Explain key slides'],
     ['narration', 'Reconstruct missing narration'],
     ['flow', 'Connect slide flow'],
@@ -42,24 +34,31 @@ const sourceModePathItems = {
 function normalizeSourceMode(value, fallback = 'paper') {
   const raw = String(value || '').toLowerCase().trim().replace(/_/g, '-');
   if (['paper', 'research-paper', 'article', 'pdf-paper'].includes(raw)) return 'paper';
-  if (['lecture-note', 'lecture-notes', 'note', 'notes', 'technical-note', 'monograph'].includes(raw)) return 'lecture-note';
-  if (['slide', 'slides', 'slide-deck', 'deck', 'ppt', 'pptx', 'presentation'].includes(raw)) return 'slide-deck';
+  if (['slide', 'slides', 'ppt', 'pptx', 'presentation'].includes(raw)) return 'slide';
   if (raw === 'auto' || raw === '') return fallback;
   return fallback;
 }
 
+function explicitSourceMode(value, fallback = 'paper') {
+  const raw = String(value || '').toLowerCase().trim().replace(/_/g, '-');
+  if (!raw || raw === 'auto') return fallback;
+  const mode = normalizeSourceMode(raw, '');
+  if (mode) return mode;
+  throw new Error(`unsupported source mode: ${value}; use --mode paper or --mode slide`);
+}
+
 function sourceModeLabel(mode) {
-  return { paper: 'Paper', 'lecture-note': 'Lecture note', 'slide-deck': 'Slides' }[normalizeSourceMode(mode)] || 'Paper';
+  return { paper: 'Paper', slide: 'Slides' }[normalizeSourceMode(mode)] || 'Paper';
 }
 
 function sourceModeNoun(mode) {
-  return { paper: 'paper', 'lecture-note': 'lecture note', 'slide-deck': 'slide' }[normalizeSourceMode(mode)] || 'paper';
+  return { paper: 'paper', slide: 'slide' }[normalizeSourceMode(mode)] || 'paper';
 }
 
 // Heading for the navigator's first-level list. Slides aren't "sections", so slide
 // mode lists "Slides" rather than "<label> sections".
 function sectionListHeading(mode) {
-  return normalizeSourceMode(mode) === 'slide-deck' ? 'Slides' : `${sourceModeLabel(mode)} sections`;
+  return normalizeSourceMode(mode) === 'slide' ? 'Slides' : `${sourceModeLabel(mode)} sections`;
 }
 
 function readingPathForMode(mode) {
@@ -183,8 +182,7 @@ function latestSessionSlug() {
 
 function argsModeFromSource(source) {
   const value = String(source || '').toLowerCase();
-  if (/\.(pptx?|key)(\?|#|$)/.test(value) || /slide|deck|presentation/.test(value)) return 'slide-deck';
-  if (/lecture[-\s]?note|notes|monograph/.test(value)) return 'lecture-note';
+  if (/\.(pptx?|key)(\?|#|$)/.test(value) || /slide|presentation/.test(value)) return 'slide';
   return 'paper';
 }
 
@@ -272,12 +270,7 @@ function inferPathKey(type, state = {}) {
       equation: 'equations', 'equation-card': 'equations',
       dependency: 'dependencies', dependencies: 'dependencies', proof: 'dependencies', 'proof-walkthrough': 'dependencies'
     },
-    'lecture-note': {
-      prerequisite: 'prerequisites', prerequisites: 'prerequisites', 'prerequisite-ladder': 'prerequisites', 'concept-ladder': 'prerequisites',
-      equation: 'notation', 'equation-card': 'notation', example: 'notation', 'example-walkthrough': 'notation',
-      dependency: 'derivations', dependencies: 'derivations', proof: 'derivations', 'proof-walkthrough': 'derivations'
-    },
-    'slide-deck': {
+    'slide': {
       'slide-explanation': 'slides', slide: 'slides',
       equation: 'slides', 'equation-card': 'slides',
       narration: 'narration', 'missing-narration': 'narration',
@@ -446,7 +439,7 @@ function cachedSourceVariant(path) {
 function finalizeDownloadedSourceFile(path, url) {
   const detectedExtension = detectSourceExtensionFromBytes(path);
   if (detectedExtension === '.html') {
-    throw new Error(`downloaded ${url} as HTML, not a paper/deck file; for Google Drive, make sure the file is shared with link access or use a direct PDF/PPTX download`);
+    throw new Error(`downloaded ${url} as HTML, not a paper/slide file; for Google Drive, make sure the file is shared with link access or use a direct PDF/PPTX download`);
   }
   if (!detectedExtension) return path;
   const currentExtension = extname(path).toLowerCase();
@@ -541,7 +534,7 @@ function cleanTitleCandidate(value) {
     .slice(0, 140);
 }
 
-function isSlideDeckBoilerplateLine(line) {
+function isSlideBoilerplateLine(line) {
   const value = String(line || '').trim();
   if (!value) return true;
   if (/^\d{1,3}\s*(?:\/\s*\d{1,3})?$/.test(value)) return true;
@@ -556,7 +549,7 @@ function isSlideDeckBoilerplateLine(line) {
 function isBadMetadataTitle(value) {
   const title = String(value || '').trim();
   if (!title) return true;
-  if (isSlideDeckBoilerplateLine(title)) return true;
+  if (isSlideBoilerplateLine(title)) return true;
   if (/^(?:lecture|lec\.?)\s*\d{1,3}$/i.test(title)) return false;
   if (/^[a-z][a-z.'-]+\s+[a-z][a-z.'-]+$/.test(title)) return true;
   return false;
@@ -568,7 +561,7 @@ function titleFromSourceName(source) {
   return cleanTitleCandidate(decodeURIComponent(base || ''));
 }
 
-function inferSlideDeckTitleFromText(text) {
+function inferSlideTitleFromText(text) {
   const firstPage = String(text || '').replace(/\r/g, '').split('\f')[0] || '';
   const lines = firstPage.split(/\n/)
     .map(cleanMetadataLine)
@@ -686,7 +679,7 @@ function representativeFigureExplanation({ sourceMode, text }) {
   // see the cropped image. Every bullet is an instruction to be replaced by what is
   // literally drawn in the figure crop above. It must never read as a finished,
   // generic "follow the arrows with your eyes" explanation.
-  if (mode === 'slide-deck') {
+  if (mode === 'slide') {
     return [
       '## Representative figure explanation',
       '',
@@ -699,21 +692,6 @@ function representativeFigureExplanation({ sourceMode, text }) {
       '- **Flow / sequence:** Walk the arrows in order — for each arrow name the quantity it carries and for each box the operation it applies — and end at the slide’s conclusion. Do not write “follow the arrows” or “left to right”.',
       '- **What to observe:** Name the specific object or contrast this slide encodes, tied to a named element.',
       '- **Equations / claims it supports:** Map these elements to the slide’s equations and the claim it carries into the next slide.'
-    ].join('\n');
-  }
-  if (mode === 'lecture-note') {
-    return [
-      '## Representative figure explanation',
-      '',
-      '_Not read yet. Open the figure crop above and replace every bullet with what is literally drawn — each object, axis, highlighted case, arrow, and any equation rendered inside the figure, symbol by symbol. Delete this note once filled._',
-      '',
-      '- **Concept / method role:** Name what this exact figure makes concrete (which definition, example, proof object, or derivation step) — not a generic description.',
-      '- **How to read it:** Name every labelled object drawn in the figure and say in one clause what each one is.',
-      '- **Parts to identify:** List every axis, coordinate, highlighted case, arrow, line, brace, and label, and state what each encodes — be exhaustive, not a sample.',
-      '- **In-figure math / symbols:** Transcribe in LaTeX every equation, variable, subscript, and annotation rendered inside the figure, and define each symbol; if none appear, say so explicitly.',
-      '- **Flow / sequence:** Walk the construction in order — for each arrow or step name the object it produces — ending at the formal statement. Do not write “follow the construction” or “left to right”.',
-      '- **What to observe:** Name the specific concept this figure makes concrete before the formal statement, tied to a named element.',
-      '- **Equations / claims it supports:** Map these elements to the definitions, theorems, and equations this figure illustrates.'
     ].join('\n');
   }
   return [
@@ -794,7 +772,7 @@ Use this timeline as the Start Here map. Read each topic as a temporal build: ea
 function slideStartHereWriterPrompt({ state, sections = [] }) {
   const topics = sections.length ? sections : ['No slide topics detected yet'];
   const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type start-here --title 'Start Here' --location 'Start Here' --body-file <your-markdown-file> --choices ${shellQuote(topics.join('|'))}`;
-  const regroupCommand = `${cliCommand()} sections --session ${shellQuote(state.slug)} --mode slide-deck --sections "<topic A>|<topic B>|<topic C>"`;
+  const regroupCommand = `${cliCommand()} sections --session ${shellQuote(state.slug)} --mode slide --sections "<topic A>|<topic B>|<topic C>"`;
   return `# PaperMentor Slide Start Here Writer Prompt
 
 You are writing the first real teaching block for a slide-based PaperMentor reading room.
@@ -828,7 +806,7 @@ Use this shape:
 
 1. \`## One-sentence orientation\`
    - Exactly one natural sentence stating what these slides teach.
-   - Do not say “this deck”.
+   - Do not say “this presentation”.
    - Do not forecast later material unless it is explicitly present in these slides.
 
 2. \`## Topic timeline map\`
@@ -853,7 +831,7 @@ Use this shape:
 - Do not leave internal labels or rubric fields in the final HTML body.
 - Do not use these field names: “Topic role”, “Build slides folded”, “Likely missing narration”, “Key visual/equation to read”.
 - Do not write tables for the timeline.
-- Do not use “deck” in the final user-facing prose; say “slides”, “lecture slides”, or “강의자료” when needed.
+- Do not use internal tooling labels in the final user-facing prose; say “slides”, “lecture slides”, or “강의자료” when needed.
 - Do not invent next-lecture claims or prerequisite targets that are not visible in the source.
 - Do not summarize slide titles mechanically; teach the conceptual path.
 `;
@@ -872,7 +850,7 @@ function writeSlideStartHerePrompt(state, sections = []) {
 
 function launchStartBody({ sourceMode, text, sections = [] }) {
   const noun = sourceModeNoun(sourceMode);
-  if (normalizeSourceMode(sourceMode) === 'slide-deck') {
+  if (normalizeSourceMode(sourceMode) === 'slide') {
     return `## One-sentence orientation
 
 _Not written yet. Replace this with exactly one sentence stating what these slides teach or argue: name the topic, the learner's before/after state, and the central mechanism or timeline._
@@ -906,9 +884,9 @@ List the prerequisites in order — calibrated to this ${noun}'s actual reader: 
 }
 
 function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
-  const isSlide = normalizeSourceMode(sourceMode) === 'slide-deck';
+  const isSlide = normalizeSourceMode(sourceMode) === 'slide';
   if (lang === 'ko') {
-    const nounKo = isSlide ? '슬라이드 덱' : normalizeSourceMode(sourceMode) === 'lecture-note' ? '노트' : '논문';
+    const nounKo = isSlide ? '슬라이드' : '논문';
     const sectionNounKo = isSlide ? '슬라이드' : '섹션';
     return `PaperMentor는 서로 연결된 두 화면으로 동작합니다: 이 리포트(HTML)와 CLI/TUI. 이 HTML을 열어둔 채 터미널로 돌아가 ${sectionNounKo}·수식·유도·의존성·질문 중 하나를 고르세요. 고른 동작 하나가 이 리포트에 잘 정리된 설명 블록 하나로 덧붙습니다.
 
@@ -973,7 +951,7 @@ function semanticRepresentativeFigureCaption({ representativeFigure, sourceMode 
     return `Figure ${representativeFigure.label}. Representative method figure from the Method section.`;
   }
   if (mode === 'paper') return `Figure ${representativeFigure.label}. Representative figure from the paper.`;
-  if (mode === 'slide-deck') return `Figure ${representativeFigure.label}. Representative visual from the slide deck.`;
+  if (mode === 'slide') return `Figure ${representativeFigure.label}. Representative visual from the slide.`;
   return `Figure ${representativeFigure.label}. Representative visual.`;
 }
 
@@ -1011,7 +989,7 @@ function dependencyStatusRows() {
     {
       name: 'LibreOffice',
       ok: Boolean(libreOffice),
-      purpose: 'convert PPT/PPTX decks to PDF before slide image extraction',
+      purpose: 'convert PPT/PPTX files to PDF before slide image extraction',
       install: 'Ubuntu: sudo apt-get install libreoffice; macOS: brew install --cask libreoffice'
     },
     {
@@ -1099,7 +1077,7 @@ function convertPptToPdf(source, outDir) {
   } catch (error) {
     const stdout = error.stdout ? String(error.stdout).trim() : '';
     const stderr = error.stderr ? String(error.stderr).trim() : '';
-    throw new Error(`LibreOffice could not convert the deck to PDF${stderr ? `: ${stderr.slice(0, 400)}` : stdout ? `: ${stdout.slice(0, 400)}` : ''}`);
+    throw new Error(`LibreOffice could not convert the slides to PDF${stderr ? `: ${stderr.slice(0, 400)}` : stdout ? `: ${stdout.slice(0, 400)}` : ''}`);
   }
   const pdf = join(outDir, `${basename(source, extname(source))}.pdf`);
   for (let attempt = 0; attempt < 8; attempt += 1) {
@@ -1343,7 +1321,7 @@ function extractFigure(args) {
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
   }
-  const type = args.type || (normalizeSourceMode(state.sourceMode) === 'slide-deck' ? 'slide-explanation' : 'paper-map');
+  const type = args.type || (normalizeSourceMode(state.sourceMode) === 'slide' ? 'slide-explanation' : 'paper-map');
   addCard({
     ...args,
     session: slug,
@@ -1352,7 +1330,7 @@ function extractFigure(args) {
     location: args.location || state.currentSection || `Page ${page}`,
     body: readBody(args) || visualExplanationBody(args, state),
     'figure-file': extracted,
-    'figure-caption': args['figure-caption'] || args.caption || (normalizeSourceMode(state.sourceMode) === 'slide-deck' ? `Slide ${page}. Representative visual.` : `Figure ${String(args.auto || args.figure || args['figure-number'] || page).replace(/^fig(?:ure)?\.?\s*/i, '')}. Representative method figure.`),
+    'figure-caption': args['figure-caption'] || args.caption || (normalizeSourceMode(state.sourceMode) === 'slide' ? `Slide ${page}. Representative visual.` : `Figure ${String(args.auto || args.figure || args['figure-number'] || page).replace(/^fig(?:ure)?\.?\s*/i, '')}. Representative method figure.`),
     choices: args.choices || `Explain this visual|Connect it to the next equation|Ask anything about ${state.currentSection || state.title}`
   });
   if (!args.quiet) console.log(`Extracted visual saved to .papermentor/sessions/${slug}/assets/${basename(extracted)}`);
@@ -1548,7 +1526,7 @@ function readPaperText(args) {
 
 function detectSourceMode(text, args = {}, state = {}) {
   const explicit = args.mode || args['source-mode'] || args.sourceMode;
-  if (explicit && String(explicit).toLowerCase() !== 'auto') return normalizeSourceMode(explicit, state.sourceMode || 'paper');
+  if (explicit && String(explicit).toLowerCase() !== 'auto') return explicitSourceMode(explicit, state.sourceMode || 'paper');
   const sourceHint = `${args.source || state.source || ''} ${args.title || state.title || ''}`;
   const bySource = argsModeFromSource(sourceHint);
   if (bySource !== 'paper') return bySource;
@@ -1558,14 +1536,8 @@ function detectSourceMode(text, args = {}, state = {}) {
   const pageBreaks = (value.match(/\f/g) || []).length;
   const bulletLines = (value.match(/^\s*[-•▪◦]\s+/gm) || []).length;
   const paragraphLines = value.split(/\r?\n/).filter((line) => line.trim().length > 120).length;
-  if (slideMatches >= 2 || (/\bslides?\b|\bdeck\b|\bpresentation\b/.test(lower) && bulletLines >= 8) || (pageBreaks >= 5 && bulletLines > paragraphLines * 2)) {
-    return 'slide-deck';
-  }
-  if (/lecture\s+notes?|course\s+notes?|chapter\s+\d+|exercise\s+\d+|problem\s+set|learning\s+objective|worked\s+example/.test(lower)) {
-    return 'lecture-note';
-  }
-  if (/this\s+lecture\s+note|these\s+notes|aimed\s+at\s+students|without\s+prior\s+exposure/.test(lower)) {
-    return 'lecture-note';
+  if (slideMatches >= 2 || (/\bslides?\b|\bpresentation\b/.test(lower) && bulletLines >= 8) || (pageBreaks >= 5 && bulletLines > paragraphLines * 2)) {
+    return 'slide';
   }
   return 'paper';
 }
@@ -1597,7 +1569,6 @@ function looksLikeSectionHeading(number, title, line, sourceMode = 'paper') {
   const level = headingLevel(number);
   if (number && level === 1 && clean.split(/\s+/).length > 8 && !sectionHeadingWords.test(clean)) return false;
   if (normalizeSourceMode(sourceMode) === 'paper' && level > 3) return false;
-  if (normalizeSourceMode(sourceMode) === 'lecture-note' && level > 4 && !sectionHeadingWords.test(clean)) return false;
   if (number && sectionHeadingWords.test(clean)) return true;
   if (number && /^[A-Z][A-Za-z0-9,&:/()\- ]+$/.test(clean)) return true;
   if (!number && sectionHeadingWords.test(clean)) return true;
@@ -1639,7 +1610,7 @@ function extractSectionBlocks(text, preferredSections = [], sourceMode = 'paper'
   );
   const headings = orderedHeadings
     .filter((item) => /^\d/.test(item.title) || !numberedCoreNames.has(sectionCoreName(item.title)))
-    .slice(0, normalizeSourceMode(sourceMode) === 'lecture-note' ? 80 : 50);
+    .slice(0, 50);
   const sections = headings.length ? headings : preferredSections.map((title) => ({ title, index: source.indexOf(title) })).filter((item) => item.index >= 0);
   const blocks = sections.map((item, index) => {
     const next = sections[index + 1]?.index ?? source.length;
@@ -1804,7 +1775,7 @@ function extractSlideBlocks(text, preferredSections = []) {
 }
 
 function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
-  if (normalizeSourceMode(sourceMode) === 'slide-deck') return extractSlideBlocks(text, preferredSections);
+  if (normalizeSourceMode(sourceMode) === 'slide') return extractSlideBlocks(text, preferredSections);
   return extractSectionBlocks(text, preferredSections, sourceMode);
 }
 
@@ -2021,25 +1992,11 @@ function equationLabel(number, body) {
   return `Explain Eq. (${number}) symbol by symbol`;
 }
 
-// Generic lecture-note menu. The model tailors it on entry by reading the
-// section and re-running `section --choices` (no word-matching / scoring).
-function lectureNoteActionProfile(section, body) {
-  const title = String(section || "this section");
-  return [
-    `Map ${title}: what it teaches`,
-    `Explain the key concepts in ${title} from first principles`,
-    `Decode the equations in ${title}`,
-    `Work through the examples or exercises in ${title}`,
-    `Ask anything about ${title}`,
-    `Chat about this section`
-  ];
-}
-
 // Generic slide menu. Slides are TEMPORAL: the model reads the slide IMAGE,
 // reconstructs the missing narration, and explains how the slide builds on the
 // earlier ones. It tailors this menu on entry via `section --choices`.
 // See prompts/slide-navigator.md.
-function slideDeckActionProfile(section, body) {
+function slideActionProfile(section, body) {
   const title = String(section || "this slide");
   return [
     `Reconstruct the lecturer's narration for ${title}`,
@@ -2054,8 +2011,7 @@ function slideDeckActionProfile(section, body) {
 
 function actionProfileForSection(section, body, sourceMode = 'paper') {
   const normalizedMode = normalizeSourceMode(sourceMode);
-  if (normalizedMode === 'lecture-note') return lectureNoteActionProfile(section, body);
-  if (normalizedMode === 'slide-deck') return slideDeckActionProfile(section, body);
+  if (normalizedMode === 'slide') return slideActionProfile(section, body);
   // Paper mode ships a GENERIC menu only. Classifying a section's role and proposing
   // tailored, template-mapped actions is the model's job: on entry it reads the
   // section title+content, infers the role (weak position prior), and re-runs
@@ -2129,7 +2085,7 @@ function setSections(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const sections = splitChoices(args.sections || readTextArg(args));
   if (!sections.length) throw new Error('sections requires --sections "A|B|C" or --text-file');
-  if (args.mode || args['source-mode']) state.sourceMode = normalizeSourceMode(args.mode || args['source-mode'], state.sourceMode || 'paper');
+  if (args.mode || args['source-mode']) state.sourceMode = explicitSourceMode(args.mode || args['source-mode'], state.sourceMode || 'paper');
   state.paperSections = sections;
   state.currentLocation = `${sourceModeLabel(state.sourceMode)} section navigator`;
   state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} section; explanations render only in HTML.`;
@@ -2439,7 +2395,7 @@ function addCard(args) {
   }
   const shouldEnterFirstSlideTopic = type === 'start-here'
     && !incomingIsScaffold
-    && normalizeSourceMode(state.sourceMode || 'paper') === 'slide-deck'
+    && normalizeSourceMode(state.sourceMode || 'paper') === 'slide'
     && (state.paperSections || []).length;
   if (shouldEnterFirstSlideTopic) {
     const firstTopic = firstMeaningfulSlideTopic(state.paperSections);
@@ -2450,7 +2406,7 @@ function addCard(args) {
     state.currentFocus = `Section selected: ${firstTopic}`;
     state.selectedAction = '';
     state.lastChoiceKind = 'section';
-    state.nextChoices = state.sectionActions?.[sectionKey(firstTopic)] || slideDeckActionProfile(firstTopic, '');
+    state.nextChoices = state.sectionActions?.[sectionKey(firstTopic)] || slideActionProfile(firstTopic, '');
   } else {
     state.currentLocation = card.location;
     state.currentFocus = card.title;
@@ -3246,7 +3202,7 @@ function bodyWithoutFigureExplanation(markdown) {
 
 function isStartHereLeadHeading(title) {
   const normalized = normalizeHeading(title);
-  return /^(one[-\s]?sentence\s+(paper\s+)?model|one[-\s]?sentence\s+summary|one[-\s]?sentence\s+orientation|what\s+this\s+(paper|source|note|deck)\s+does|(paper|source|note|deck)\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
+  return /^(one[-\s]?sentence\s+(paper\s+)?model|one[-\s]?sentence\s+summary|one[-\s]?sentence\s+orientation|what\s+this\s+(paper|source|note|slides)\s+does|(paper|source|note|slides)\s+model|paper\s+in\s+one\s+sentence)$/.test(normalized)
     || /^(한\s*문장\s*(논문\s*)?(요약|모델)|이\s*논문이\s*하는\s*일)$/.test(normalized);
 }
 
@@ -3701,17 +3657,17 @@ function shellQuote(value) {
 function actionType(action, state = {}) {
   const text = String(action || '').toLowerCase();
   const mode = normalizeSourceMode(state.sourceMode || 'paper');
-  if (/concept ladder|prerequisite|from first principles|readiness/.test(text)) return mode === 'lecture-note' ? 'concept-ladder' : 'prerequisite';
+  if (/concept ladder|prerequisite|from first principles|readiness/.test(text)) return 'prerequisite';
   if (/eq\.|equation|symbol by symbol|notation/.test(text)) return 'equation';
   if (/derivation|trace|transition/.test(text)) return 'derivation';
-  if (/dependenc|related-work|citation|contrast|connect/.test(text)) return mode === 'slide-deck' ? 'slide-transition' : 'dependency';
+  if (/dependenc|related-work|citation|contrast|connect/.test(text)) return mode === 'slide' ? 'slide-transition' : 'dependency';
   if (/proof|lemma|theorem|proposition/.test(text)) return 'proof';
-  if (/method|pipeline|algorithm|visual element|slide/.test(text)) return mode === 'slide-deck' ? 'slide-explanation' : 'method';
+  if (/method|pipeline|algorithm|visual element|slide/.test(text)) return mode === 'slide' ? 'slide-explanation' : 'method';
   if (/narration/.test(text)) return 'missing-narration';
   if (/confusion|diagnostic|ask anything|chat|answer question/.test(text)) return 'confusion';
   if (/final insight|one-sentence/.test(text)) return 'final-insight';
   if (/visualize|draw|diagram|graph|landscape/.test(text)) return 'visualization';
-  return mode === 'slide-deck' ? 'slide-explanation' : mode === 'lecture-note' ? 'concept-ladder' : 'note';
+  return mode === 'slide' ? 'slide-explanation' : 'note';
 }
 
 function promptTemplateForType(type) {
@@ -4113,7 +4069,7 @@ function askCurrentSession(args = {}) {
 function prepareStartHerePrompt(state) {
   const slug = state.slug;
   if (!slug) throw new Error('Start Here regeneration needs an active reading room');
-  if (normalizeSourceMode(state.sourceMode || 'paper') === 'slide-deck') {
+  if (normalizeSourceMode(state.sourceMode || 'paper') === 'slide') {
     writeSlideStartHerePrompt(state, state.paperSections || []);
   } else {
     const command = `${cliCommand()} card --session ${shellQuote(slug)} --type start-here --title 'Start Here' --body-file <your-markdown-file>`;
@@ -4387,7 +4343,7 @@ function createLaunchShell({ input, source, args }) {
   const seed = sourceSeedFromInput(input, args);
   const provisionalTitle = args.title || seed || 'PaperMentor reading session';
   const slug = args.slug || slugify(provisionalTitle);
-  const sourceMode = normalizeSourceMode(args.mode || args['source-mode'], argsModeFromSource(source || input));
+  const sourceMode = explicitSourceMode(args.mode || args['source-mode'], argsModeFromSource(source || input));
   const { state } = ensureSession({ title: provisionalTitle, authors: args.authors || args.author || '', source, slug, sections: [], sourceMode });
   state.currentLocation = `${sourceModeLabel(sourceMode)} launch`;
   state.currentFocus = `Preparing the HTML-first reading room for this ${sourceModeNoun(sourceMode)}.`;
@@ -4403,9 +4359,9 @@ function updateLaunchNavigation({ slug, source, args, text }) {
   const sourceMode = detectSourceMode(text, { ...args, source, title: provisionalTitle, mode: args.mode || args['source-mode'] || 'auto' }, { title: provisionalTitle, source });
   const metadata = inferMetadataFromText(text || '', args);
   const sourceTitle = titleFromSourceName(source);
-  const slideTitle = normalizeSourceMode(sourceMode) === 'slide-deck' ? inferSlideDeckTitleFromText(text) : '';
+  const slideTitle = normalizeSourceMode(sourceMode) === 'slide' ? inferSlideTitleFromText(text) : '';
   const title = args.title
-    || (normalizeSourceMode(sourceMode) === 'slide-deck'
+    || (normalizeSourceMode(sourceMode) === 'slide'
       ? (slideTitle || provisionalTitle || sourceTitle || 'PaperMentor slide session')
       : (metadata.title || provisionalTitle || sourceTitle || 'PaperMentor reading session'));
   const authors = args.authors || args.author || metadata.authors || state?.authors || '';
@@ -4489,7 +4445,7 @@ function detectRepresentativeFigure(text, sourceMode = 'paper') {
       if (/\b(method|architecture|objective|pipeline|framework|algorithm|model|overview|system|mechanism|training|pretrain|pre-training|masking|context|target|predict|representation|encoder|decoder)\b/.test(lower)) score += 8;
       if (/\b(overall|proposed|main|our|approach|workflow|procedure|schematic|illustration)\b/.test(lower)) score += 4;
       if (mode === 'paper' && inMethod) score += 30;
-      if (mode === 'slide-deck') score += /\b(flow|overview|pipeline|architecture|system)\b/.test(lower) ? 4 : 0;
+      if (mode === 'slide') score += /\b(flow|overview|pipeline|architecture|system)\b/.test(lower) ? 4 : 0;
       if (/\b(evaluation|accuracy|benchmark|ablation|results?|comparison|gpu hours?|imagenet|linear|classification|table)\b/.test(lower)) score -= 6;
       const number = Number(String(label).match(/\d+/)?.[0] || 0);
       score += Math.max(0, 3 - Math.min(number, 3)) * 0.2;
@@ -4506,9 +4462,9 @@ function detectRepresentativeFigure(text, sourceMode = 'paper') {
 function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure }) {
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
-  const isSlideDeck = normalizeSourceMode(sourceMode) === 'slide-deck';
+  const isSlide = normalizeSourceMode(sourceMode) === 'slide';
   const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop);
-  if (isSlideDeck && !explicitStartFigure) {
+  if (isSlide && !explicitStartFigure) {
     addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
     return { canExtractVisual, attachedVisual: false };
   }
@@ -4609,7 +4565,7 @@ function launchSession(args) {
   const extension = extname(source).toLowerCase();
   const canExtractVisualForPreview = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const hasProvidedStartHereBody = Boolean(args.body || args['body-file']);
-  if (normalizeSourceMode(sourceMode) === 'slide-deck' && !hasProvidedStartHereBody) {
+  if (normalizeSourceMode(sourceMode) === 'slide' && !hasProvidedStartHereBody) {
     const pendingState = readJson(statePath(slug), state);
     writeSlideStartHerePrompt(pendingState, sections);
     pendingState.updatedAt = now();
@@ -4677,8 +4633,8 @@ Advanced/internal commands still exist for agents and scripts:
 
 Usage:
   papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
-  papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|lecture-note|slide-deck|auto] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
-  papermentor analyze --session <slug> --mode auto --paper-text-file source.txt
+  papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
+  papermentor analyze --session <slug> --paper-text-file source.txt
   papermentor tui --session <slug>
   papermentor run --session <slug> --index <n>
   ${cliCommand()} extract-figure --session <slug> --source paper.pdf --page 1 [--auto figure1|--crop x,y,w,h] [--title <title>]
@@ -4734,7 +4690,7 @@ try {
     const source = args.source || '';
     const sections = splitChoices(args.sections || '');
     const modeHint = argsModeFromSource(`${source} ${title}`);
-    const sourceMode = normalizeSourceMode(args.mode || args['source-mode'] || args.sourceMode || modeHint, modeHint);
+    const sourceMode = explicitSourceMode(args.mode || args['source-mode'] || args.sourceMode, modeHint);
     const { state, cards } = ensureSession({ title, authors, source, slug, sections, sourceMode });
     const hasStartHereBody = Boolean(args.body || args['body-file'] || args['figure-file'] || args['figure-url'] || args.figure || args['image-file'] || args.image || args.latex);
     if (hasStartHereBody) {

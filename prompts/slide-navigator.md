@@ -1,6 +1,6 @@
 # Slide Navigator Prompt
 
-Slides are different from papers. A slide deck usually has **no table of contents**, the content is **visual and spatial** (titles, bullets, boxes, arrows, figures, boxed equations, color-highlighted emphasis), the lecturer's spoken **narration is missing**, and — most importantly — the deck is **temporal**: early slides build up ideas that later slides depend on.
+Slides are different from papers. Slide material usually has **no table of contents**, the content is **visual and spatial** (titles, bullets, boxes, arrows, figures, boxed equations, color-highlighted emphasis), the lecturer's spoken **narration is missing**, and — most importantly — the sequence is **temporal**: early slides build up ideas that later slides depend on.
 
 ## Read the slide as an image, not as text
 
@@ -8,7 +8,7 @@ Extracted text loses layout and reading order. Read the **rendered slide image**
 
 ## Respect the temporal flow
 
-Treat the deck as a timeline. When explaining slide *N*, lean on slides *1…N−1* — what has already been built — and point forward to where this leads. The reader is moving through time, so make **"continue to the next slide"** and **"how this slide builds on the earlier ones"** first-class moves, not afterthoughts.
+Treat the slides as a timeline. When explaining slide *N*, lean on slides *1…N−1* — what has already been built — and point forward to where this leads. The reader is moving through time, so make **"continue to the next slide"** and **"how this slide builds on the earlier ones"** first-class moves, not afterthoughts.
 
 ## Group build slides
 

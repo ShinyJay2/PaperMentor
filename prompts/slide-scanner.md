@@ -1,6 +1,6 @@
-# Slide Deck Scanner
+# Slide Scanner
 
-Use this prompt for `slide-deck` mode. Slides often omit the lecturer's spoken explanation, so PaperMentor reconstructs the missing narration and connects slides into a learning path.
+Use this prompt for `slide` mode. Slides often omit the lecturer's spoken explanation, so PaperMentor reconstructs the missing narration and connects slides into a learning path.
 
 ## Extract
 
@@ -24,4 +24,4 @@ For each selected slide, generate actions such as:
 - Ask anything about this slide.
 - Chat about this slide.
 
-Generated diagrams must be deterministic mono-tone SVG, labeled as PaperMentor conceptual diagrams, and never presented as figures from the source deck.
+Generated diagrams must be deterministic mono-tone SVG, labeled as PaperMentor conceptual diagrams, and never presented as figures from the source slides.

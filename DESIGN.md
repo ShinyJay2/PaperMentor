@@ -53,7 +53,7 @@ PaperMentor is a **skill**, so the division of labor is deliberate:
 | Stage | `prompts/*.md` (what to produce) | `templates/*.md` (block shape) |
 |---|---|---|
 | Mode detect | `source-mode-detector` | — |
-| Map (Start Here) | `paper-scanner` / `lecture-note-scanner` / `slide-deck-scanner` | `start_here` / `paper_map` (+ lecture/slide variants) |
+| Map (Start Here) | `paper-scanner` / `slide-scanner` | `start_here` / `paper_map` / `slide_start_here` |
 | Prerequisites | `prerequisite-analyzer` | `prerequisite_ladder` / `concept_ladder` |
 | Equation | `equation-analyzer` | `equation_card` |
 | Derivation | `derivation-tracer` | `derivation_trace` |

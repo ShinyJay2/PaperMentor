@@ -6,11 +6,11 @@ import { execFileSync, spawn } from 'node:child_process';
 const root = new URL('..', import.meta.url).pathname;
 const required = [
   'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','.npmignore','docs/ci/github-actions-ci.yml','.github/workflows/ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
-  'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/lecture-note-scanner.md','prompts/slide-deck-scanner.md','prompts/slide-navigator.md','prompts/prerequisite-analyzer.md','prompts/section-navigator.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
+  'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/slide-scanner.md','prompts/slide-navigator.md','prompts/prerequisite-analyzer.md','prompts/section-navigator.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/start_here.md','templates/lecture_note_start_here.md','templates/slide_deck_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
+  'templates/start_here.md','templates/slide_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
   'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md','examples/golden_quality_contracts.md',
-  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/lecture_note_mode_checklist.md','tests/slide_deck_mode_checklist.md','tests/prerequisite_depth_checklist.md',
+  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/slide_mode_checklist.md','tests/prerequisite_depth_checklist.md',
   'demo/sample-paper.md','demo/sample-session.md','demo/report/index.html','demo/report/assets/drifting-method-demo.svg','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
 ];
 
@@ -424,22 +424,22 @@ Slide 16: DDPM
 
 Slide 17: Sampling
 - How the reverse chain generates samples.`);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', slideLaunchPath, '--slug', 'slide-launch-smoke', '--mode', 'slide-deck', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', slideLaunchPath, '--slug', 'slide-launch-smoke', '--mode', 'slide', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
     const slideLaunchState = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'state.json'), {});
     const slideLaunchCards = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'cards.json'), { cards: [] });
     const slidePendingPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'pending-prompt.md'), 'utf8');
-    if (slideLaunchCards.cards?.length !== 1 || slideLaunchCards.cards?.[0]?.type !== 'reading-guide') failures.push('slide-deck launch should render only the reading guide until the Start Here writer prompt is filled');
-    if (slideLaunchState.readingPath?.find((item) => item.key === 'narration')?.status === 'current') failures.push('slide-deck launch should not skip key-slide explanation and jump to narration');
-    if (/rights reserved|copyright|©/i.test(slideLaunchState.title || '')) failures.push(`slide-deck title inference should not promote copyright footers, got ${slideLaunchState.title}`);
-    if (!slideLaunchState.paperSections?.includes('Slides 14–16 — DDPM')) failures.push(`slide-deck build slides should fold repeated titles into one topic, got ${JSON.stringify(slideLaunchState.paperSections)}`);
-    if (slideLaunchState.pendingBlockType !== 'start-here' || !slideLaunchState.startHerePending) failures.push('slide-deck launch should mark Start Here as pending instead of rendering a scaffold');
+    if (slideLaunchCards.cards?.length !== 1 || slideLaunchCards.cards?.[0]?.type !== 'reading-guide') failures.push('slide launch should render only the reading guide until the Start Here writer prompt is filled');
+    if (slideLaunchState.readingPath?.find((item) => item.key === 'narration')?.status === 'current') failures.push('slide launch should not skip key-slide explanation and jump to narration');
+    if (/rights reserved|copyright|©/i.test(slideLaunchState.title || '')) failures.push(`slide title inference should not promote copyright footers, got ${slideLaunchState.title}`);
+    if (!slideLaunchState.paperSections?.includes('Slides 14–16 — DDPM')) failures.push(`slide build slides should fold repeated titles into one topic, got ${JSON.stringify(slideLaunchState.paperSections)}`);
+    if (slideLaunchState.pendingBlockType !== 'start-here' || !slideLaunchState.startHerePending) failures.push('slide launch should mark Start Here as pending instead of rendering a scaffold');
     for (const phrase of ['Slide Start Here Writer Prompt', 'Topic timeline map', 'Do not output placeholder text', 'Do not use these field names', 'Topic role']) {
       if (!slidePendingPrompt.includes(phrase)) failures.push(`slide Start Here pending prompt missing phrase: ${phrase}`);
     }
     writeFileSync(join(temp, 'slide-start-here.md'), '## One-sentence orientation\n\nThese slides introduce diffusion model sampling.\n\n## Topic timeline map\n\nflow: Diffusion Models -> DDPM -> Sampling\n\n## Preliminary\n\nNo extra prerequisites.');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'slide-launch-smoke', '--type', 'start-here', '--title', 'Start Here', '--body-file', join(temp, 'slide-start-here.md')], { cwd: temp, stdio: 'pipe' });
     const slideAfterStartHere = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'state.json'), {});
-    if (!/Diffusion Models/.test(slideAfterStartHere.currentSection || '') || slideAfterStartHere.pendingBlockPrompt) failures.push('slide-deck should enter the first meaningful topic and clear the Start Here prompt after Start Here is filled');
+    if (!/Diffusion Models/.test(slideAfterStartHere.currentSection || '') || slideAfterStartHere.pendingBlockPrompt) failures.push('slide should enter the first meaningful topic and clear the Start Here prompt after Start Here is filled');
     const launchDir = join(temp, '.papermentor', 'sessions', 'launch-smoke');
     const launchState = readJson(join(launchDir, 'state.json'), {});
     const launchHtml = readFileSync(join(launchDir, 'index.html'), 'utf8');
@@ -541,15 +541,15 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     const layoutFallbackStartCard = layoutFallbackCards.cards?.find((card) => card.type === 'start-here');
     if (!layoutFallbackStartCard?.figure?.src?.endsWith('.png')) failures.push('layout fallback crop should attach a Start Here PNG when bbox extraction is unavailable');
 
-    const realPptxPath = join(temp, 'tiny-slide-deck.pptx');
+    const realPptxPath = join(temp, 'tiny-slide.pptx');
     writeTinyPptxFixture(realPptxPath);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-launch', '--mode', 'slide-deck', '--page', '1'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-launch', '--mode', 'slide', '--page', '1'], { cwd: temp, stdio: 'pipe' });
     const realPptxDir = join(temp, '.papermentor', 'sessions', 'real-pptx-launch');
     const realPptxState = readJson(join(realPptxDir, 'state.json'), {});
     const realPptxCards = readJson(join(realPptxDir, 'cards.json'), { cards: [] });
     const realPptxHtml = readFileSync(join(realPptxDir, 'index.html'), 'utf8');
     const realPptxPendingPrompt = readFileSync(join(realPptxDir, 'pending-prompt.md'), 'utf8');
-    if (realPptxState.sourceMode !== 'slide-deck') failures.push(`real PPTX launch should preserve slide-deck mode, got ${realPptxState.sourceMode}`);
+    if (realPptxState.sourceMode !== 'slide') failures.push(`real PPTX launch should preserve slide mode, got ${realPptxState.sourceMode}`);
     if (!realPptxState.cropPreview || !existsSync(join(realPptxDir, 'crop-preview.html'))) failures.push('real PPTX launch should write crop preview evidence');
     const realPptxStartCard = realPptxCards.cards?.find((card) => card.type === 'start-here');
     if (realPptxStartCard) failures.push('real PPTX launch should not render a Start Here scaffold before the writer prompt is filled');
@@ -829,21 +829,8 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
 function validateSourceModes() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-modes-'));
   try {
-    const lectureText = join(temp, 'lecture-note.txt');
-    const slideText = join(temp, 'deck.txt');
+    const slideText = join(temp, 'slides.txt');
     const paperText = join(temp, 'paper.txt');
-    writeFileSync(lectureText, `A Brief Introduction to Causal Inference in Machine Learning
-
-This lecture note is aimed at students without prior exposure to causal inference.
-
-1. Introduction
-Causal inference asks what changes under intervention. A structural causal model and a DAG encode assumptions.
-
-2. Potential Outcomes and Interventions
-Definition 2.1 Potential outcomes. Example 2.2 A treatment variable changes an outcome. Exercise 2.3 asks the reader to check ignorability. Equation (1) defines the average treatment effect.
-
-3. Causal Representation Learning
-Out-of-distribution generalization uses causal reasoning and invariance. Theorem 3.1 states when stable mechanisms transfer.`);
     writeFileSync(slideText, `Slide 1: Sequence Modeling and Transformers
 - Robot learning needs policies over observation-action histories.
 - Attention lets a model select relevant tokens.
@@ -873,28 +860,11 @@ The pushforward distribution is q=f#p. (1) The training objective uses stopgrad.
 
 3. Experiments
 FID and ablations evaluate sample quality.`);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Causal Inference Notes', '--source', 'https://arxiv.org/abs/2405.08793', '--slug', 'causal-note', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'causal-note', '--mode', 'auto', '--paper-text-file', lectureText], { cwd: temp, stdio: 'pipe' });
-    let state = readJson(join(temp, '.papermentor', 'sessions', 'causal-note', 'state.json'), {});
-    if (state.sourceMode !== 'lecture-note') failures.push(`lecture note source mode not detected: ${state.sourceMode}`);
-    const lectureActions = Object.values(state.sectionActions || {}).flat();
-    for (const phrase of ['Explain the key concepts', 'Work through the examples', 'Ask anything about']) {
-      if (!lectureActions.some((action) => action.includes(phrase))) failures.push(`lecture note actions missing ${phrase}`);
-    }
-    if (lectureActions.some((action) => /from its concepts|citation-following|Run a readiness checkpoint/.test(action))) failures.push('lecture note menu must be generic/model-driven, not word-matched/scored');
-    const lectureTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'causal-note', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!lectureTui.includes('PaperMentor Skill') || !lectureTui.includes('command palette') || !lectureTui.includes('Lecture note sections')) failures.push('lecture note TUI should show the command palette choices');
-    const conceptBodyPath = join(temp, 'concept-ladder.md');
-    writeFileSync(conceptBodyPath, '## Target concept\n\nIntervention.\n\n## Ladder\n\n### 1. Observational distribution\n\n- Why needed: separates seeing from doing.');
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'causal-note', '--type', 'concept-ladder', '--title', 'Concept ladder — intervention', '--body-file', conceptBodyPath], { cwd: temp, stdio: 'pipe' });
-    state = readJson(join(temp, '.papermentor', 'sessions', 'causal-note', 'state.json'), {});
-    if (state.readingPath?.find((item) => item.key === 'prerequisites')?.status !== 'done') failures.push('lecture-note concept ladder should complete the prerequisites reading-path step');
-    if (state.readingPath?.find((item) => item.key === 'notation')?.status !== 'current') failures.push('lecture-note concept ladder should advance to notation, not paper derivations');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Robot Learning Transformer Slides', '--source', 'lecture-slides.pdf', '--slug', 'robot-slides', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'robot-slides', '--mode', 'auto', '--paper-text-file', slideText], { cwd: temp, stdio: 'pipe' });
-    state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
-    if (state.sourceMode !== 'slide-deck') failures.push(`slide deck source mode not detected: ${state.sourceMode}`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Robot Learning Transformer Slides', '--source', 'lecture-slides.pdf', '--slug', 'robot-slides'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'robot-slides', '--paper-text-file', slideText], { cwd: temp, stdio: 'pipe' });
+    let state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
+    if (state.sourceMode !== 'slide') failures.push(`slide source mode not detected: ${state.sourceMode}`);
     const slideActions = Object.values(state.sectionActions || {}).flat();
     for (const phrase of ['Reconstruct the', 'builds on the earlier slides', 'Continue to the next slide', 'Chat about this slide']) {
       if (!slideActions.some((action) => action.includes(phrase))) failures.push(`slide actions missing ${phrase}`);
@@ -909,8 +879,8 @@ FID and ablations evaluate sample quality.`);
     writeFileSync(slideBodyPath, '## Slide role\n\nExplain the Transformer policy diagram.');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'robot-slides', '--type', 'slide-explanation', '--title', 'Slide explanation — Transformer policy diagram', '--body-file', slideBodyPath], { cwd: temp, stdio: 'pipe' });
     state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
-    if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide-deck slide explanation should complete the slides reading-path step');
-    if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide-deck slide explanation should advance to missing narration');
+    if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide slide explanation should complete the slides reading-path step');
+    if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide slide explanation should advance to missing narration');
 
     const numberedOnlySlideText = join(temp, 'numbered-only-slides.txt');
     writeFileSync(numberedOnlySlideText, `Slide 1: Convex Optimization
@@ -930,13 +900,13 @@ Slide 5: 2. Convex sets
 
 Slide 6: Convex set
 - theta x + (1-theta)y stays in C.`);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Numbered Only Slides', '--source', 'numbered-only-slides.pdf', '--slug', 'numbered-only-slides', '--mode', 'slide-deck'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'numbered-only-slides', '--mode', 'slide-deck', '--paper-text-file', numberedOnlySlideText], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Numbered Only Slides', '--source', 'numbered-only-slides.pdf', '--slug', 'numbered-only-slides', '--mode', 'slide'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'numbered-only-slides', '--mode', 'slide', '--paper-text-file', numberedOnlySlideText], { cwd: temp, stdio: 'pipe' });
     state = readJson(join(temp, '.papermentor', 'sessions', 'numbered-only-slides', 'state.json'), {});
     if (state.paperSections?.some((section) => /^Slides 2–4 — 1\. Introduction|^Slides 5–6 — 2\. Convex sets/.test(section))) failures.push('slide grouping should not infer semantic sections from numbered titles; the LLM regroup prompt owns that judgment');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Method Paper', '--source', 'paper.pdf', '--slug', 'method-paper', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'method-paper', '--mode', 'auto', '--paper-text-file', paperText], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Method Paper', '--source', 'paper.pdf', '--slug', 'method-paper'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'method-paper', '--paper-text-file', paperText], { cwd: temp, stdio: 'pipe' });
     state = readJson(join(temp, '.papermentor', 'sessions', 'method-paper', 'state.json'), {});
     if (state.sourceMode !== 'paper') failures.push(`paper source mode not detected: ${state.sourceMode}`);
 
@@ -972,8 +942,8 @@ function validatePptxExtractionWhenAvailable() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-pptx-'));
   try {
     const pptxPath = join(temp, 'papermentor-smoke.pptx');
-    const makeDeckPath = join(temp, 'make_deck.py');
-    writeFileSync(makeDeckPath, `from pptx import Presentation
+    const makeSlidePath = join(temp, 'make_slides.py');
+    writeFileSync(makeSlidePath, `from pptx import Presentation
 from pptx.util import Inches, Pt
 from pptx.dml.color import RGBColor
 
@@ -996,7 +966,7 @@ p.font.bold = True
 p.font.color.rgb = RGBColor(34, 34, 34)
 
 items = [
-    ("Upload paper / deck", 0.8),
+    ("Upload paper / slides", 0.8),
     ("Detect section / slide", 3.7),
     ("Choose action in TUI", 6.6),
     ("Append HTML block", 9.5),
@@ -1025,19 +995,19 @@ footer.text_frame.paragraphs[0].font.color.rgb = RGBColor(80, 80, 80)
 
 prs.save(${JSON.stringify(pptxPath)})
 `);
-    execFileSync('python3', [makeDeckPath], { cwd: temp, stdio: 'pipe' });
+    execFileSync('python3', [makeSlidePath], { cwd: temp, stdio: 'pipe' });
 
     execFileSync('node', [
       join(root, 'scripts', 'papermentor-session.mjs'),
       'start',
       '--title',
-      'PPTX Smoke Deck',
+      'PPTX Smoke Slide',
       '--slug',
       'pptx-smoke',
       '--source',
       pptxPath,
       '--mode',
-      'slide-deck'
+      'slide'
     ], { cwd: temp, stdio: 'pipe' });
 
     const previewOutput = execFileSync('node', [
@@ -1077,7 +1047,7 @@ prs.save(${JSON.stringify(pptxPath)})
       '--caption',
       'Slide 1. Full method pipeline.',
       '--body',
-      '## Slide explanation\n\n- **Question:** What does this slide verify?\n- **Concept:** PPTX-to-reading-room extraction.\n- **What to observe:** the entire slide is preserved without clipping.\n- **Conclusion:** slide-deck sessions can attach real converted visuals.'
+      '## Slide explanation\n\n- **Question:** What does this slide verify?\n- **Concept:** PPTX-to-reading-room extraction.\n- **What to observe:** the entire slide is preserved without clipping.\n- **Conclusion:** slide sessions can attach real converted visuals.'
     ], { cwd: temp, stdio: 'pipe' });
 
     const sessionDir = join(temp, '.papermentor', 'sessions', 'pptx-smoke');
@@ -1099,7 +1069,7 @@ prs.save(${JSON.stringify(pptxPath)})
     if (!html.includes('class="paper-figure"')) failures.push('pptx extraction should render the converted slide as a paper figure');
     if (!html.includes('Slide 1 — Full method pipeline')) failures.push('pptx extraction HTML should include the slide explanation title');
     if (!html.includes('assets/mathjax/tex-svg.js')) failures.push('pptx extraction report should use local MathJax');
-    if (data.cards?.length !== 1 || data.cards?.[0]?.type !== 'slide-explanation') failures.push('pptx extraction should persist a slide-explanation card for slide-deck mode');
+    if (data.cards?.length !== 1 || data.cards?.[0]?.type !== 'slide-explanation') failures.push('pptx extraction should persist a slide-explanation card for slide mode');
 
     execFileSync('soffice', ['--headless', '--convert-to', 'ppt', '--outdir', temp, pptxPath], { cwd: temp, stdio: 'pipe' });
     const pptPath = join(temp, 'papermentor-smoke.ppt');
@@ -1109,13 +1079,13 @@ prs.save(${JSON.stringify(pptxPath)})
         join(root, 'scripts', 'papermentor-session.mjs'),
         'start',
         '--title',
-        'Legacy PPT Smoke Deck',
+        'Legacy PPT Smoke Slide',
         '--slug',
         'legacy-ppt-smoke',
         '--source',
         pptPath,
         '--mode',
-        'slide-deck'
+        'slide'
       ], { cwd: temp, stdio: 'pipe' });
       execFileSync('node', [
         join(root, 'scripts', 'papermentor-session.mjs'),
