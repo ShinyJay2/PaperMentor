@@ -175,6 +175,9 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
+for (const phrase of ['renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'Claude/Codex-style command palette']) {
+  if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified palette phrase: ${phrase}`);
+}
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
   failures.push('session helper must not use a paper-specific I-JEPA preliminary ladder branch');
 }
@@ -275,6 +278,7 @@ for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section
 
 const packageJson = readJson(join(root, 'package.json'), {});
 if (packageJson.bin?.papermentor !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a papermentor CLI bin');
+if (packageJson.bin?.pm !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a pm palette CLI bin');
 if (!packageJson.scripts?.launch?.includes('papermentor-session.mjs launch')) failures.push('package.json should expose npm run launch');
 const npmIgnore = readFileSync(join(root, '.npmignore'), 'utf8');
 for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-skill-*.tgz']) {
@@ -341,7 +345,9 @@ function validateInstalledArtifact() {
     execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
     assertInstalledArtifact(join(codexHome, 'skills', 'papermentor'), 'codex');
     const installedHelp = execFileSync('papermentor', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedHelp.includes('papermentor launch <paper-url-or-file>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor commands, not development node script paths');
+    if (!installedHelp.includes('pm <file-or-url>') || !installedHelp.includes('papermentor launch <paper-url-or-file>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor/pm commands, not development node script paths');
+    const installedPalette = execFileSync('pm', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
+    if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified palette commands');
     const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedDoctor.includes('"status": "ok"') || !installedDoctor.includes('"python3-pptx"')) failures.push('installed papermentor doctor should run through the installed CLI shim');
 
@@ -359,8 +365,10 @@ function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
-    if (!helpOutput.includes('Usage:')) failures.push('start --help should print usage');
+    if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
+    const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('pm <file>') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified command palette');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor dependency doctor', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
@@ -647,7 +655,7 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor Live', 'Claude-like start surface', '↑/↓ select', 'Enter choose', 'Ask/chat are first-class choices']) {
+    for (const phrase of ['PaperMentor Skill', 'command palette', '↑/↓ move', 'Enter select', 'o open HTML', 'pm open']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
@@ -875,7 +883,7 @@ FID and ablations evaluate sample quality.`);
     }
     if (lectureActions.some((action) => /from its concepts|citation-following|Run a readiness checkpoint/.test(action))) failures.push('lecture note menu must be generic/model-driven, not word-matched/scored');
     const lectureTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'causal-note', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!lectureTui.includes('Source mode:') || !lectureTui.includes('Lecture note sections')) failures.push('lecture note TUI should show source mode and lecture note sections');
+    if (!lectureTui.includes('PaperMentor Skill') || !lectureTui.includes('command palette') || !lectureTui.includes('Lecture note sections')) failures.push('lecture note TUI should show the command palette choices');
     const conceptBodyPath = join(temp, 'concept-ladder.md');
     writeFileSync(conceptBodyPath, '## Target concept\n\nIntervention.\n\n## Ladder\n\n### 1. Observational distribution\n\n- Why needed: separates seeing from doing.');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'causal-note', '--type', 'concept-ladder', '--title', 'Concept ladder — intervention', '--body-file', conceptBodyPath], { cwd: temp, stdio: 'pipe' });
@@ -892,7 +900,7 @@ FID and ablations evaluate sample quality.`);
       if (!slideActions.some((action) => action.includes(phrase))) failures.push(`slide actions missing ${phrase}`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!slideTui.includes('Slides') || !slideTui.includes('HTML-first slide navigator')) failures.push('slide TUI should show the Slides navigator');
+    if (!slideTui.includes('Slides') || !slideTui.includes('PaperMentor Skill') || !slideTui.includes('command palette')) failures.push('slide TUI should show the slide command palette');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     const slidePendingActionPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'pending-prompt.md'), 'utf8');

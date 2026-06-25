@@ -18,11 +18,28 @@ PaperMentor uses one local append-only reading document per paper session:
 Use the installed `papermentor` CLI when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
 
 ```bash
+pm
+pm "paper-or-slides.pdf"
+pm open
+pm go
+pm ask "What is confusing here?"
+pm export
 papermentor launch "https://arxiv.org/pdf/2602.04770" --open
 papermentor start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
 papermentor status --session paper-title
 papermentor doctor
 ```
+
+User-facing surface:
+
+- `pm` opens the Claude/Codex-style command palette.
+- `pm <file-or-url>` starts a reading room.
+- `pm open` opens the latest/current HTML.
+- `pm go` resumes the arrow-key palette.
+- `pm ask "..."` creates a pending HTML answer prompt for the current topic.
+- `pm export` exports the latest/current room.
+
+Advanced `papermentor ...` commands remain available for agents and scripts, but normal users should not need to memorize them.
 
 Reading Path:
 

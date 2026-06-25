@@ -48,6 +48,7 @@ install_cli() {
   local bin_dir="${PAPERMENTOR_BIN_DIR:-$HOME/.local/bin}"
   mkdir -p "$bin_dir"
   local bin_path="$bin_dir/papermentor"
+  local pm_path="$bin_dir/pm"
   cat > "$bin_path" <<EOF
 #!/usr/bin/env bash
 set -euo pipefail
@@ -55,7 +56,15 @@ export PAPERMENTOR_CLI="papermentor"
 exec node "$skill_dir/scripts/papermentor-session.mjs" "\$@"
 EOF
   chmod +x "$bin_path"
+  cat > "$pm_path" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export PAPERMENTOR_CLI="pm"
+exec node "$skill_dir/scripts/papermentor-session.mjs" "\$@"
+EOF
+  chmod +x "$pm_path"
   printf 'PaperMentor CLI installed: %s\n' "$bin_path"
+  printf 'PaperMentor palette shortcut installed: %s\n' "$pm_path"
   case ":$PATH:" in
     *":$bin_dir:"*) ;;
     *) printf 'Note: add %s to PATH to run `papermentor` from any shell.\n' "$bin_dir" ;;
@@ -88,4 +97,4 @@ case "$TARGET" in
     ;;
 esac
 
-printf 'Try: papermentor launch <paper.pdf-or-url> --open\n'
+printf 'Try: pm <paper.pdf-or-url>\n'

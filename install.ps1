@@ -41,13 +41,20 @@ function Install-PaperMentorCli($SkillDir) {
   $BinDir = if ($env:PAPERMENTOR_BIN_DIR) { $env:PAPERMENTOR_BIN_DIR } else { Join-Path $HOME ".papermentor\bin" }
   New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
   $CmdPath = Join-Path $BinDir "papermentor.cmd"
+  $PmPath = Join-Path $BinDir "pm.cmd"
   $ScriptPath = Join-Path $SkillDir "scripts\papermentor-session.mjs"
   @"
 @echo off
 set PAPERMENTOR_CLI=papermentor
 node "$ScriptPath" %*
 "@ | Set-Content -Encoding ASCII -Path $CmdPath
+  @"
+@echo off
+set PAPERMENTOR_CLI=pm
+node "$ScriptPath" %*
+"@ | Set-Content -Encoding ASCII -Path $PmPath
   Write-Host "PaperMentor CLI installed: $CmdPath"
+  Write-Host "PaperMentor palette shortcut installed: $PmPath"
   if (-not (($env:PATH -split ';') -contains $BinDir)) {
     Write-Host "Note: add $BinDir to PATH to run 'papermentor' from any shell."
   }
@@ -78,4 +85,4 @@ switch ($Platform.ToLowerInvariant()) {
   default { throw "Usage: install.ps1 [codex|claude|all]" }
 }
 
-Write-Host 'Try: papermentor launch <paper.pdf-or-url> --open'
+Write-Host 'Try: pm <paper.pdf-or-url>'

@@ -119,10 +119,22 @@ Claude Code: ~/.claude/skills/papermentor
 After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL or local file:
 
 ```bash
-papermentor launch https://arxiv.org/pdf/2602.04770 --open
+pm https://arxiv.org/pdf/2602.04770
 ```
 
 PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative method/system figure when it can, and writes a crop preview for quick recropping.
+
+Open the command palette any time:
+
+```bash
+pm
+pm open
+pm go
+pm ask "What does this equation mean?"
+pm export
+```
+
+Advanced/internal commands are still available through `papermentor help --advanced`.
 
 ```text
 .papermentor/sessions/<paper>/
@@ -134,9 +146,9 @@ PaperMentor downloads the source when needed, extracts the title and authors, de
 Local files work the same way:
 
 ```bash
-papermentor launch ./paper.pdf --open
-papermentor launch ./lecture-notes.pdf --mode lecture-note
-papermentor launch ./slides.pptx --mode slide-deck
+pm ./paper.pdf
+pm ./lecture-notes.pdf --mode lecture-note
+pm ./slides.pptx --mode slide-deck
 ```
 
 Want to inspect the figure crop before committing it to the report?

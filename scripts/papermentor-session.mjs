@@ -124,6 +124,8 @@ function indexPath(slug) { return safeSessionPath(slug, 'index.html'); }
 function assetDir(slug) { return safeSessionPath(slug, 'assets'); }
 function promptPath(slug) { return safeSessionPath(slug, 'pending-prompt.md'); }
 function sourceCacheDir() { return join(root, '.papermentor', 'sources'); }
+function papermentorDir() { return join(root, '.papermentor'); }
+function recentPath() { return join(papermentorDir(), 'recent.json'); }
 
 function readJson(path, fallback) {
   if (!existsSync(path)) return fallback;
@@ -131,7 +133,51 @@ function readJson(path, fallback) {
 }
 
 function writeJson(path, data) {
+  mkdirSync(dirname(path), { recursive: true });
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
+}
+
+function loadRecentSessions() {
+  const raw = readJson(recentPath(), { sessions: [] });
+  const sessions = Array.isArray(raw) ? raw : raw.sessions || [];
+  const valid = sessions.filter((item) => item?.slug && existsSync(statePath(item.slug)));
+  if (valid.length) return valid;
+  if (!existsSync(baseDir)) return [];
+  return readdirSync(baseDir, { withFileTypes: true })
+    .filter((entry) => entry.isDirectory())
+    .map((entry) => readJson(statePath(entry.name), null))
+    .filter(Boolean)
+    .sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')))
+    .slice(0, 20)
+    .map((state) => ({
+      slug: state.slug,
+      title: state.title || state.slug,
+      sourceMode: state.sourceMode || 'paper',
+      html: `.papermentor/sessions/${state.slug}/index.html`,
+      currentSection: state.currentSection || '',
+      currentFocus: state.currentFocus || '',
+      updatedAt: state.updatedAt || state.createdAt || ''
+    }));
+}
+
+function touchRecentSession(state = {}) {
+  if (!state.slug) return;
+  mkdirSync(papermentorDir(), { recursive: true });
+  const sessions = loadRecentSessions().filter((item) => item.slug !== state.slug);
+  sessions.unshift({
+    slug: state.slug,
+    title: state.title || state.slug,
+    sourceMode: state.sourceMode || 'paper',
+    html: `.papermentor/sessions/${state.slug}/index.html`,
+    currentSection: state.currentSection || '',
+    currentFocus: state.currentFocus || '',
+    updatedAt: now()
+  });
+  writeJson(recentPath(), { schema: 'papermentor.recent.v1', sessions: sessions.slice(0, 20) });
+}
+
+function latestSessionSlug() {
+  return loadRecentSessions()[0]?.slug || '';
 }
 
 
@@ -199,6 +245,7 @@ function ensureSession({ title, authors = '', source, slug, sections = [], sourc
     writeFileSync(turnsPath(slug), '');
   }
   renderHtml(slug);
+  touchRecentSession(state);
   return { state, cards };
 }
 
@@ -297,7 +344,7 @@ function appendTurn(args) {
   }
   state.updatedAt = now();
   writeJson(statePath(slug), state);
-  console.log(`Logged ${turn.id} (${turn.role}, ${turn.promotion}) to .papermentor/sessions/${slug}/turns.jsonl`);
+  if (!args.quiet) console.log(`Logged ${turn.id} (${turn.role}, ${turn.promotion}) to .papermentor/sessions/${slug}/turns.jsonl`);
 }
 
 function hasForbiddenDiagramSubstitute(markdown) {
@@ -1656,8 +1703,6 @@ function firstSlideTitle(chunk, fallback, options = {}) {
       let score = 20 - index;
       if (words.length >= 2 && words.length <= 7) score += 4;
       if (words.length === 1 && index > 0) score -= 3;
-      if (/^(?:outline|overview|agenda)$/i.test(candidate)) score += 2;
-      if (/^(?:admin|background|motivation|summary|conclusion)$/i.test(candidate)) score += 1;
       if (/^\d{1,2}\s+\S/.test(candidate)) score -= 8;
       if (fromCombined) score += 5;
       if (/[.!?。]$/.test(candidate)) score -= 6;
@@ -2023,7 +2068,6 @@ function isMeaningfulSlideTopic(section) {
   const topic = slideTitleParts(section).topic || section;
   const normalized = normalizeSlideTopic(topic);
   if (!normalized) return false;
-  if (/^(outline|agenda|contents|overview|admin|administrivia|class information|course information|title slide|references?)$/.test(normalized)) return false;
   if (/^(lecture|lec)\s+\d+/.test(normalized)) return false;
   if (/^(slide|page)\s+\d+$/.test(normalized)) return false;
   if (/copyright|all rights reserved/.test(normalized)) return false;
@@ -3601,22 +3645,30 @@ function currentMenuItems(state) {
 
 function renderTuiScreen(state, selected = 0) {
   const cards = readJson(cardsPath(state.slug), { cards: [] });
-  const width = 90;
+  const width = 96;
   const items = currentMenuItems(state);
-  const label = currentMenuLabel(state);
-  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : `choose a ${sourceModeNoun(state.sourceMode)} section`;
+  const label = state.currentSection ? 'Choose next' : currentMenuLabel(state);
+  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : `choose a ${sourceModeNoun(state.sourceMode)} topic`;
+  const hasStartHere = (cards.cards || []).some((card) => card.type === 'start-here' && !/Not built yet|Not written yet/.test(card.body || ''));
+  const startHereStatus = state.startHerePending || state.pendingBlockType === 'start-here'
+    ? `${ansi.amber}pending${ansi.reset}`
+    : hasStartHere ? `${ansi.green}complete${ansi.reset}` : `${ansi.dim}not started${ansi.reset}`;
   const top = `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Live${ansi.reset} ${ansi.dim}HTML-first ${sourceModeNoun(state.sourceMode)} navigator${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Claude-like start surface · arrow-key TUI · explanations render in HTML${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.bold}${trim(state.title, 72)}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}View:${ansi.reset} ${ansi.green}${state.renderedView}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Focus:${ansi.reset} ${trim(focus, 72)}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}  ${ansi.dim}Source mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}  ${state.pendingBlockPrompt ? `${ansi.dim}Prompt:${ansi.reset} ${state.pendingBlockPrompt}` : `${ansi.dim}Runner:${ansi.reset} choose action → prompt`}`, width, ansi.magenta),
+    boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}command palette${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open HTML · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
     `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}${label}${ansi.reset} ${ansi.dim}(↑/↓ select · Enter choose · / ask anything · q quit)${ansi.reset}`, width, ansi.magenta)
+    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(state.title, 70)}${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHereStatus}   ${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}   ${ansi.dim}Mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(focus, 72)}`, width, ansi.magenta),
+    state.pendingBlockPrompt
+      ? boxLine(`${ansi.dim}Pending prompt:${ansi.reset} ${ansi.amber}${trim(state.pendingBlockPrompt, 68)}${ansi.reset}`, width, ansi.magenta)
+      : boxLine(`${ansi.dim}Runner:${ansi.reset} choose an item; explanations are appended to HTML, not dumped here`, width, ansi.magenta),
+    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.magenta)
   ];
   const visibleItems = items.length ? items : ['No dynamic choices yet. Run analyze with source text or ask a question.'];
   visibleItems.slice(0, 14).forEach((item, index) => {
@@ -3627,7 +3679,7 @@ function renderTuiScreen(state, selected = 0) {
     rows.push(boxLine(`${prefix} ${pointer} ${trim(text, 70)}`, width, active ? ansi.magenta : ansi.cyan));
   });
   rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Ask/chat are first-class choices.${ansi.reset} Enter writes a pending HTML block prompt; the CLI stays navigation-only.`, width, ansi.magenta));
+  rows.push(boxLine(`${ansi.amber}Palette:${ansi.reset} pm open · pm go · pm ask "…" · pm <file-or-url>  ${ansi.dim}(also: ${cliCommand()} open)${ansi.reset}`, width, ansi.magenta));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -3656,7 +3708,7 @@ function actionType(action, state = {}) {
   if (/proof|lemma|theorem|proposition/.test(text)) return 'proof';
   if (/method|pipeline|algorithm|visual element|slide/.test(text)) return mode === 'slide-deck' ? 'slide-explanation' : 'method';
   if (/narration/.test(text)) return 'missing-narration';
-  if (/confusion|diagnostic|ask anything|chat/.test(text)) return 'confusion';
+  if (/confusion|diagnostic|ask anything|chat|answer question/.test(text)) return 'confusion';
   if (/final insight|one-sentence/.test(text)) return 'final-insight';
   if (/visualize|draw|diagram|graph|landscape/.test(text)) return 'visualization';
   return mode === 'slide-deck' ? 'slide-explanation' : mode === 'lecture-note' ? 'concept-ladder' : 'note';
@@ -3789,6 +3841,11 @@ function runTui(args) {
     process.stdin.pause();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
+  const exitForMissingSession = () => {
+    cleanup();
+    console.log(`No active reading room yet.\n\nStart one with:\n\n  ${cliCommand()} <file-or-url>\n`);
+    process.exit(0);
+  };
 
   process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
   process.stdin.setRawMode(true);
@@ -3816,12 +3873,276 @@ function runTui(args) {
       state.nextChoices = [`Ask anything about ${state.currentSection || state.title}`, `Chat about this section`, 'Return to section choices'];
       writeJson(statePath(state.slug), state);
       draw();
+    } else if (key === 'o') {
+      openSessionHtml(state.slug);
+      draw();
+    } else if (key === 'n') {
+      cleanup();
+      console.log(`Start a new room with:\n\n  ${cliCommand()} <file-or-url>\n`);
+      process.exit(0);
+    } else if (key === 'r') {
+      state = prepareStartHerePrompt(state);
+      draw();
+    } else if (key === 'e') {
+      cleanup();
+      exportSession({ session: state.slug, format: 'pdf', overwrite: true });
+      process.exit(0);
     }
   };
   process.stdin.on('data', (chunk) => {
     const keys = String(chunk).match(/\x1b\[[AB]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
   });
+}
+
+function isSourceLike(value) {
+  const text = String(value || '');
+  if (!text || text.startsWith('-')) return false;
+  if (isUrl(text) || existsSync(resolve(text))) return true;
+  return /\.(pdf|pptx?|key|md|txt|png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(text);
+}
+
+function readStateForSlug(slug) {
+  if (!slug) return null;
+  return readJson(statePath(slug), null);
+}
+
+function sessionSummary(slug) {
+  const state = readStateForSlug(slug);
+  if (!state) return null;
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const hasStartHere = (cards.cards || []).some((card) => card.type === 'start-here' && !/Not built yet|Not written yet/.test(card.body || ''));
+  return {
+    state,
+    cards,
+    hasStartHere,
+    startHereStatus: state.startHerePending || state.pendingBlockType === 'start-here' ? 'pending' : hasStartHere ? 'complete' : 'not started'
+  };
+}
+
+function defaultPaletteItems(slug) {
+  const hasSession = Boolean(slug);
+  return [
+    hasSession ? 'Continue current reading room' : 'New reading room from file / URL',
+    hasSession ? 'Open current HTML' : 'Show recent reading rooms',
+    hasSession ? 'Ask about current topic' : 'Paste or pass a source path',
+    hasSession ? 'Regenerate Start Here prompt' : 'Doctor / check setup',
+    hasSession ? 'Export PDF report' : 'Advanced help',
+    'New reading room from file / URL',
+    'Doctor / check setup',
+    'Advanced help'
+  ];
+}
+
+function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) {
+  const width = 96;
+  const summary = sessionSummary(slug);
+  const state = summary?.state || {};
+  const recent = loadRecentSessions();
+  const items = defaultPaletteItems(summary ? slug : '').filter((item, index, arr) => arr.indexOf(item) === index);
+  const top = `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const title = summary ? state.title : 'No reading room selected';
+  const html = summary ? (state.renderedView || `.papermentor/sessions/${state.slug}/index.html`) : 'Start with: pm <file-or-url>';
+  const topic = summary ? (state.currentSection || state.currentLocation || 'choose a topic') : `${recent.length} recent session(s)`;
+  const startHere = summary
+    ? summary.startHereStatus === 'complete' ? `${ansi.green}complete${ansi.reset}` : summary.startHereStatus === 'pending' ? `${ansi.amber}pending${ansi.reset}` : `${ansi.dim}not started${ansi.reset}`
+    : `${ansi.dim}none${ansi.reset}`;
+  const rows = [
+    top,
+    boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}Claude/Codex-style command palette${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open HTML · n new source · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
+    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(title, 70)}${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${trim(html, 78)}${ansi.reset}`, width, ansi.magenta),
+    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 56)}`, width, ansi.magenta),
+    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.magenta)
+  ];
+  items.forEach((item, index) => {
+    const active = index === selected;
+    const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
+    const prefix = active ? `${ansi.magenta}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
+    rows.push(boxLine(`${prefix} ${pointer} ${active ? `${ansi.bold}${item}${ansi.reset}` : item}`, width, active ? ansi.magenta : ansi.cyan));
+  });
+  if (recent.length) {
+    rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+    rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 3).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.magenta));
+  }
+  rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm export`, width, ansi.magenta));
+  rows.push(bottom);
+  return { screen: rows.join('\n'), items };
+}
+
+function executePaletteItem(item, slug) {
+  if (/continue/i.test(item)) return runTui({ session: slug });
+  if (/open current html/i.test(item)) return openLatestSession({ session: slug });
+  if (/ask/i.test(item)) return askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
+  if (/regenerate start/i.test(item)) return regenerateStartHere({ session: slug });
+  if (/export pdf/i.test(item)) return exportSession({ session: slug, format: 'pdf', overwrite: true });
+  if (/doctor/i.test(item)) return runDoctor({});
+  if (/advanced help/i.test(item)) return usage({ advanced: true });
+  if (/recent/i.test(item)) return listRecentSessions();
+  console.log(`Start a new room with:\n\n  ${cliCommand()} <file-or-url>\n`);
+}
+
+function runPalette(args = {}) {
+  let slug = args.session || args.slug || latestSessionSlug();
+  let selected = Math.max(0, Number(args.index || args.cursor || 1) - 1);
+  const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
+  const render = () => renderPaletteScreen({ slug, selected });
+  if (snapshot) {
+    const { screen, items } = render();
+    console.log(screen);
+    if (args.index) executePaletteItem(items[selected], slug);
+    return;
+  }
+  let current = render();
+  const draw = () => {
+    current = render();
+    process.stdout.write(`${ansi.clear}${current.screen}`);
+  };
+  const cleanup = () => {
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
+  };
+  process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  draw();
+  const handleKey = (key) => {
+    const items = current.items;
+    if (key === '\u0003' || key === 'q') {
+      cleanup();
+      process.exit(0);
+    } else if (key === '\u001b[A' || key === 'k') {
+      selected = (selected - 1 + items.length) % Math.max(1, items.length);
+      draw();
+    } else if (key === '\u001b[B' || key === 'j') {
+      selected = (selected + 1) % Math.max(1, items.length);
+      draw();
+    } else if (key === '\r' || key === '\n') {
+      cleanup();
+      executePaletteItem(items[selected], slug);
+      process.exit(0);
+    } else if (key === 'o') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      openLatestSession({ session: slug });
+      process.exit(0);
+    } else if (key === 'n') {
+      cleanup();
+      console.log(`Start a new room with:\n\n  ${cliCommand()} <file-or-url>\n`);
+      process.exit(0);
+    } else if (key === '/') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
+      process.exit(0);
+    } else if (key === 'r') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      regenerateStartHere({ session: slug });
+      process.exit(0);
+    } else if (key === 'e') {
+      if (!slug) exitForMissingSession();
+      cleanup();
+      exportSession({ session: slug, format: 'pdf', overwrite: true });
+      process.exit(0);
+    }
+  };
+  process.stdin.on('data', (chunk) => {
+    const keys = String(chunk).match(/\x1b\[[AB]|[\s\S]/g) || [];
+    for (const key of keys) handleKey(key);
+  });
+}
+
+function listRecentSessions() {
+  const recent = loadRecentSessions();
+  if (!recent.length) {
+    console.log(`No recent reading rooms yet.\n\nStart one with:\n  ${cliCommand()} <file-or-url>`);
+    return;
+  }
+  console.log('Recent PaperMentor reading rooms\n');
+  recent.forEach((item, index) => {
+    console.log(`${String(index + 1).padStart(2, ' ')}. ${item.title || item.slug}`);
+    console.log(`    ${cliCommand()} go --session ${item.slug}`);
+    console.log(`    ${cliCommand()} open --session ${item.slug}`);
+  });
+}
+
+function requireSessionSlug(args = {}, verb = 'command') {
+  const slug = args.session || args.slug || latestSessionSlug();
+  if (!slug) throw new Error(`${verb} needs a reading room; start one with ${cliCommand()} <file-or-url>`);
+  if (!readStateForSlug(slug)) throw new Error(`session not found: ${slug}`);
+  return slug;
+}
+
+function openLatestSession(args = {}) {
+  const slug = requireSessionSlug(args, 'open');
+  renderHtml(slug);
+  openSessionHtml(slug);
+  const html = `.papermentor/sessions/${slug}/index.html`;
+  console.log(`Opened ${html}`);
+}
+
+function goLatestSession(args = {}) {
+  const slug = requireSessionSlug(args, 'go');
+  return runTui({ ...args, session: slug });
+}
+
+function askCurrentSession(args = {}) {
+  const slug = requireSessionSlug(args, 'ask');
+  const state = readStateForSlug(slug);
+  const question = args.text || args.question || args._?.slice(1).join(' ') || readTextArg(args) || 'Ask anything about the current topic';
+  state.currentMode = 'chat';
+  state.currentFocus = question;
+  state.selectedAction = `Answer question: ${question}`;
+  state.lastChoiceKind = 'action';
+  writePendingActionPrompt(state, state.selectedAction);
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  appendTurn({ session: slug, role: 'user', text: question, 'no-promote': true, quiet: true });
+  renderHtml(slug);
+  console.log(renderRunnerConsole(state, state.selectedAction));
+}
+
+function prepareStartHerePrompt(state) {
+  const slug = state.slug;
+  if (!slug) throw new Error('Start Here regeneration needs an active reading room');
+  if (normalizeSourceMode(state.sourceMode || 'paper') === 'slide-deck') {
+    writeSlideStartHerePrompt(state, state.paperSections || []);
+  } else {
+    const command = `${cliCommand()} card --session ${shellQuote(slug)} --type start-here --title 'Start Here' --body-file <your-markdown-file>`;
+    const prompt = `# PaperMentor Start Here Regeneration Prompt
+
+Write a finished Start Here block for ${state.title}.
+
+Use the existing reading-room state and source excerpts to produce a real teaching introduction, not a scaffold. Include only prerequisites actually needed for this source; use equations or concrete examples when they are required by the material.
+
+Append it with:
+
+\`${command}\`
+`;
+    writeFileSync(promptPath(slug), prompt);
+    state.pendingBlockPrompt = `.papermentor/sessions/${slug}/pending-prompt.md`;
+    state.pendingBlockType = 'start-here';
+    state.pendingBlockTitle = 'Start Here';
+  }
+  state.startHerePending = true;
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  return readStateForSlug(slug) || state;
+}
+
+function regenerateStartHere(args = {}) {
+  const slug = requireSessionSlug(args, 'regenerate Start Here');
+  prepareStartHerePrompt(readStateForSlug(slug));
+  console.log(`Start Here prompt ready: .papermentor/sessions/${slug}/pending-prompt.md`);
 }
 
 function renderSession(args) {
@@ -4330,8 +4651,29 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: read the source and replace the Start Here scaffold with real content — the one-sentence model, the figure reading (every box, arrow, line, and in-figure equation), and a beginner-facing preliminary ladder that teaches each prerequisite from zero with concrete numeric examples (see prompts/prerequisite-analyzer.md).` : ''}`);
 }
 
-function usage() {
-  console.log(`PaperMentor session helper
+function usage(options = {}) {
+  if (!options.advanced) {
+    console.log(`PaperMentor
+
+User commands:
+  pm                         open the command palette
+  pm <file-or-url>           start a reading room
+  pm open                    open the latest/current HTML
+  pm go                      continue in the arrow-key palette
+  pm ask "question"          ask about the current topic
+  pm export                  export the latest/current room as PDF
+  pm recent                  list recent reading rooms
+  pm doctor                  check local PDF/PPT extraction tools
+
+Also available as: papermentor
+
+Advanced/internal commands still exist for agents and scripts:
+  papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
+  papermentor help --advanced
+`);
+    return;
+  }
+  console.log(`PaperMentor advanced/internal commands
 
 Usage:
   papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
@@ -4361,11 +4703,29 @@ Usage:
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
 if (args.help || args.h || command === 'help' || command === '--help' || command === '-h') {
-  usage();
+  usage({ advanced: args.advanced || args.a || args._.includes('--advanced') || args._[1] === 'advanced' });
   process.exit(0);
 }
 try {
-  if (command === 'launch') {
+  if (!command || command === 'menu' || command === 'palette') {
+    runPalette(args);
+  } else if (isSourceLike(command)) {
+    launchSession({ ...args, _: ['launch', command], source: args.source || command });
+  } else if (command === 'open' || command === 'last') {
+    openLatestSession(args);
+  } else if (command === 'go' || command === 'continue') {
+    goLatestSession(args);
+  } else if (command === 'recent' || command === 'rooms') {
+    listRecentSessions();
+  } else if (command === 'ask') {
+    askCurrentSession({ ...args, text: args.text || args.question || args._.slice(1).join(' ') });
+  } else if (command === 'new') {
+    const source = args.source || args.input || args._[1];
+    if (source) launchSession({ ...args, _: ['launch', source], source });
+    else runPalette(args);
+  } else if (command === 'regenerate-start' || command === 'start-here') {
+    regenerateStartHere(args);
+  } else if (command === 'launch') {
     launchSession(args);
   } else if (command === 'start') {
     const title = args.title || 'Paper reading session';
@@ -4420,7 +4780,8 @@ try {
   } else if (command === 'render') {
     renderSession(args);
   } else if (command === 'export' || command === 'bundle') {
-    exportSession(args);
+    const slug = args.session || args.slug || latestSessionSlug();
+    exportSession({ ...args, session: slug });
   } else if (command === 'state') {
     showState(args);
   } else if (command === 'status') {
