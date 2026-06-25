@@ -21,6 +21,10 @@ If the proof uses expectations, conditioning, variance, or randomness, state wha
 
 Name every inequality or bound and explain its direction.
 
+## Proof coverage / compression audit
+
+State whether this block covers every proof line or intentionally compresses repeated algebra. If anything is omitted, name exactly what is omitted and why it is safe for teaching.
+
 ## Minimal example
 
 Use a small numeric or symbolic example if the proof object is abstract.

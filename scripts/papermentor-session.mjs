@@ -3845,6 +3845,7 @@ function stageQualityRules(type) {
       '- Walk the actual proof, not just the theorem intuition. Quote or rewrite each proof line before explaining it.',
       '- Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims; do not stop after the first claim.',
       '- For each line, state the algebraic/logical operation, dependency, hidden assumption, and why the line proves progress toward the claim.',
+      '- Add a proof coverage / compression audit: say whether every proof line is covered, or name exactly which repeated algebra is compressed and why that is safe.',
       '- Close by explaining why the final line is sufficient for the theorem statement.'
     ],
     confusion: [
@@ -3939,7 +3940,8 @@ function evaluateCardQuality(card) {
     proof: [
       [/Claim statement|Claim/i, 8, 'proof block should restate the claim'],
       [/line-by-line|Proof line|\|.*Operation.*Dependency/i, 12, 'proof block should walk lines with operations/dependencies'],
-      [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present']
+      [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present'],
+      [/Proof coverage|Coverage audit|Completeness audit|compression audit|compressed|omitted|every proof line|full formal proof/i, 10, 'proof block should state whether it covers every proof line or compresses/omits repeated algebra']
     ],
     confusion: [
       [/Direct answer/i, 10, 'confusion block should answer directly'],
