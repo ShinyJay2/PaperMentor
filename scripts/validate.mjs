@@ -428,6 +428,10 @@ Slide 17: Sampling
     for (const phrase of ['Slide Start Here Writer Prompt', 'Topic timeline map', 'Do not output placeholder text', 'Do not use these field names', 'Topic role']) {
       if (!slidePendingPrompt.includes(phrase)) failures.push(`slide Start Here pending prompt missing phrase: ${phrase}`);
     }
+    writeFileSync(join(temp, 'slide-start-here.md'), '## One-sentence orientation\n\nThese slides introduce diffusion model sampling.\n\n## Topic timeline map\n\nflow: Diffusion Models -> DDPM -> Sampling\n\n## Preliminary\n\nNo extra prerequisites.');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'slide-launch-smoke', '--type', 'start-here', '--title', 'Start Here', '--body-file', join(temp, 'slide-start-here.md')], { cwd: temp, stdio: 'pipe' });
+    const slideAfterStartHere = readJson(join(temp, '.papermentor', 'sessions', 'slide-launch-smoke', 'state.json'), {});
+    if (!/Diffusion Models/.test(slideAfterStartHere.currentSection || '') || slideAfterStartHere.pendingBlockPrompt) failures.push('slide-deck should enter the first meaningful topic and clear the Start Here prompt after Start Here is filled');
     const launchDir = join(temp, '.papermentor', 'sessions', 'launch-smoke');
     const launchState = readJson(join(launchDir, 'state.json'), {});
     const launchHtml = readFileSync(join(launchDir, 'index.html'), 'utf8');
@@ -839,6 +843,7 @@ Out-of-distribution generalization uses causal reasoning and invariance. Theorem
 Slide 2: Decision Transformer
 - Treat reinforcement learning as sequence modeling.
 - Return-to-go conditions the action sequence.
+- Return-to-go is G_t = r_t + r_{t+1} + ...
 - Citation: Chen et al., 2021.
 
 Slide 3: Transformer Policy Diagram
@@ -888,12 +893,50 @@ FID and ablations evaluate sample quality.`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!slideTui.includes('Slides') || !slideTui.includes('HTML-first slide navigator')) failures.push('slide TUI should show the Slides navigator');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });
+    const slidePendingActionPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'pending-prompt.md'), 'utf8');
+    if (!slidePendingActionPrompt.includes('Source excerpt for this selected range') || !slidePendingActionPrompt.includes('G_t = r_t')) failures.push('slide action prompt should include the selected slide range text/equation preview');
     const slideBodyPath = join(temp, 'slide-explanation.md');
     writeFileSync(slideBodyPath, '## Slide role\n\nExplain the Transformer policy diagram.');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'robot-slides', '--type', 'slide-explanation', '--title', 'Slide explanation — Transformer policy diagram', '--body-file', slideBodyPath], { cwd: temp, stdio: 'pipe' });
     state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
     if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide-deck slide explanation should complete the slides reading-path step');
     if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide-deck slide explanation should advance to missing narration');
+
+    const outlineSlideText = join(temp, 'outline-slides.txt');
+    writeFileSync(outlineSlideText, `Slide 1: Convex Optimization
+- Why convexity matters.
+
+Slide 2: 1. Introduction
+- Optimization problem form.
+
+Slide 3: Optimization problem
+- minimize f_0(x) subject to f_i(x) <= 0.
+
+Slide 4: Summary
+- Convex problems can be solved reliably.
+
+Slide 5: 2. Convex sets
+- Sets closed under convex combinations.
+
+Slide 6: Convex set
+- theta x + (1-theta)y stays in C.
+
+Slide 7: Hyperplanes and halfspaces
+- a^T x = b and a^T x <= b.
+
+Slide 8: 3. Convex functions
+- Function curvature controls optimization.
+
+Slide 9: First order condition
+- f(y) >= f(x) + grad f(x)^T (y-x).`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Convex Slides', '--source', 'convex-slides.pdf', '--slug', 'outline-slides', '--mode', 'slide-deck'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'outline-slides', '--mode', 'slide-deck', '--paper-text-file', outlineSlideText], { cwd: temp, stdio: 'pipe' });
+    state = readJson(join(temp, '.papermentor', 'sessions', 'outline-slides', 'state.json'), {});
+    for (const expected of ['Slides 2–4 — 1. Introduction', 'Slides 5–7 — 2. Convex sets', 'Slides 8–9 — 3. Convex functions']) {
+      if (!state.paperSections?.includes(expected)) failures.push(`slide outline grouping missing ${expected}, got ${JSON.stringify(state.paperSections)}`);
+    }
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Method Paper', '--source', 'paper.pdf', '--slug', 'method-paper', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'method-paper', '--mode', 'auto', '--paper-text-file', paperText], { cwd: temp, stdio: 'pipe' });

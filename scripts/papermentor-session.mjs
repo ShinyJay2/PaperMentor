@@ -1643,11 +1643,12 @@ function firstSlideTitle(chunk, fallback, options = {}) {
 }
 
 function slideTitleParts(title) {
-  const match = String(title || '').match(/^Slides?\s+(\d{1,4})(?:\s*[–-]\s*\d{1,4})?(?:\s*[—-]\s*(.+))?$/i);
-  if (!match) return { slideNumber: null, topic: cleanHeadingTitle(title) };
+  const rangeMatch = String(title || '').match(/^Slides?\s+(\d{1,4})(?:\s*[–-]\s*(\d{1,4}))?(?:\s*[—-]\s*(.+))?$/i);
+  if (!rangeMatch) return { slideNumber: null, endSlide: null, topic: cleanHeadingTitle(title) };
   return {
-    slideNumber: Number(match[1]),
-    topic: cleanHeadingTitle(match[2] || `Slide ${match[1]}`)
+    slideNumber: Number(rangeMatch[1]),
+    endSlide: Number(rangeMatch[2] || rangeMatch[1]),
+    topic: cleanHeadingTitle(rangeMatch[3] || `Slide ${rangeMatch[1]}`)
   };
 }
 
@@ -1677,7 +1678,7 @@ function groupConsecutiveSlideBlocks(blocks) {
       && previous.normalizedTopic === normalizedTopic
       && (parts.slideNumber === null || previous.endSlide === null || parts.slideNumber === previous.endSlide + 1);
     if (canFold) {
-      previous.endSlide = parts.slideNumber || previous.endSlide;
+      previous.endSlide = parts.endSlide || parts.slideNumber || previous.endSlide;
       previous.body = `${previous.body}\n\n---\n\n${block.body}`.trim();
       previous.count += 1;
     } else {
@@ -1685,7 +1686,7 @@ function groupConsecutiveSlideBlocks(blocks) {
         topic,
         normalizedTopic,
         startSlide: parts.slideNumber,
-        endSlide: parts.slideNumber,
+        endSlide: parts.endSlide || parts.slideNumber,
         body: block.body,
         count: 1
       });
@@ -1698,6 +1699,87 @@ function groupConsecutiveSlideBlocks(blocks) {
       body: group.body.slice(0, 32000)
     };
   });
+}
+
+function meaningfulOutlineTitle(topic) {
+  const value = cleanHeadingTitle(topic);
+  if (!value) return '';
+  const lower = value.toLowerCase();
+  if (/^(outline|agenda|contents?|overview|summary|references?|appendix)$/.test(lower)) return '';
+  if (/^(slide|page)\s+\d+$/i.test(value)) return '';
+  if (/copyright|all rights reserved|©/.test(lower)) return '';
+  return value;
+}
+
+function numberedOutlineAnchor(topic) {
+  const match = cleanHeadingTitle(topic).match(/^(\d{1,2})\.\s+(.{3,90})$/);
+  if (!match) return '';
+  const title = meaningfulOutlineTitle(match[2]);
+  return title ? `${match[1]}. ${title}` : '';
+}
+
+function outlineCandidateLinesFromBlock(block) {
+  const parts = slideTitleParts(block.title);
+  if (!/\b(outline|agenda|contents?)\b/i.test(parts.topic || '')) return [];
+  return String(block.body || '')
+    .split(/\n/)
+    .map((line) => cleanHeadingTitle(line.replace(/^\s*(?:[-•▪◦]|\d{1,2}[.)])\s*/, '')))
+    .map(meaningfulOutlineTitle)
+    .filter((line) => line && line.length >= 4 && line.length <= 80);
+}
+
+function outlineAnchorFromCandidates(topic, candidates = []) {
+  const normalizedTopic = normalizeSlideTopic(topic);
+  if (!normalizedTopic) return '';
+  const candidate = candidates.find((item) => {
+    const normalizedCandidate = normalizeSlideTopic(item);
+    return normalizedCandidate
+      && (normalizedTopic === normalizedCandidate
+        || normalizedTopic.startsWith(`${normalizedCandidate} `)
+        || normalizedCandidate.startsWith(`${normalizedTopic} `));
+  });
+  return candidate || '';
+}
+
+function combineSlideBlockRange(blocks, start, end, title) {
+  const slice = blocks.slice(start, end + 1);
+  const first = slideTitleParts(slice[0]?.title || '');
+  const last = slideTitleParts(slice[slice.length - 1]?.title || '');
+  const startSlide = first.slideNumber;
+  const endSlide = last.endSlide || last.slideNumber || startSlide;
+  return {
+    title: `${slideRangeLabel(startSlide, endSlide)} — ${title}`,
+    body: slice.map((block) => block.body).join('\n\n---\n\n').trim().slice(0, 42000)
+  };
+}
+
+function groupSlideBlocksByOutline(blocks) {
+  if (!Array.isArray(blocks) || blocks.length < 6) return blocks;
+  const outlineCandidates = unique(blocks.slice(0, 12).flatMap(outlineCandidateLinesFromBlock)).slice(0, 12);
+  const anchors = [];
+  const seenTitles = new Set();
+  blocks.forEach((block, index) => {
+    const topic = slideTitleParts(block.title).topic;
+    const anchor = numberedOutlineAnchor(topic) || outlineAnchorFromCandidates(topic, outlineCandidates);
+    const key = normalizeSlideTopic(anchor);
+    if (!anchor || seenTitles.has(key)) return;
+    seenTitles.add(key);
+    anchors.push({ index, title: anchor });
+  });
+  if (anchors.length < 2) return blocks;
+  const grouped = [];
+  let cursor = 0;
+  for (let i = 0; i < anchors.length; i += 1) {
+    const anchor = anchors[i];
+    if (anchor.index > cursor) grouped.push(...blocks.slice(cursor, anchor.index));
+    const nextIndex = anchors[i + 1]?.index ?? blocks.length;
+    const end = nextIndex - 1;
+    if (end > anchor.index) grouped.push(combineSlideBlockRange(blocks, anchor.index, end, anchor.title));
+    else grouped.push(blocks[anchor.index]);
+    cursor = nextIndex;
+  }
+  if (cursor < blocks.length) grouped.push(...blocks.slice(cursor));
+  return grouped.slice(0, 80);
 }
 
 function extractSlideBlocks(text, preferredSections = []) {
@@ -1728,7 +1810,7 @@ function extractSlideBlocks(text, preferredSections = []) {
     const next = markers[index + 1]?.index ?? source.length;
     return { title: item.title, body: source.slice(item.index, next).trim().slice(0, 16000) };
   });
-  return groupConsecutiveSlideBlocks(slideBlocks).slice(0, 80);
+  return groupSlideBlocksByOutline(groupConsecutiveSlideBlocks(slideBlocks)).slice(0, 80);
 }
 
 function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
@@ -1771,6 +1853,33 @@ function detectEquationNumbers(text) {
   return unique([...String(text || '').matchAll(/\((\d{1,2})\)/g)].map((match) => match[1]))
     .filter((value) => Number(value) > 0 && Number(value) < 80)
     .slice(0, 12);
+}
+
+function detectEquationSnippets(text, max = 8) {
+  const lines = String(text || '')
+    .split(/\n/)
+    .map((line) => cleanMetadataLine(line).replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  const snippets = [];
+  for (let i = 0; i < lines.length; i += 1) {
+    const joined = [lines[i], lines[i + 1] || '', lines[i + 2] || ''].join(' ').replace(/\s+/g, ' ').trim();
+    const mathLike = /(?:\\[a-zA-Z]+|[=≤≥∈∉∑∏√∇]|[_^{}]|\b(?:minimize|maximize|subject to|s\.t\.|argmin|argmax|gradient|hessian|convex combination|expectation|variance)\b)/i.test(joined);
+    if (!mathLike || joined.length < 6) continue;
+    const clean = joined.slice(0, 240);
+    if (!snippets.some((existing) => normalizeSlideTopic(existing) === normalizeSlideTopic(clean))) snippets.push(clean);
+    if (snippets.length >= max) break;
+  }
+  return snippets;
+}
+
+function sourceExcerptForPrompt(text, max = 5200) {
+  return String(text || '')
+    .replace(/\r/g, '')
+    .split(/\n/)
+    .map((line) => line.replace(/\s+$/g, ''))
+    .join('\n')
+    .trim()
+    .slice(0, max);
 }
 
 function detectCitations(text) {
@@ -1964,6 +2073,21 @@ function actionProfileForSection(section, body, sourceMode = 'paper') {
   // See prompts/section-navigator.md.
   return defaultSectionActions(section);
 }
+
+function isMeaningfulSlideTopic(section) {
+  const topic = slideTitleParts(section).topic || section;
+  const normalized = normalizeSlideTopic(topic);
+  if (!normalized) return false;
+  if (/^(outline|agenda|contents|overview|admin|administrivia|class information|course information|title slide|references?)$/.test(normalized)) return false;
+  if (/^(lecture|lec)\s+\d+/.test(normalized)) return false;
+  if (/^(slide|page)\s+\d+$/.test(normalized)) return false;
+  if (/copyright|all rights reserved/.test(normalized)) return false;
+  return true;
+}
+
+function firstMeaningfulSlideTopic(sections = []) {
+  return (sections || []).find(isMeaningfulSlideTopic) || sections?.[0] || '';
+}
 function analyzePaper(args) {
   const slug = args.session || args.slug;
   if (!slug) throw new Error('analyze requires --session <slug>');
@@ -1990,9 +2114,11 @@ function analyzePaper(args) {
     state.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
     state.sectionInsights[key] = {
       equations,
+      equationSnippets: detectEquationSnippets(block.body),
       citations,
       concepts,
-      preview: block.body.replace(/\s+/g, ' ').slice(0, 500)
+      preview: block.body.replace(/\s+/g, ' ').slice(0, 500),
+      sourceExcerpt: sourceExcerptForPrompt(block.body)
     };
   }
   state.currentSection = '';
@@ -2322,9 +2448,25 @@ function addCard(args) {
     const nextKey = args.next || activePathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
     if (nextKey) setPathStatus(state, nextKey, 'current');
   }
-  state.currentLocation = card.location;
-  state.currentFocus = card.title;
-  state.nextChoices = card.choices.length ? card.choices : state.nextChoices;
+  const shouldEnterFirstSlideTopic = type === 'start-here'
+    && !incomingIsScaffold
+    && normalizeSourceMode(state.sourceMode || 'paper') === 'slide-deck'
+    && (state.paperSections || []).length;
+  if (shouldEnterFirstSlideTopic) {
+    const firstTopic = firstMeaningfulSlideTopic(state.paperSections);
+    state.currentSection = firstTopic;
+    state.currentMode = '';
+    state.detectedItems = [];
+    state.currentLocation = firstTopic;
+    state.currentFocus = `Section selected: ${firstTopic}`;
+    state.selectedAction = '';
+    state.lastChoiceKind = 'section';
+    state.nextChoices = state.sectionActions?.[sectionKey(firstTopic)] || slideDeckActionProfile(firstTopic, '');
+  } else {
+    state.currentLocation = card.location;
+    state.currentFocus = card.title;
+    state.nextChoices = card.choices.length ? card.choices : state.nextChoices;
+  }
   clearPendingPrompt(state);
   state.updatedAt = now();
   writeJson(cardsPath(slug), cards);
@@ -3598,10 +3740,12 @@ function buildActionPrompt(state, action) {
   const type = actionType(action, state);
   const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
   const equations = insight.equations?.length ? insight.equations.map((n) => `Eq. (${n})`).join(', ') : 'none detected yet';
+  const equationSnippets = insight.equationSnippets?.length ? insight.equationSnippets.map((line) => `- ${line}`).join('\n') : '- none detected yet';
   const concepts = insight.concepts?.length ? insight.concepts.join(', ') : 'none detected yet';
   const citations = insight.citations?.length ? insight.citations.join(', ') : 'none detected yet';
+  const sourceExcerpt = insight.sourceExcerpt || insight.preview || 'No extracted preview. Use the attached source/paper text available in context.';
   const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type ${shellQuote(type)} --title ${shellQuote(action)} --body-file <your-markdown-file>`;
-  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview. Use the attached source/paper text available in context.'}\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Show every non-trivial equation in LaTeX before explaining it.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
+  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview yet.'}\n\n## Equation / notation preview from this selected range\n\n${equationSnippets}\n\n## Source excerpt for this selected range\n\n\`\`\`text\n${sourceExcerpt}\n\`\`\`\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Use the source excerpt above as the local evidence for the selected section / slide range; do not explain unrelated slides unless the action asks for temporal context.\n- Show every non-trivial equation in LaTeX before explaining it.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
 }
 
 function writePendingActionPrompt(state, action) {
@@ -4010,9 +4154,11 @@ function updateLaunchNavigation({ slug, source, args, text }) {
     nextState.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
     nextState.sectionInsights[key] = {
       equations: detectEquationNumbers(block.body),
+      equationSnippets: detectEquationSnippets(block.body),
       citations: detectCitations(block.body),
       concepts: detectConcepts(block.body),
-      preview: block.body.replace(/\s+/g, ' ').slice(0, 500)
+      preview: block.body.replace(/\s+/g, ' ').slice(0, 500),
+      sourceExcerpt: sourceExcerptForPrompt(block.body)
     };
   }
   nextState.paperSections = sections;
