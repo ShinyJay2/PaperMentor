@@ -1,57 +1,33 @@
 # Prerequisite Analyzer Prompt
 
-Role: when a paper/note/slide is uploaded, automatically and kindly teach the exact concepts a beginner must know before this specific source becomes readable. This output is what goes into the **Preliminary ladder** of Start Here.
+This is the prompt for the **Preliminary ladder** in Start Here. It is a prompt, not a form. Do not impose a fixed structure, a required number of parts, mandatory section headers, field tables, or tiers. Write the way a patient tutor answers a beginner.
 
-You are a patient tutor, not a summarizer. Imagine the reader has never seen this field. Walk them up from the most primitive idea to the source's own notation, method, and key equations, so that by the end they can read the target paragraph/equation on their own.
+The reader is asking, in their own words, something like:
 
-The ladder answers: “What do I need to understand before this paper's notation, method, or equation becomes readable?” Begin **below** the paper's notation and climb toward the exact source claim. It is not a summary and not a keyword list.
+> "내가 이걸 완벽히 이해하려면 필요한 사전지식을 싹 다 알려줘. 특히 비트(bit)가 뭔지, 그런 것부터 설명해줘."
+>
+> "Tell me all the background I need to fully understand this — starting from the very basics, like what a bit even is."
 
-## Output shape (always produce all five parts, in order)
+Answer that question. Concretely:
 
-1. **Ordered prerequisite list** — first list the exact concepts needed for THIS source, in dependency order from most primitive upward. Example for a quantization paper: bit → binary → vector → real number → dimension → function → encoding/decoding → quantization → lossy compression → distortion → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case analysis.
-2. **Teach each concept from zero** — one short numbered card per concept, in the same order. Each card teaches the idea kindly and grounds it in a **tiny, concrete, numeric example with real numbers** (see the worked-example bank). Then connect it back to the source's symbol/figure/equation.
-3. **One-sentence reconstruction** — rewrite the target paragraph/problem/equation in one precise sentence the reader could now say themselves.
-4. **Domain re-translation** — restate that one sentence in the reader's own domain when helpful (e.g. an LLM/embedding framing: “compress a 1536-d float vector to 1–4 bits per value while keeping inner-product/cosine search quality”).
-5. **What to study next** — name the more advanced tools the later sections assume (e.g. norm $\lVert x\rVert$, stochastic rounding, rate–distortion theory, Johnson–Lindenstrauss, product/vector quantization (PQ/OPQ), entropy), so the reader knows the road ahead.
+- List the concepts the reader must know to read THIS exact source, in dependency order, up to the source's own notation and key equations. **Calibrate the floor to this paper's actual reader** — do not spend rungs on things they already know. Start where the genuine difficulty begins and focus on the **non-trivial, load-bearing, paper-specific** ideas the source introduces or relies on. For a specialist paper (e.g. a SOTA ML method), assume basic vectors / probability / sampling and begin at the harder constructions; only drop to elementary concepts when the paper's likely reader would actually need them.
+- Then teach each item, one at a time, in that order. Explain it **clearly in a few sentences** (not a one-liner) — what it is and how it works — and ground it in a **concrete example with real numbers**, not abstract prose. Explain **how and where the concept is actually used in this paper**: bring in the real equation or figure it appears in and say what the concept *is within* it (which term, symbol, or part) — not just a "see Eq. (n)" pointer.
+- Finish when the reader could now read the target paragraph/equation and give a **one-sentence reconstruction** of it in their own words.
 
-## Concrete example bank (every concept needs a concrete example with real numbers, not abstract prose)
+The flavor that works — for a **beginner-aimed** reading of a quantization paper, the rungs might be:
 
-- **Bit**: 1 bit → `0` or `1`. 2 bits → `00 01 10 11` (4 cases). In general `B` bits → $2^B$ cases (8 bit → 256, 16 bit → 65536).
-- **Why bits matter**: a float like `3.141592653589793` usually needs 64 bits; squeezing 64→4 bits saves ~16× storage but loses information — that loss is quantization.
-- **Vector / $\mathbb{R}^d$**: `x = [1.2, 3.5, -0.7]` is a point in $\mathbb{R}^3$; an OpenAI embedding is a point in $\mathbb{R}^{1536}$.
-- **Function $Q:\mathbb{R}^d\to\{0,1\}^B$**: reads a real vector, returns `B` bits, e.g. `[1.2,3.4] -> 01101010`.
-- **Quantization / dequantization $Q^{-1}$**: `3.1415… -> 3.1` (store), `3.1 -> 3.1` (restore), error `≈ 0.0416`. $Q^{-1}$ is a decoder, not a true inverse.
-- **Lossy / not a bijection**: `1.01, 1.02, 1.03` may all store as `1.0`; on restore you cannot tell which it was.
-- **MSE**: `x=[1,2]`, `x̂=[1.1,1.9]` → error `[0.1,-0.1]` → `0.01+0.01 = 0.02`. Smaller is better.
-- **Inner product**: `[1,2]·[3,4] = 1×3 + 2×4 = 11`; it acts as a similarity score in vector search/RAG.
-- **Randomized quantizer + expectation**: `3.4 -> 3` with prob 0.6, `-> 4` with prob 0.4, so `Q(x)` is a random variable and $\mathbb{E}_Q[\cdot]$ is its average over repeats.
-- **Unbiased estimator**: results `90, 110, 95, 105` average to `100` = the true value, so the estimate is unbiased even though any single one is wrong.
+bit → binary string → vector → real number → dimension → function → encoding/decoding → quantization → lossy compression → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case analysis
 
-(These are the style and granularity to match. For a different paper, invent the equivalent tiny numeric examples for ITS primitives — patches, masks, gradients, norms, etc.)
+…and each rung is taught from zero — *2 bits = `00 01 10 11`*; *a vector `[1.2,3.5,-0.7]`*; *MSE `[0.1,-0.1] → 0.01+0.01=0.02`*; *inner product `[1,2]·[3,4]=11`*; *an unbiased estimator where `90,110,95,105` average to `100`* — then tied back to the paper's $Q:\mathbb{R}^d\to\{0,1\}^B$, distortion, $\mathbb{E}_Q[\cdot]$.
 
-## Depth tiers (climb through these when needed)
+Let the **source and its audience** decide the rungs, including where the ladder starts. A graduate-level method paper should skip the trivial rungs above and instead dwell on its own hard, novel ideas (e.g. a generative-modeling paper: pushforward $f_\#p$ → training-time distribution evolution → drift/vector field → fixed-point & equilibrium → kernel mean-shift → attraction−repulsion → stop-gradient objective → one-step inference). Don't pad with broad labels ("linear algebra", "probability", "self-supervised learning"), and don't pad with concepts the paper's reader already owns. The goal: the reader studies the list top-to-bottom and can then read the paper.
 
-1. **Primitive vocabulary** — bit, binary string, real number, vector, coordinate, image, patch, function/map, set, index, random variable.
-2. **Notation decoding** — $\mathbb{R}^d$, $\{0,1\}^B$, $Q:\mathbb{R}^d\to\{0,1\}^B$, $Q^{-1}$, $B_i$, $s_y^{(i)}$, $\lVert\cdot\rVert_2$, $\langle x,y\rangle$, $\mathbb{E}_Q[\cdot]$.
-3. **Core mechanism** — quantization/dequantization, lossy compression, embedding/representation, context block, target block, predictor, randomized quantizer, estimator.
-4. **Metric / assumption layer** — MSE, squared $\ell_2$ loss, inner-product error, unbiased estimator, unbiasedness, exponential moving average, worst-case analysis.
-5. **Paper-specific reconstruction** — the objective, algorithm, theorem, figure, or claim that becomes readable after the ladder.
+## Rendering (keep it exactly this light)
 
-Do not give shallow labels like “linear algebra, probability, optimization, transformers.” If such a label is relevant, decompose it into the exact primitive objects the source uses: vector, coordinate, norm, inner product, expectation, mask, patch, encoder, objective, estimator. Do not output only method/model names; explain the prerequisites that make those names meaningful.
+Structure the output only this much — no more:
 
-## Per-concept card fields
-
-For each rung provide:
-
-- concept name;
-- tier;
-- why it is needed for this exact paper/location;
-- a kind, plain-language explanation with a tiny **concrete numeric example** (not abstract prose);
-- notation or paper object it unlocks;
-- where it appears in the paper (section, equation, figure, claim);
-- diagnostic check;
-- next prerequisite.
-
-## Quality bar
-
-Write it so a motivated beginner can read the ladder top-to-bottom, then explain the source claim in their own words. Be warm and explicit; prefer a concrete number over a sentence of abstraction. Stop only when that reconstruction is achievable.
+- Title the section **Preliminary** (not "Preliminary ladder", not "예비 사다리").
+- Put the whole order on a single `flow:` line — `flow: A → B → C → …` renders as a block diagram strip. For a longer chain (roughly 6+ steps), split it into 2–4 labeled **phase groups** with ` || ` and a leading `[label]`, e.g. `flow: [basics] A → B || [model] C → D` — each group renders as a labeled cluster with breathing room. Use short labels per box (a symbol or 1–2 words), not full sentences.
+- Then write **each prerequisite as its own `### N. concept` block** (each renders as a card): explain it **clearly in a few plain sentences** (not a one-liner) — what it is and how it works — grounded in a concrete numeric example with real numbers. Then **show how and where it is actually used in this paper**: write out the real equation or figure it appears in and explain what the concept is within it (which term/symbol it is). **Do not stamp a fixed label like `→ 논문:` on every block** — write the paper usage as a normal explanatory sentence. Be clear and direct: no extended metaphors or analogies.
+- **Not every paper is ladder-shaped.** For surveys, systems/empirical/benchmark papers, or papers whose difficulty is conceptual (a clever proof, a counterintuitive idea) rather than a bottom-up prerequisite chain, keep the `flow:` very short or omit it entirely and let the concept blocks carry the explanation. Never pad a long linear chain where the real dependencies aren't linear — the `flow:` strip is a single left-to-right line, not a branching/merging graph, so don't try to encode true branches in it.
+- No tables, no field lists, no tiers, no per-item form. The `flow:` strip (when it fits) plus one tight block per concept is the entire structure.

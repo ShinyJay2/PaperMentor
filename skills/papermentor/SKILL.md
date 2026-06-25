@@ -13,7 +13,7 @@ PaperMentor supports three source modes:
 
 - `paper`: research articles and preprints. Preserve the paper workflow: map, equations, derivations, dependencies, confusion repair, final insight.
 - `lecture-note`: instructional notes and technical chapters. Prioritize concept ladders, definitions, worked examples, exercises, proofs, derivations, and readiness checks.
-- `slide-deck`: PDF/PPT slide decks. Treat slides as navigable sections, reconstruct missing lecturer narration, explain visual labels/arrows, connect adjacent slides, and extract equations/notation on the slide.
+- `slide-deck` (shown as **Slides**): PDF/PPT slide decks, usually with **no table of contents**. Slides are **image-first and temporal** — read each rendered slide image (not just extracted text), and treat the deck as a timeline where early slides build up ideas that later slides depend on. Reconstruct the missing lecturer narration, read figures/visual elements and color-highlighted emphasis, decode on-slide equations, group consecutive same-title build slides into one topic, and make "how this builds on earlier slides" and "continue to the next slide" first-class moves. See `prompts/slide-navigator.md`.
 
 Only support concrete reading artifacts: `paper`, `lecture-note`, and `slide-deck`. Do not invent additional modes or attach unrelated local diagrams as evidence for a source.
 If a selected slide deck is protected or text extraction fails, keep `slide-deck` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
@@ -34,7 +34,7 @@ If a selected slide deck is protected or text extraction fails, keep `slide-deck
 
 On source start, render `index.html` before giving any substantive explanation in the CLI. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the HTML path, detected sections/slides, numbered choices, and a place for user questions.
 
-The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`papermentor tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions must be dynamic: Introduction actions should come from its concepts and framing sentences; Related Work actions should include citation-following and family comparisons from the references it cites; Method actions should expose section equations, propositions, algorithms, assumptions, and derivation transitions. Always include `Ask anything about <section>` and `Chat about this section`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. When an action is chosen, the helper writes a pending HTML-block prompt (`pending-prompt.md`) with inferred card type, local equations/concepts/citations, and the right template so the next answer can be appended with `card` instead of being dumped into the terminal.
+The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`papermentor tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions are **classified by the model on entry — not by word-matching or scoring in the script.** On selecting a section, read its title and content, infer its role (a weak position prior — Introduction → Related Work → Method → Experiments → Conclusion, with subsections sharing their parent's role — is only a tiebreak; trust the content over the position), then replace the generic menu with a tailored one via `papermentor section --index <n> --choices "…"`. Match actions to the role (Introduction → promise/core concepts; Related Work → the specific families/citations it actually discusses; Method → its real equations, propositions, assumptions, derivations, pipeline; Experiments → what each result proves; Conclusion → final insight/limitations) and always include `Ask anything about <section>` and `Chat about this section`. Follow `prompts/section-navigator.md`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. When an action is chosen, the helper writes a pending HTML-block prompt (`pending-prompt.md`) with inferred card type, local equations/concepts/citations, and the right template so the next answer can be appended with `card` instead of being dumped into the terminal.
 
 ### Representative figure rule
 
@@ -107,41 +107,9 @@ Status marks:
 - `[!]` blocked by unresolved confusion
 - `[↺]` revisit recommended
 
-### Preliminary ladder depth rule
+### Preliminary ladder rule
 
-The preliminary ladder is not a section summary, not a topic list, and not a list of extracted keywords. It is a beginner-facing prerequisite curriculum for this exact paper. Before the reader enters sections, identify the concepts they must know to understand the paper's problem, method, notation, and core equations.
-
-Write it like a tutor answering: “What do I need to know before I can read this paper?” The ladder must start below the paper's notation and climb upward. For each prerequisite, explain the idea in plain language, give a tiny concrete example, then reconnect it to the paper's symbols, figure, equation, or method claim.
-
-Produce the ladder in this shape, like a patient tutor: (1) first **list the exact prerequisites in dependency order**, from the most primitive idea up to the paper's notation and key equations; (2) **teach each concept from zero, in order**, grounding every one in a tiny **concrete numeric example with real numbers** — e.g. 2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] → 0.01+0.01=0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimate where `90,110,95,105` average to `100` — then reconnect it to the paper's symbol/figure/equation; (3) **reconstruct the target paragraph/problem in one precise sentence**; (4) **re-translate that sentence into the reader's domain** when helpful (e.g. an LLM/embedding framing); (5) **name what to study next** for the later sections. Prefer a concrete number over a sentence of abstraction. Follow `prompts/prerequisite-analyzer.md`.
-
-For a dense mathematical paper, infer prerequisites from the actual paper objects and equations. Examples:
-
-- Quantization paper: bit → binary string → vector → $\mathbb{R}^d$ → function/map → encoding/decoding → quantization → lossy compression → distortion → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case analysis.
-- Self-supervised vision paper: image → patch → vector/embedding → representation → encoder → target/context split → mask/block index set → predictor → loss/objective → $\ell_2$ norm → moving-average target network → representation-space prediction.
-- Optimization paper: scalar/vector/function → objective function → gradient → step size → constraint → estimator/noise → convergence statement → theorem assumptions.
-
-Do not output broad labels such as “linear algebra”, “probability”, “optimization”, “self-supervised learning”, or “transformers” unless you immediately decompose them into the exact primitive concepts used here. Do not output only paper-specific labels such as “I-JEPA” or “ViT-H”; first explain the prerequisites that make those labels meaningful.
-
-For a dense mathematical paragraph, use this ordering when needed:
-
-1. primitive vocabulary — e.g. bit, binary string, real number, vector, coordinate, image patch, function/map, random variable;
-2. notation decoding — e.g. $\mathbb{R}^d$, $\{0,1\}^B$, $Q:\mathbb{R}^d\to\{0,1\}^B$, $Q^{-1}$, $B_i$, $s_y^{(i)}$, $\|\cdot\|_2$, $\langle x,y\rangle$, $\mathbb{E}_Q[\cdot]$;
-angle$, $\mathbb{E}_Q[\cdot]$;
-3. core concept — e.g. quantization/dequantization, lossy compression, embedding/representation, context block, target block, randomized quantizer, predictor;
-4. metric / assumption layer — e.g. MSE, inner-product error, squared $\ell_2$ loss, unbiased estimator, exponential moving average, worst-case analysis, computational efficiency;
-5. source-specific reconstruction — rewrite the target paragraph/equation/method claim in one precise sentence.
-
-Every ladder item must include:
-
-- concept name;
-- why it is needed for this paper;
-- minimal explanation with a concrete toy example;
-- notation or paper object it unlocks;
-- where it appears in the paper (section, equation, figure, or claim);
-- diagnostic check.
-
-Prefer numbered concept cards over wide tables. A good item should be teachable to a motivated beginner in isolation, then reconnect to the paper. Stop only when the reader can reconstruct the paper's main method claim or equation in their own words.
+The preliminary ladder is a prompt, not a fixed form: do not impose required parts, mandatory section headers, field tables, or tiers. Write it like a patient tutor answering "what do I need to know before I can read this paper?" — list every prerequisite for this exact source in dependency order, from the most primitive idea (e.g. what a bit is) up through its notation and key equations; teach each one briefly, grounded in a concrete numeric example with real numbers (2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] -> 0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimator where `90,110,95,105` average to `100`); and connect each back to the exact symbol, figure, equation, or claim it unlocks. Do not stop at broad labels ("linear algebra", "self-supervised learning") without decomposing them into the source's actual primitives, and do not output only model names ("I-JEPA", "ViT-H") without the prerequisites that make them meaningful. Stop when the reader can reconstruct the paper's main claim or equation in their own words. Follow `prompts/prerequisite-analyzer.md`.
 
 ## Strict policies
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync, rmSync, mkdtempSync, readdirSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync, rmSync, mkdtempSync, readdirSync, renameSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { basename, dirname, extname, join, resolve, sep, relative } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -49,11 +49,17 @@ function normalizeSourceMode(value, fallback = 'paper') {
 }
 
 function sourceModeLabel(mode) {
-  return { paper: 'Paper', 'lecture-note': 'Lecture note', 'slide-deck': 'Slide deck' }[normalizeSourceMode(mode)] || 'Paper';
+  return { paper: 'Paper', 'lecture-note': 'Lecture note', 'slide-deck': 'Slides' }[normalizeSourceMode(mode)] || 'Paper';
 }
 
 function sourceModeNoun(mode) {
-  return { paper: 'paper', 'lecture-note': 'lecture note', 'slide-deck': 'slide deck' }[normalizeSourceMode(mode)] || 'paper';
+  return { paper: 'paper', 'lecture-note': 'lecture note', 'slide-deck': 'slide' }[normalizeSourceMode(mode)] || 'paper';
+}
+
+// Heading for the navigator's first-level list. Slides aren't "sections", so slide
+// mode lists "Slides" rather than "<label> sections".
+function sectionListHeading(mode) {
+  return normalizeSourceMode(mode) === 'slide-deck' ? 'Slides' : `${sourceModeLabel(mode)} sections`;
 }
 
 function readingPathForMode(mode) {
@@ -317,14 +323,40 @@ function isHttpUrl(value) {
 function sourceExtensionFromUrl(value) {
   const clean = String(value || '').split(/[?#]/)[0];
   if (/arxiv\.org\/abs\//i.test(clean) || /arxiv\.org\/pdf\//i.test(clean)) return '.pdf';
+  if (/docs\.google\.com\/(?:presentation|document)\/d\//i.test(clean)) return '.pdf';
+  if (/drive\.google\.com\/(?:file\/d\/|open\b|uc\b)/i.test(clean)) return '.pdf';
   const extension = extname(clean).toLowerCase();
   if (extension) return extension;
   return '.pdf';
 }
 
+function googleDriveDirectUrl(value) {
+  const raw = String(value || '');
+  if (!/^https?:\/\//i.test(raw)) return raw;
+  let url;
+  try {
+    url = new URL(raw);
+  } catch {
+    return raw;
+  }
+  const host = url.hostname.toLowerCase();
+  const path = url.pathname;
+  if (host === 'drive.google.com' || host.endsWith('.drive.google.com')) {
+    const fileId = path.match(/\/file\/d\/([^/]+)/)?.[1] || url.searchParams.get('id');
+    if (fileId) return `https://drive.google.com/uc?export=download&id=${encodeURIComponent(fileId)}`;
+  }
+  if (host === 'docs.google.com' || host.endsWith('.docs.google.com')) {
+    const presentationId = path.match(/\/presentation\/d\/([^/]+)/)?.[1];
+    if (presentationId) return `https://docs.google.com/presentation/d/${encodeURIComponent(presentationId)}/export/pdf`;
+    const documentId = path.match(/\/document\/d\/([^/]+)/)?.[1];
+    if (documentId) return `https://docs.google.com/document/d/${encodeURIComponent(documentId)}/export?format=pdf`;
+  }
+  return raw;
+}
+
 function normalizePaperUrl(value) {
   const raw = String(value || '');
-  return raw.replace(/https:\/\/arxiv\.org\/abs\/([^?#]+)/i, 'https://arxiv.org/pdf/$1');
+  return googleDriveDirectUrl(raw).replace(/https:\/\/arxiv\.org\/abs\/([^?#]+)/i, 'https://arxiv.org/pdf/$1');
 }
 
 function sourceCacheFile(url, slugHint = 'source') {
@@ -334,6 +366,53 @@ function sourceCacheFile(url, slugHint = 'source') {
   return join(sourceCacheDir(), `${stem}-${key}${extension}`);
 }
 
+function detectSourceExtensionFromBytes(path) {
+  const buffer = readFileSync(path);
+  const head = buffer.subarray(0, 4096);
+  const textHead = head.toString('utf8').trimStart();
+  if (head.subarray(0, 4).toString() === '%PDF') return '.pdf';
+  if (head.length >= 8 && head[0] === 0x89 && head.subarray(1, 4).toString() === 'PNG') return '.png';
+  if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return '.jpg';
+  if (head.subarray(0, 6).toString() === 'GIF87a' || head.subarray(0, 6).toString() === 'GIF89a') return '.gif';
+  if (head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP') return '.webp';
+  if (head.length >= 8 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return '.ppt';
+  if (head.subarray(0, 2).toString() === 'PK') {
+    const zipText = buffer.toString('latin1');
+    if (zipText.includes('ppt/presentation.xml')) return '.pptx';
+    if (zipText.includes('word/document.xml')) return '.docx';
+  }
+  if (/^(?:<!doctype\s+html|<html\b)/i.test(textHead)) return '.html';
+  return '';
+}
+
+function cachedSourceVariant(path) {
+  if (existsSync(path)) return path;
+  const extension = extname(path);
+  const stem = extension ? path.slice(0, -extension.length) : path;
+  for (const candidateExtension of ['.pdf', '.pptx', '.ppt', '.png', '.jpg', '.jpeg', '.webp', '.gif']) {
+    const candidate = `${stem}${candidateExtension}`;
+    if (existsSync(candidate)) return candidate;
+  }
+  return '';
+}
+
+function finalizeDownloadedSourceFile(path, url) {
+  const detectedExtension = detectSourceExtensionFromBytes(path);
+  if (detectedExtension === '.html') {
+    throw new Error(`downloaded ${url} as HTML, not a paper/deck file; for Google Drive, make sure the file is shared with link access or use a direct PDF/PPTX download`);
+  }
+  if (!detectedExtension) return path;
+  const currentExtension = extname(path).toLowerCase();
+  if (detectedExtension === currentExtension) return path;
+  const target = `${path.slice(0, currentExtension ? -currentExtension.length : undefined)}${detectedExtension}`;
+  if (existsSync(target)) {
+    rmSync(path, { force: true });
+    return target;
+  }
+  renameSync(path, target);
+  return target;
+}
+
 function downloadSourceIfNeeded(source, slugHint = 'source') {
   if (!isHttpUrl(source)) return resolve(source);
   const curl = commandPath('curl');
@@ -341,7 +420,8 @@ function downloadSourceIfNeeded(source, slugHint = 'source') {
   const url = normalizePaperUrl(source);
   mkdirSync(sourceCacheDir(), { recursive: true });
   const out = sourceCacheFile(url, slugHint);
-  if (existsSync(out)) return out;
+  const cached = cachedSourceVariant(out);
+  if (cached) return finalizeDownloadedSourceFile(cached, url);
   try {
     runTool(curl, [
       '-L',
@@ -366,7 +446,7 @@ function downloadSourceIfNeeded(source, slugHint = 'source') {
     rmSync(out, { force: true });
     throw error;
   }
-  return out;
+  return finalizeDownloadedSourceFile(out, url);
 }
 
 function extractTextFromSourceFile(source, args = {}) {
@@ -403,6 +483,74 @@ function cleanMetadataLine(line) {
     .replace(/\s+/g, ' ')
     .replace(/\b(arXiv:\S+|v\d+|\[[^\]]+\])\b/g, '')
     .trim();
+}
+
+function cleanTitleCandidate(value) {
+  return String(value || '')
+    .replace(/\.[A-Za-z0-9]{2,5}$/g, '')
+    .replace(/[_-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 140);
+}
+
+function isSlideDeckBoilerplateLine(line) {
+  const value = String(line || '').trim();
+  if (!value) return true;
+  if (/^\d{1,3}\s*(?:\/\s*\d{1,3})?$/.test(value)) return true;
+  if (/^(?:slide|page)\s*\d{1,3}\b\s*$/i.test(value)) return true;
+  if (/(?:©|copyright|all rights reserved|rights reserved|confidential|proprietary|do not distribute)/i.test(value)) return true;
+  if (/@|https?:\/\/|www\./i.test(value)) return true;
+  if (/^\d{4}[-./]\d{1,2}[-./]\d{1,2}$/.test(value)) return true;
+  if (/^(?:presented by|presenter|author|instructor|professor|department|university|school of|college of)\b/i.test(value)) return true;
+  return false;
+}
+
+function isBadMetadataTitle(value) {
+  const title = String(value || '').trim();
+  if (!title) return true;
+  if (isSlideDeckBoilerplateLine(title)) return true;
+  if (/^(?:lecture|lec\.?)\s*\d{1,3}$/i.test(title)) return false;
+  if (/^[a-z][a-z.'-]+\s+[a-z][a-z.'-]+$/.test(title)) return true;
+  return false;
+}
+
+function titleFromSourceName(source) {
+  const clean = String(source || '').split(/[?#]/)[0];
+  const base = basename(clean, extname(clean));
+  return cleanTitleCandidate(decodeURIComponent(base || ''));
+}
+
+function inferSlideDeckTitleFromText(text) {
+  const firstPage = String(text || '').replace(/\r/g, '').split('\f')[0] || '';
+  const lines = firstPage.split(/\n/)
+    .map(cleanMetadataLine)
+    .filter(Boolean)
+    .slice(0, 40);
+  const candidates = [];
+  lines.forEach((line, index) => {
+    const parts = unique([line, ...line.split(/\s{2,}/)]).map(cleanTitleCandidate).filter(Boolean);
+    for (const part of parts) {
+      const value = part.replace(/^(?:slide|page)\s*\d{1,3}\s*[:.\-–—]?\s*/i, '').trim();
+      if (isBadMetadataTitle(value)) continue;
+      if (value.length < 3 || value.length > 110) continue;
+      if (/^[•▪◦-]/.test(value)) continue;
+      if (/[.!?。]$/.test(value) && value.split(/\s+/).length > 8) continue;
+      const words = value.split(/\s+/).filter(Boolean);
+      let score = 20 - index * 0.35;
+      if (/\b[A-Z]{2,}\b/.test(value)) score += 5;
+      if (/^(?:lecture|lec\.?)\s*\d{1,3}\s*:/i.test(value)) score += 8;
+      if (/:\s*\S/.test(value) && words.length >= 4) score += 4;
+      if (/^[A-Z0-9][A-Za-z0-9:()[\]/+&,\- ]+$/.test(value)) score += 3;
+      if (words.length <= 8) score += 2;
+      if (words.length <= 2 && index > 0) score -= 5;
+      if (lines.slice(0, index).some((earlier) => earlier.includes(value) && earlier.length > value.length + 8)) score -= 10;
+      if (/^(?:lecture|lec\.?)\s*\d{1,3}\b/i.test(value)) score -= 3;
+      candidates.push({ value, score });
+    }
+  });
+  candidates.sort((a, b) => b.score - a.score || a.value.length - b.value.length);
+  return candidates[0]?.value || '';
 }
 
 function formatAuthors(value) {
@@ -482,7 +630,7 @@ function representativeFigureExplanation({ sourceMode, text }) {
       '',
       '_Not read yet. Open the slide crop above and replace every bullet with what is literally on the slide — each box, arrow, label, axis, and any equation printed on it, symbol by symbol. Delete this note once filled._',
       '',
-      '- **Concept / method role:** Name what this exact slide visual is (architecture, pipeline, result, or mechanism) and the one thing the speaker wants remembered — in this deck’s own terms, not a generic description.',
+      '- **Concept / method role:** Name what this exact slide visual is (architecture, pipeline, result, or mechanism) and the one thing the speaker wants remembered — in these slides’ own terms, not a generic description.',
       '- **How to read it:** Name every labelled box/object on the slide and say in one clause what each one is.',
       '- **Parts to identify:** List every arrow, line, shape, color, axis, legend, and callout, and state what each encodes — be exhaustive, not a sample.',
       '- **In-figure math / symbols:** Transcribe in LaTeX every equation, variable, subscript, and annotation printed inside the slide visual, and define each symbol; if none appear, say so explicitly.',
@@ -556,8 +704,111 @@ function cleanNotationCandidate(value) {
 }
 
 
-function launchStartBody({ sourceMode, text }) {
+function slideTopicTimelineScaffold(sections = []) {
+  const topics = sections.length ? sections : ['Slides 1–? — Topic to detect'];
+  const flowTopics = topics
+    .slice(0, 14)
+    .map((section) => {
+      const { topic } = slideTitleParts(section);
+      return topic || section;
+    });
+  const flow = flowTopics.length
+    ? `flow: ${flowTopics.join(' → ')}${topics.length > flowTopics.length ? ' → …' : ''}`
+    : 'flow: Topic 1 → Topic 2 → Topic 3';
+  const topicBlocks = topics.slice(0, 24).map((section, index) => `### ${index + 1}. ${section}
+
+_Not written yet. Replace this placeholder with one natural teaching paragraph: explain what changes at this point, why the learner needs it before the next topic, and which concrete slide element should be read first. Do not keep this instruction or convert it into labeled fields._`).join('\n\n');
+  return `## Topic timeline map
+
+${flow}
+
+${topicBlocks}
+
+## Slide reading contract
+
+Use this timeline as the Start Here map. Read each topic as a temporal build: earlier topics define the vocabulary, repeated-title slides are progressive overlays, and the main work is to reconstruct the lecturer's missing narration between topics.`;
+}
+
+function slideStartHereWriterPrompt({ state, sections = [] }) {
+  const topics = sections.length ? sections : ['No slide topics detected yet'];
+  const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type start-here --title 'Start Here' --location 'Start Here' --body-file <your-markdown-file> --choices ${shellQuote(topics.join('|'))}`;
+  return `# PaperMentor Slide Start Here Writer Prompt
+
+You are writing the first real teaching block for a slide-based PaperMentor reading room.
+
+Append the finished Markdown to HTML with:
+
+\`${command}\`
+
+## Source
+
+- Title: ${state.title}
+- Mode: Slides
+- Detected slide topics:
+${topics.map((topic, index) => `  ${index + 1}. ${topic}`).join('\n')}
+
+## What to write
+
+Write a finished Start Here explanation, not a scaffold and not a planning table.
+
+Use this shape:
+
+1. \`## One-sentence orientation\`
+   - Exactly one natural sentence stating what these slides teach.
+   - Do not say “this deck”.
+   - Do not forecast later material unless it is explicitly present in these slides.
+
+2. \`## Topic timeline map\`
+   - Include one \`flow:\` line that groups the major learning phases.
+   - Then write 4–8 natural teaching paragraphs under \`###\` headings.
+   - Each paragraph should explain what changes at that point, why the learner needs it before the next point, and which concrete slide object/example/diagram/equation to read first.
+   - Write as a tutor speaking to a reader, not as metadata about slides.
+
+3. \`## Preliminary\`
+   - Build the prerequisite ladder needed to read these slides, using the same depth expected in paper mode.
+   - Read the detected slide topics and any visible formulas/notation before choosing prerequisites.
+   - Do not list broad labels like “probability”, “linear algebra”, “optimization”, “Markov decision processes”, or “reinforcement learning basics” unless you decompose them into the exact smaller ideas these slides require.
+   - Start with a \`flow:\` line in dependency order. Use phase groups when helpful, e.g. \`flow: [interaction] agent → action → observation → reward || [math] random variable → expectation → return\`.
+   - Then write natural \`### N. concept\` blocks. Each block must teach the concept from first principles, give a tiny concrete example, and name the exact slide symbol, equation, diagram, or claim it unlocks.
+   - If the slides use mathematical notation, include the relevant LaTeX in the prerequisite block and define every symbol. For example, if a slide uses reward $R_t$, return $G_t$, policy $\\pi(a\\mid s)$, value $v_\\pi(s)$, transition probability $P(s'\\mid s,a)$, or an expectation $\\mathbb{E}[\\cdot]$, teach the minimum math needed to read that notation before using it.
+   - Use equations when they genuinely clarify the slide content. A good block may include a tiny numeric example such as $G_1=1+0.9\\cdot2+0.9^2\\cdot3=5.23$, or $\\mathbb{E}[X]=0.7\\cdot10+0.3\\cdot0=7$.
+   - Keep the final prose smooth: do not render field labels like “Why needed”, “Minimal explanation”, or “Diagnostic check” as headings. Those are internal checks only.
+
+## Hard prohibitions
+
+- Do not output placeholder text such as “Not written yet”.
+- Do not leave internal labels or rubric fields in the final HTML body.
+- Do not use these field names: “Topic role”, “Build slides folded”, “Likely missing narration”, “Key visual/equation to read”.
+- Do not write tables for the timeline.
+- Do not use “deck” in the final user-facing prose; say “slides”, “lecture slides”, or “강의자료” when needed.
+- Do not invent next-lecture claims or prerequisite targets that are not visible in the source.
+- Do not summarize slide titles mechanically; teach the conceptual path.
+`;
+}
+
+function writeSlideStartHerePrompt(state, sections = []) {
+  const prompt = slideStartHereWriterPrompt({ state, sections });
+  writeFileSync(promptPath(state.slug), prompt);
+  state.pendingBlockPrompt = `.papermentor/sessions/${state.slug}/pending-prompt.md`;
+  state.pendingBlockType = 'start-here';
+  state.pendingBlockTitle = 'Start Here';
+  state.startHerePending = true;
+  delete state.figureReadingPending;
+  return prompt;
+}
+
+function launchStartBody({ sourceMode, text, sections = [] }) {
   const noun = sourceModeNoun(sourceMode);
+  if (normalizeSourceMode(sourceMode) === 'slide-deck') {
+    return `## One-sentence orientation
+
+_Not written yet. Replace this with exactly one sentence stating what these slides teach or argue: name the topic, the learner's before/after state, and the central mechanism or timeline._
+
+${slideTopicTimelineScaffold(sections)}
+
+${preliminaryLadderScaffold(sourceMode)}
+`;
+  }
   // Launch ships only scaffolds. Every source-derived explanation below — the
   // one-sentence model, the figure reading, and the preliminary ladder — must be
   // written by the model after reading the source. The script never synthesises this
@@ -574,26 +825,42 @@ ${preliminaryLadderScaffold(sourceMode)}
 
 function preliminaryLadderScaffold(sourceMode) {
   const noun = sourceModeNoun(sourceMode);
-  return `## Preliminary ladder
+  return `## Preliminary
 
-_Not built yet. Read the source and teach the exact concepts a beginner must know before this ${noun}, the way a patient tutor would._
+_Not built yet. Replace this with the real preliminary, written like a patient tutor — not a fixed form._
 
-1. **List the prerequisites in order** for THIS ${noun}, from the most primitive up to its notation, method, and key equations (e.g. for a quantization paper: bit → binary → vector → real number → dimension → function → encoding/decoding → quantization → lossy compression → expectation → randomized algorithm → MSE → inner product → unbiased estimator → worst-case).
-2. **Teach each concept from zero with a tiny, concrete, numeric example** — actual numbers, not abstract prose (bit: 2 bits = 4 cases \`00 01 10 11\`; vector: \`x=[1.2,3.5,-0.7]\`; MSE: \`[0.1,-0.1] -> 0.01+0.01=0.02\`; inner product: \`[1,2]·[3,4]=11\`; unbiased: average of 90,110,95,105 = 100). Decompose broad labels into the exact primitives this source uses; never list keywords.
-3. **Reconstruct the target paragraph/problem in one precise sentence**, then **re-translate it into the reader's domain** (e.g. an LLM/embedding framing).
-4. **Name what to study next** to finish the paper (the more advanced tools the later sections assume).
-
-Follow \`prompts/prerequisite-analyzer.md\` and \`templates/prerequisite_ladder.md\`. Do not ship this scaffold — replace it with the real ladder.`;
+List the prerequisites in order — calibrated to this ${noun}'s actual reader: skip the trivial basics they already know and focus on the non-trivial, paper-specific concepts, up to its notation and key equations. Render the whole order as one \`flow:\` line (\`flow: A → B → C\`, or \`flow: [phase] A → B || [phase] C → D\` to group a longer chain into labeled phases), then write each prerequisite as its own \`### N. concept\` block with a concrete numeric example and the exact symbol, figure, equation, or claim it unlocks. No tables, field lists, or tiers beyond that. Follow \`prompts/prerequisite-analyzer.md\`.`;
 }
 
-function readingGuideBody({ slug, sourceMode }) {
+function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
+  const isSlide = normalizeSourceMode(sourceMode) === 'slide-deck';
+  if (lang === 'ko') {
+    const nounKo = isSlide ? '슬라이드 덱' : normalizeSourceMode(sourceMode) === 'lecture-note' ? '노트' : '논문';
+    const sectionNounKo = isSlide ? '슬라이드' : '섹션';
+    return `PaperMentor는 서로 연결된 두 화면으로 동작합니다: 이 리포트(HTML)와 CLI/TUI. 이 HTML을 열어둔 채 터미널로 돌아가 ${sectionNounKo}·수식·유도·의존성·질문 중 하나를 고르세요. 고른 동작 하나가 이 리포트에 잘 정리된 설명 블록 하나로 덧붙습니다.
+
+**새로고침 동작:** \`state.json\`이 바뀌면 HTML이 자동으로 새로고침을 시도합니다. 브라우저가 로컬 파일 폴링을 막으면, CLI 작업이 끝난 뒤 직접 새로고침하세요. PDF 내보내기는 스냅샷이므로 블록을 추가한 뒤 다시 내보내세요.
+
+**복귀 명령:** \`papermentor tui --session ${slug}\` — 대화형 ${nounKo} 내비게이터.`;
+  }
   const noun = sourceModeNoun(sourceMode);
-  const sectionNoun = normalizeSourceMode(sourceMode) === 'slide-deck' ? 'slide' : 'section';
+  const sectionNoun = isSlide ? 'slide' : 'section';
   return `PaperMentor has two linked surfaces: this report and the CLI/TUI. Keep this HTML open, then return to the terminal and choose a ${sectionNoun}, equation, derivation, dependency, or question. Each chosen action appends one polished explanation block to this same report.
 
 **Refresh behavior:** the HTML tries to auto-refresh when \`state.json\` changes. If your browser blocks local file polling, press reload after the CLI finishes. A PDF export is a snapshot, so re-export it after adding blocks.
 
 **Return command:** \`papermentor tui --session ${slug}\` for the interactive ${noun} navigator.`;
+}
+
+// The reading guide is a script-generated meta block, so it follows the document
+// language at render time: a Korean report shows the Korean guide automatically.
+function localizeReadingGuide(card, lang, slug, sourceMode) {
+  if (card.type !== 'reading-guide') return card;
+  return {
+    ...card,
+    title: lang === 'ko' ? '이 리딩룸 사용법' : 'How to use this reading room',
+    body: readingGuideBody({ slug, sourceMode, lang })
+  };
 }
 
 function addReadingGuideBlock({ slug, sourceMode, sections, args = {} }) {
@@ -1164,13 +1431,17 @@ function prepareFigure(slug, cardId, args) {
   };
 }
 
+// Generic, uniform section menu — no word-matching or scoring. The model tailors a
+// section's menu on entry by reading its title+content and re-running `section
+// --choices`. See prompts/section-navigator.md.
 function defaultSectionActions(section) {
   return [
+    `Map ${section}: what it covers and its role`,
     `Decode key equations in ${section}`,
     `Trace derivations in ${section}`,
     `Connect dependencies in ${section}`,
-    `Resolve confusion in ${section}`,
-    `Ask a question about ${section}`
+    `Ask anything about ${section}`,
+    `Chat about this section`
   ];
 }
 
@@ -1283,9 +1554,18 @@ function extractSectionBlocks(text, preferredSections = [], sourceMode = 'paper'
     }
     offset += rawLine.length + 1;
   }
-  const headings = unique(found.map((item) => item.title))
+  const orderedHeadings = unique(found.map((item) => item.title))
     .map((title) => found.find((item) => item.title === title))
-    .sort((a, b) => a.index - b.index)
+    .sort((a, b) => a.index - b.index);
+  // Two-column PDF extraction often leaves a bare section word (e.g. "Method")
+  // floating on its own line, which the unnumbered matcher picks up as a second
+  // section alongside the real numbered "3. Method". Drop an unnumbered heading
+  // when a numbered heading already covers the same core name.
+  const numberedCoreNames = new Set(
+    orderedHeadings.filter((item) => /^\d/.test(item.title)).map((item) => sectionCoreName(item.title))
+  );
+  const headings = orderedHeadings
+    .filter((item) => /^\d/.test(item.title) || !numberedCoreNames.has(sectionCoreName(item.title)))
     .slice(0, normalizeSourceMode(sourceMode) === 'lecture-note' ? 80 : 50);
   const sections = headings.length ? headings : preferredSections.map((title) => ({ title, index: source.indexOf(title) })).filter((item) => item.index >= 0);
   const blocks = sections.map((item, index) => {
@@ -1298,10 +1578,126 @@ function extractSectionBlocks(text, preferredSections = [], sourceMode = 'paper'
   return blocks.sort(compareSectionBlocks);
 }
 
-function firstSlideTitle(chunk, fallback) {
-  const lines = String(chunk || '').split(/\n/).map((line) => line.trim()).filter(Boolean);
-  const strong = lines.find((line) => line.length >= 4 && line.length <= 96 && !/^[-•▪◦]/.test(line) && !/^\d+$/.test(line));
-  return cleanHeadingTitle(strong || fallback);
+function slideLineKey(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9가-힣]+/g, ' ').trim();
+}
+
+function repeatedSlideHeaderKeys(chunks) {
+  const counts = new Map();
+  for (const chunk of chunks) {
+    const seen = new Set();
+    const lines = String(chunk || '').split(/\n/).slice(0, 8).map(cleanMetadataLine).filter(Boolean);
+    for (const line of lines) {
+      const key = slideLineKey(line);
+      if (key.length >= 14) seen.add(key);
+    }
+    for (const key of seen) counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const threshold = Math.max(2, Math.ceil(Math.min(chunks.length, 8) * 0.35));
+  return new Set([...counts.entries()].filter(([, count]) => count >= threshold).map(([key]) => key));
+}
+
+function firstSlideTitle(chunk, fallback, options = {}) {
+  const repeatedHeaders = options.repeatedHeaders || new Set();
+  const rawLines = String(chunk || '').split(/\n/);
+  const candidates = [];
+  rawLines.slice(0, 18).forEach((rawLine, index) => {
+    const line = cleanMetadataLine(rawLine);
+    if (!line) return;
+    const lineLooksLikeBullet = /^\s{2,}(?:I|•|◦|▪|[-–])\s+\S/.test(rawLine);
+    const nextLine = cleanMetadataLine(rawLines[index + 1] || '');
+    const lineIsRepeatedHeader = repeatedHeaders.has(slideLineKey(line));
+    const combined = !lineIsRepeatedHeader
+      && nextLine
+      && /^(?:lecture|lec\.?)\s*\d{1,3}\s*:/i.test(line)
+      && line.length >= 18
+      && line.length <= 80
+      && !/[.!?。]$/.test(line)
+      ? `${line} ${nextLine}`
+      : '';
+    const parts = unique([line, combined, ...line.split(/\s{2,}/)])
+      .map((part) => cleanTitleCandidate(part.replace(/^(?:slide|page)\s*\d{1,3}\s*[:.\-–—]?\s*/i, '')))
+      .filter(Boolean);
+    for (const candidate of parts) {
+      if (lineLooksLikeBullet) continue;
+      const key = slideLineKey(candidate);
+      const fromCombined = Boolean(combined && candidate === cleanTitleCandidate(combined));
+      if (repeatedHeaders.has(key) && !fromCombined) continue;
+      if (candidate.length < 3 || candidate.length > 96 || /^[-–•▪◦]/.test(candidate) || isBadMetadataTitle(candidate)) continue;
+      if (/\bBoyd\s+and\s+Vandenberghe\b/i.test(candidate)) continue;
+      if (/[=≤≥∈∉∑∏√{}|∇]/.test(candidate)) continue;
+      const words = candidate.split(/\s+/).filter(Boolean);
+      let score = 20 - index;
+      if (words.length >= 2 && words.length <= 7) score += 4;
+      if (words.length === 1 && index > 0) score -= 3;
+      if (/^(?:outline|overview|agenda)$/i.test(candidate)) score += 2;
+      if (/^(?:admin|background|motivation|summary|conclusion)$/i.test(candidate)) score += 1;
+      if (/^\d{1,2}\s+\S/.test(candidate)) score -= 8;
+      if (fromCombined) score += 5;
+      if (/[.!?。]$/.test(candidate)) score -= 6;
+      candidates.push({ candidate, score });
+    }
+  });
+  candidates.sort((a, b) => b.score - a.score || b.candidate.length - a.candidate.length);
+  return cleanHeadingTitle(candidates[0]?.candidate || fallback);
+}
+
+function slideTitleParts(title) {
+  const match = String(title || '').match(/^Slides?\s+(\d{1,4})(?:\s*[–-]\s*\d{1,4})?(?:\s*[—-]\s*(.+))?$/i);
+  if (!match) return { slideNumber: null, topic: cleanHeadingTitle(title) };
+  return {
+    slideNumber: Number(match[1]),
+    topic: cleanHeadingTitle(match[2] || `Slide ${match[1]}`)
+  };
+}
+
+function normalizeSlideTopic(topic) {
+  return String(topic || '')
+    .toLowerCase()
+    .replace(/\b(?:continued|cont\.?|build|part)\s*\d*\b/g, '')
+    .replace(/\s*\(\s*\d+\s*\/\s*\d+\s*\)\s*$/g, '')
+    .replace(/[^a-z0-9가-힣]+/g, ' ')
+    .trim();
+}
+
+function slideRangeLabel(start, end) {
+  if (!start || !end || start === end) return `Slide ${start || end || 1}`;
+  return `Slides ${start}–${end}`;
+}
+
+function groupConsecutiveSlideBlocks(blocks) {
+  const groups = [];
+  for (const block of blocks) {
+    const parts = slideTitleParts(block.title);
+    const topic = parts.topic || block.title;
+    const normalizedTopic = normalizeSlideTopic(topic);
+    const previous = groups[groups.length - 1];
+    const canFold = previous
+      && normalizedTopic
+      && previous.normalizedTopic === normalizedTopic
+      && (parts.slideNumber === null || previous.endSlide === null || parts.slideNumber === previous.endSlide + 1);
+    if (canFold) {
+      previous.endSlide = parts.slideNumber || previous.endSlide;
+      previous.body = `${previous.body}\n\n---\n\n${block.body}`.trim();
+      previous.count += 1;
+    } else {
+      groups.push({
+        topic,
+        normalizedTopic,
+        startSlide: parts.slideNumber,
+        endSlide: parts.slideNumber,
+        body: block.body,
+        count: 1
+      });
+    }
+  }
+  return groups.map((group) => {
+    const range = group.startSlide ? slideRangeLabel(group.startSlide, group.endSlide) : 'Slides';
+    return {
+      title: `${range} — ${group.topic}`,
+      body: group.body.slice(0, 32000)
+    };
+  });
 }
 
 function extractSlideBlocks(text, preferredSections = []) {
@@ -1318,18 +1714,21 @@ function extractSlideBlocks(text, preferredSections = []) {
   }
   if (!markers.length && source.includes('\f')) {
     let offset = 0;
-    source.split('\f').forEach((chunk, index) => {
-      markers.push({ title: `Slide ${index + 1} — ${firstSlideTitle(chunk, `Slide ${index + 1}`)}`, index: offset });
+    const chunks = source.split('\f');
+    const repeatedHeaders = repeatedSlideHeaderKeys(chunks);
+    chunks.forEach((chunk, index) => {
+      markers.push({ title: `Slide ${index + 1} — ${firstSlideTitle(chunk, `Slide ${index + 1}`, { repeatedHeaders })}`, index: offset });
       offset += chunk.length + 1;
     });
   }
   if (!markers.length && preferredSections.length) {
     markers.push(...preferredSections.map((title) => ({ title, index: source.indexOf(title) })).filter((item) => item.index >= 0));
   }
-  return markers.slice(0, 80).map((item, index) => {
+  const slideBlocks = markers.slice(0, 160).map((item, index) => {
     const next = markers[index + 1]?.index ?? source.length;
     return { title: item.title, body: source.slice(item.index, next).trim().slice(0, 16000) };
   });
+  return groupConsecutiveSlideBlocks(slideBlocks).slice(0, 80);
 }
 
 function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
@@ -1341,6 +1740,18 @@ function sectionNumberParts(title) {
   const match = String(title || '').match(/^(\d+(?:\.\d+)*)\./);
   if (!match) return [];
   return match[1].split('.').map((part) => Number(part));
+}
+
+// Normalized section name for de-duplication: strip the leading number and any
+// subtitle, lowercase, and fold a trailing plural so "3. Method" and a stray
+// "Method" (or "Methods") collapse to the same key.
+function sectionCoreName(title) {
+  return String(title || '')
+    .replace(/^\d+(?:\.\d+)*\.?\s*/, '')
+    .replace(/\s*[—:-]\s.*$/, '')
+    .toLowerCase()
+    .replace(/s$/, '')
+    .trim();
 }
 
 function compareSectionBlocks(a, b) {
@@ -1511,106 +1922,48 @@ function equationLabel(number, body) {
   return `Explain Eq. (${number}) symbol by symbol`;
 }
 
+// Generic lecture-note menu. The model tailors it on entry by reading the
+// section and re-running `section --choices` (no word-matching / scoring).
 function lectureNoteActionProfile(section, body) {
-  const title = String(section || 'this lecture-note section');
-  const equations = detectEquationNumbers(body);
-  const concepts = detectConcepts(body);
-  const definitions = detectDefinitions(body);
-  const actions = [];
-  actions.push(`Build the concept ladder for ${title}`);
-  for (const concept of concepts.slice(0, 4)) actions.push(`Explain ${concept} from first principles`);
-  for (const item of definitions.slice(0, 3)) actions.push(`Walk through ${item} and why it is needed`);
-  for (const number of equations.slice(0, 5)) actions.push(equationLabel(number, body));
-  if (/example|worked example/i.test(body)) actions.push(`Work through the example in ${title} step by step`);
-  if (/exercise|problem/i.test(body)) actions.push(`Turn the exercise in ${title} into a guided solution path`);
-  if (/proof|lemma|theorem|proposition/i.test(body)) actions.push(`Trace the proof logic in ${title}`);
-  actions.push(...visualRepairActions(title, body));
-  actions.push(`Run a readiness checkpoint for ${title}`);
-  actions.push(`Ask anything about ${title}`);
-  actions.push(`Chat about this section`);
-  return unique(actions).slice(0, 12);
+  const title = String(section || "this section");
+  return [
+    `Map ${title}: what it teaches`,
+    `Explain the key concepts in ${title} from first principles`,
+    `Decode the equations in ${title}`,
+    `Work through the examples or exercises in ${title}`,
+    `Ask anything about ${title}`,
+    `Chat about this section`
+  ];
 }
 
+// Generic slide menu. Slides are TEMPORAL: the model reads the slide IMAGE,
+// reconstructs the missing narration, and explains how the slide builds on the
+// earlier ones. It tailors this menu on entry via `section --choices`.
+// See prompts/slide-navigator.md.
 function slideDeckActionProfile(section, body) {
-  const title = String(section || 'this slide');
-  const equations = detectEquationNumbers(body);
-  const concepts = detectConcepts(body);
-  const citations = detectCitations(body);
-  const actions = [];
-  actions.push(`Explain ${title} as if the lecturer paused here`);
-  actions.push(`Reconstruct the missing narration for ${title}`);
-  for (const concept of concepts.slice(0, 4)) actions.push(`Explain slide concept: ${concept}`);
-  for (const number of equations.slice(0, 4)) actions.push(equationLabel(number, body));
-  if (/figure|diagram|architecture|pipeline|model|image|visual|robot|trajectory/i.test(body)) actions.push(`Explain every label/arrow/visual element on ${title}`);
-  if (citations.length) actions.push(`Explain why ${citations[0]} appears on this slide`);
-  actions.push(`Connect ${title} to the previous and next slide`);
-  actions.push(...visualRepairActions(title, body));
-  actions.push(`Ask anything about ${title}`);
-  actions.push(`Chat about this slide`);
-  return unique(actions).slice(0, 12);
+  const title = String(section || "this slide");
+  return [
+    `Reconstruct the lecturer's narration for ${title}`,
+    `Read the figure(s) and visual elements on ${title}`,
+    `Decode the equations on ${title}`,
+    `How ${title} builds on the earlier slides`,
+    `Continue to the next slide`,
+    `Ask anything about ${title}`,
+    `Chat about this slide`
+  ];
 }
 
 function actionProfileForSection(section, body, sourceMode = 'paper') {
   const normalizedMode = normalizeSourceMode(sourceMode);
   if (normalizedMode === 'lecture-note') return lectureNoteActionProfile(section, body);
   if (normalizedMode === 'slide-deck') return slideDeckActionProfile(section, body);
-  const title = String(section || '');
-  const lowerTitle = title.toLowerCase();
-  const equations = detectEquationNumbers(body);
-  const citations = detectCitations(body);
-  const concepts = detectConcepts(body);
-  const actions = [];
-
-  if (/introduction/.test(lowerTitle)) {
-    actions.push('Explain the Introduction as a promise-and-mechanism story');
-    for (const concept of concepts.slice(0, 4)) actions.push(`Unpack "${concept}" from the Introduction`);
-    if (citations.length) actions.push('Identify which prior work or baseline frames the paper’s promise');
-    actions.push(...visualRepairActions(title, body));
-  } else if (/related work/.test(lowerTitle)) {
-    actions.push('Build a related-work map: what each family contributes and why PaperMentor cares');
-    for (const family of ['Diffusion-/Flow-based Models', 'GANs', 'VAEs', 'Normalizing Flows', 'Moment Matching', 'Contrastive Learning']) {
-      if (body.toLowerCase().includes(family.toLowerCase().replace('-/', '/').split(' ')[0].toLowerCase()) || body.includes(family.split(' ')[0])) {
-        actions.push(`Explain the contrast with ${family}`);
-      }
-    }
-    for (const citation of citations.slice(0, 4)) actions.push(`Follow citation: explain how ${citation} is used here`);
-    actions.push(...visualRepairActions(title, body));
-  } else if (/\b(method|methods|approach|model|architecture|algorithm|framework|system)\b/.test(lowerTitle) || /Algorithm\s+\d+|objective|pipeline|optimizer|architecture|framework|procedure/i.test(body)) {
-    actions.push('Give a compact method overview for this section');
-    for (const number of equations.slice(0, 8)) actions.push(equationLabel(number, body));
-    for (const item of detectDefinitions(body).filter((item) => /Proposition|Theorem|Lemma|Assumption|Definition/i.test(item)).slice(0, 3)) actions.push(`Explain ${item} and why it is needed`);
-    if (/stopgrad|stop-gradient/i.test(body)) actions.push('Explain why the stop-gradient target is used and what would break without it');
-    actions.push('Build the dependency chain for the method section');
-    actions.push(...visualRepairActions(title, body));
-  } else if (/implementation/.test(lowerTitle)) {
-    actions.push('Walk through the implementation step by step');
-    for (const item of detectDefinitions(body).filter((value) => /Algorithm/i.test(value)).slice(0, 3)) actions.push(`Explain ${item} as executable pseudocode`);
-    for (const concept of concepts.slice(0, 4)) actions.push(`Explain implementation detail: ${concept}`);
-    actions.push('Connect implementation choices back to the objective or system contract');
-    actions.push(...visualRepairActions(title, body));
-  } else if (/experiment|evaluation|results|analysis|ablation|benchmark|case study/i.test(lowerTitle)) {
-    actions.push('Explain what the experiments are trying to prove');
-    for (const concept of concepts.slice(0, 4)) actions.push(`Explain evaluation concept: ${concept}`);
-    if (/metric|score|accuracy|error|loss|FID|BLEU|ROUGE|AUC/i.test(body)) actions.push('Explain the main metric and why it supports the claim');
-    if (/ablation/i.test(body)) actions.push('Interpret the ablation without overclaiming');
-    actions.push(...visualRepairActions(title, body));
-  } else if (/discussion|conclusion/.test(lowerTitle)) {
-    actions.push('Extract the paper’s final insight from this section');
-    actions.push('Identify limitations, assumptions, and open questions');
-  }
-
-  if (!actions.length) {
-    for (const concept of concepts.slice(0, 4)) actions.push(`Explain "${concept}" in this section`);
-    for (const number of equations.slice(0, 5)) actions.push(equationLabel(number, body));
-    actions.push(...visualRepairActions(title, body));
-    if (!actions.length) actions.push(`Explain the purpose of ${title}`);
-  }
-
-  actions.push(`Ask anything about ${title}`);
-  actions.push(`Chat about this section`);
-  return unique(actions).slice(0, 12);
+  // Paper mode ships a GENERIC menu only. Classifying a section's role and proposing
+  // tailored, template-mapped actions is the model's job: on entry it reads the
+  // section title+content, infers the role (weak position prior), and re-runs
+  // `section --choices` to replace this menu. No word-matching or scoring here.
+  // See prompts/section-navigator.md.
+  return defaultSectionActions(section);
 }
-
 function analyzePaper(args) {
   const slug = args.session || args.slug;
   if (!slug) throw new Error('analyze requires --session <slug>');
@@ -1921,7 +2274,24 @@ function addCard(args) {
   if (hasForbiddenDiagramSubstitute(body)) {
     throw new Error('report body contains a Mermaid/flowchart diagram substitute; attach an actual paper figure crop or write prose instead');
   }
-  const cardId = args.id || `${type}-${String(cards.cards.length + 1).padStart(3, '0')}`;
+  // Start Here and the reading guide are singleton blocks: a re-render or a real
+  // fill replaces the existing one in place (same id and position) instead of
+  // appending a duplicate.
+  const singletonTypes = new Set(['start-here', 'reading-guide']);
+  const existingIndex = singletonTypes.has(type)
+    ? cards.cards.findIndex((existing) => existing.type === type)
+    : -1;
+  const existingSingleton = existingIndex >= 0 ? cards.cards[existingIndex] : null;
+  const incomingIsScaffold = /Not built yet|Not written yet/.test(body);
+  // A re-launch ships the scaffold again; never let it clobber an already-filled
+  // Start Here, so re-running the same source keeps the reader's content.
+  if (type === 'start-here' && existingSingleton && incomingIsScaffold
+    && !/Not built yet|Not written yet/.test(existingSingleton.body || '')) {
+    return existingSingleton;
+  }
+  const cardId = args.id
+    || existingSingleton?.id
+    || `${type}-${String(cards.cards.length + 1).padStart(3, '0')}`;
   const card = {
     id: cardId,
     type,
@@ -1934,9 +2304,16 @@ function addCard(args) {
     originTurn: args['origin-turn'] || args.originTurn || '',
     body,
     choices: splitChoices(args.choices),
-    createdAt: now()
+    createdAt: existingSingleton?.createdAt || now()
   };
-  cards.cards.push(card);
+  if (existingSingleton) cards.cards[existingIndex] = card;
+  else cards.cards.push(card);
+  // A real Start Here fill (not the "Not built yet/written yet" scaffold) clears
+  // the pending flags so the navigator stops asking for the replacement.
+  if (type === 'start-here' && !incomingIsScaffold) {
+    state.startHerePending = false;
+    if (card.figure && splitFigureExplanationSection(body).figure) state.figureReadingPending = false;
+  }
   const shouldUpdatePath = !args.noPath && !args['no-path'];
   if (shouldUpdatePath) {
     const pathKey = inferPathKey(type, state);
@@ -2260,7 +2637,80 @@ body {
 .body h1 { font-size:24px; margin:22px 0 10px; }
 .body h2 { font-size:21px; margin:22px 0 10px; }
 .body h3 { font-size:18px; margin:18px 0 8px; }
-.body h3.ladder-heading {
+.body .flow {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:10px 7px;
+  margin:16px 0 24px;
+  padding:16px 16px;
+  max-width:100%;
+  min-width:0;
+  overflow-wrap:anywhere;
+  border:1px solid var(--line);
+  border-radius:10px;
+  background:#fafafa;
+}
+.body .flow-box {
+  min-width:0;
+  max-width:100%;
+  border:1px solid var(--line);
+  border-radius:7px;
+  padding:6px 11px;
+  background:#fff;
+  font-size:13px;
+  line-height:1.3;
+  white-space:normal;
+  overflow-wrap:anywhere;
+  word-break:normal;
+  box-shadow:0 1px 2px rgba(40,40,40,.04);
+}
+.body .flow-arrow { color:#9a9a9a; font-size:12px; padding:0 1px; }
+
+/* Grouped flow: each " || " phase becomes a labeled, bordered cluster, with a
+   larger separator arrow between phases and generous spacing. */
+.body .flow-grouped {
+  align-items:stretch;
+  gap:12px 10px;
+  padding:18px 16px;
+}
+.body .flow-group {
+  display:flex;
+  flex-direction:column;
+  flex:1 1 220px;
+  min-width:0;
+  max-width:100%;
+  gap:9px;
+  padding:11px 13px 13px;
+  border:1px solid var(--line);
+  border-radius:11px;
+  background:#fff;
+}
+.body .flow-group-label {
+  font-size:10.5px;
+  font-weight:700;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+  color:#7a7a7a;
+}
+.body .flow-grouped .flow-row {
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  min-width:0;
+  max-width:100%;
+  gap:9px 6px;
+}
+.body .flow-grouped .flow-box { background:#fafafa; }
+.body .flow-sep {
+  display:flex;
+  align-items:center;
+  color:#c2c2c2;
+  font-size:17px;
+  padding:0 3px;
+}
+
+.ladder-heading {
   margin:20px 0 10px;
   padding:12px 14px 10px;
   border:1px solid var(--line);
@@ -2478,7 +2928,7 @@ html.papermentor-print-preview .latex { font-size:12px; padding:10px 12px; margi
     ${state.authors ? `<div class="paper-authors">${escapeHtml(state.authors)}</div>` : ''}
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => renderCardArticle(card, index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
+    ${(cards.cards || []).map((card, index) => renderCardArticle(localizeReadingGuide(card, lang, slug, state.sourceMode), index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
 <script>
@@ -2905,6 +3355,34 @@ function markdownToHtml(markdown) {
       closeList();
       if (!isTableSeparator(line)) tableRows.push(tableCells(line));
     }
+    else if (/^flow:\s*/i.test(trimmed)) {
+      // Block diagram. "flow: A → B → C" renders as a spaced strip of pill boxes.
+      // " || " splits the chain into phase groups, and a leading "[label]" names a
+      // phase, e.g. "flow: [basics] A → B || [model] C → D". No Mermaid/SVG, and
+      // never a paper-figure claim.
+      closeBlocks();
+      const arrow = '<span class="flow-arrow" aria-hidden="true">→</span>';
+      const splitSteps = (text) => text.split(/\s*(?:→|-&gt;|->)\s*/).map((step) => step.trim()).filter(Boolean);
+      const pill = (step) => `<span class="flow-box">${formatInline(step)}</span>`;
+      const rawGroups = trimmed.replace(/^flow:\s*/i, '').split(/\s*\|\|\s*/).map((group) => group.trim()).filter(Boolean);
+      const grouped = rawGroups.length > 1 || /^\[/.test(rawGroups[0] || '');
+      if (!grouped) {
+        const boxes = splitSteps(rawGroups[0] || '').map(pill).join(arrow);
+        if (boxes) html += `<div class="flow">${boxes}</div>`;
+      } else {
+        const groupsHtml = rawGroups.map((group) => {
+          const labelMatch = group.match(/^\[([^\]]+)\]\s*(.*)$/);
+          const label = labelMatch ? labelMatch[1].trim() : '';
+          const steps = splitSteps(labelMatch ? labelMatch[2] : group);
+          if (!steps.length) return '';
+          const labelHtml = label ? `<div class="flow-group-label">${formatInline(label)}</div>` : '';
+          return `<div class="flow-group">${labelHtml}<div class="flow-row">${steps.map(pill).join(arrow)}</div></div>`;
+        }).filter(Boolean);
+        if (groupsHtml.length) {
+          html += `<div class="flow flow-grouped">${groupsHtml.join('<span class="flow-sep" aria-hidden="true">→</span>')}</div>`;
+        }
+      }
+    }
     else if (/^###\s+/.test(line)) {
       closeBlocks();
       const title = line.replace(/^###\s+/, '');
@@ -2931,9 +3409,29 @@ function markdownToHtml(markdown) {
 }
 
 function formatInline(value) {
-  return value
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`(.+?)`/g, '<code>$1</code>');
+  // Stash inline code and math first so emphasis/link rules never corrupt LaTeX
+  // subscripts ($s_{y_j}$) or code spans. Sentinels are Private-Use-Area chars
+  // built at runtime: they cannot appear in source text and escapeHtml ignores them.
+  const L = String.fromCharCode(0xE000);
+  const R = String.fromCharCode(0xE001);
+  const stash = [];
+  const hold = (html) => {
+    const token = L + stash.length + R;
+    stash.push(html);
+    return token;
+  };
+  let s = String(value)
+    .replace(/`([^`]+?)`/g, (_m, inner) => hold(`<code>${inner}</code>`))
+    .replace(/\$\$[\s\S]+?\$\$/g, (m) => hold(m))
+    .replace(/\$[^\$\n]+?\$/g, (m) => hold(m))
+    .replace(/\\\([\s\S]+?\\\)/g, (m) => hold(m))
+    .replace(/\\\[[\s\S]+?\\\]/g, (m) => hold(m));
+  s = s
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/(^|[^\w$])_(?=\S)(.+?)(?<=\S)_(?![\w$])/g, "$1<em>$2</em>")
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "<a href=\"$2\" target=\"_blank\" rel=\"noopener\">$1</a>");
+  const restore = new RegExp(L + "(\\d+)" + R, "g");
+  return s.replace(restore, (_m, idx) => stash[Number(idx)]);
 }
 
 function line(width = 74) { return '─'.repeat(width); }
@@ -2955,7 +3453,7 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
   console.log(`╰${line(width)}╯`);
   console.log('\nOpen the HTML first. Use the CLI for navigation, section choices, and questions.');
   if ((state.paperSections || []).length && !state.currentSection) {
-    console.log(`\n${sourceModeLabel(state.sourceMode)} sections`);
+    console.log(`\n${sectionListHeading(state.sourceMode)}`);
     (state.paperSections || []).forEach((section, index) => console.log(`  ${index === 0 ? '◆' : '◇'} [${index + 1}] ${section}`));
   } else if (state.currentSection && !state.currentMode) {
     console.log(`\nSelected section: ${state.currentSection}`);
@@ -3004,7 +3502,7 @@ function boxLine(content = '', width = 84, color = ansi.cyan) {
 }
 
 function currentMenuLabel(state) {
-  if ((state.paperSections || []).length && !state.currentSection) return `${sourceModeLabel(state.sourceMode)} sections`;
+  if ((state.paperSections || []).length && !state.currentSection) return sectionListHeading(state.sourceMode);
   if (state.currentSection && !state.currentMode) return 'Section actions';
   return 'Choose next';
 }
@@ -3435,8 +3933,19 @@ function resumeReading(args) {
 
 function sourceSeedFromInput(input, args = {}) {
   const clean = String(input || '').split(/[?#]/)[0];
+  try {
+    const url = new URL(String(input || ''));
+    const driveId = url.hostname.includes('drive.google.com')
+      ? (url.pathname.match(/\/file\/d\/([^/]+)/)?.[1] || url.searchParams.get('id'))
+      : url.hostname.includes('docs.google.com')
+        ? url.pathname.match(/\/(?:presentation|document)\/d\/([^/]+)/)?.[1]
+        : '';
+    if (driveId) return args.title || `google-drive-${driveId.slice(0, 10)}`;
+  } catch {
+    // Local paths and non-URL inputs fall through to basename handling.
+  }
   const extension = sourceExtensionFromUrl(clean);
-  return args.title || basename(clean, extension) || 'paper';
+  return args.title || cleanTitleCandidate(basename(clean, extension)) || 'paper';
 }
 
 function openSessionHtml(slug) {
@@ -3479,11 +3988,17 @@ function createLaunchShell({ input, source, args }) {
 }
 
 function updateLaunchNavigation({ slug, source, args, text }) {
-  const metadata = inferMetadataFromText(text || '', args);
   const state = readJson(statePath(slug), null);
-  const title = args.title || metadata.title || state?.title || basename(source, extname(source)) || 'PaperMentor reading session';
+  const provisionalTitle = args.title || state?.title || titleFromSourceName(source) || 'PaperMentor reading session';
+  const sourceMode = detectSourceMode(text, { ...args, source, title: provisionalTitle, mode: args.mode || args['source-mode'] || 'auto' }, { title: provisionalTitle, source });
+  const metadata = inferMetadataFromText(text || '', args);
+  const sourceTitle = titleFromSourceName(source);
+  const slideTitle = normalizeSourceMode(sourceMode) === 'slide-deck' ? inferSlideDeckTitleFromText(text) : '';
+  const title = args.title
+    || (normalizeSourceMode(sourceMode) === 'slide-deck'
+      ? (slideTitle || provisionalTitle || sourceTitle || 'PaperMentor slide session')
+      : (metadata.title || provisionalTitle || sourceTitle || 'PaperMentor reading session'));
   const authors = args.authors || args.author || metadata.authors || state?.authors || '';
-  const sourceMode = detectSourceMode(text, { ...args, source, title, mode: args.mode || args['source-mode'] || 'auto' }, { title, source });
   const blocks = text ? extractSourceBlocks(text, [], sourceMode) : [];
   const sections = blocks.map((block) => block.title).slice(0, 60);
   const ensured = ensureSession({ title, authors, source, slug, sections, sourceMode });
@@ -3505,7 +4020,7 @@ function updateLaunchNavigation({ slug, source, args, text }) {
   nextState.currentLocation = `${sourceModeLabel(sourceMode)} section navigator`;
   nextState.currentFocus = `Launched from one command. Open the HTML report, then choose a ${sourceModeNoun(sourceMode)} section.`;
   writeJson(statePath(slug), nextState);
-  return { state: nextState, sourceMode, sections };
+  return { state: nextState, sourceMode, sections, blocks };
 }
 
 
@@ -3579,6 +4094,12 @@ function detectRepresentativeFigure(text, sourceMode = 'paper') {
 function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure }) {
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
+  const isSlideDeck = normalizeSourceMode(sourceMode) === 'slide-deck';
+  const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop);
+  if (isSlideDeck && !explicitStartFigure) {
+    addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
+    return { canExtractVisual, attachedVisual: false };
+  }
   if (canExtractVisual && !args['no-figure']) {
     const requestedPage = args.page || args.slide;
     const requestedAuto = args.auto || args.figure || args['figure-number'];
@@ -3652,7 +4173,7 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
   } else {
     addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body, choices: sections.join('|'), quiet: true, noPath: true });
   }
-  return canExtractVisual;
+  return { canExtractVisual, attachedVisual: canExtractVisual && !args['no-figure'] };
 }
 
 function maybeWriteCropPreview({ slug, source, args, canExtractVisual }) {
@@ -3672,12 +4193,34 @@ function launchSession(args) {
   const { slug } = createLaunchShell({ input, source, args });
   const { text, orientationText } = extractLaunchTexts(source, args);
   const { state, sourceMode, sections } = updateLaunchNavigation({ slug, source, args, text });
-  const body = args.body || launchStartBody({ sourceMode, text: orientationText });
   addReadingGuideBlock({ slug, sourceMode, sections, args });
+  const extension = extname(source).toLowerCase();
+  const canExtractVisualForPreview = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
+  const hasProvidedStartHereBody = Boolean(args.body || args['body-file']);
+  if (normalizeSourceMode(sourceMode) === 'slide-deck' && !hasProvidedStartHereBody) {
+    const pendingState = readJson(statePath(slug), state);
+    writeSlideStartHerePrompt(pendingState, sections);
+    pendingState.updatedAt = now();
+    writeJson(statePath(slug), pendingState);
+    maybeWriteCropPreview({ slug, source, args, canExtractVisual: canExtractVisualForPreview });
+    renderHtml(slug);
+    if (args.open) openSessionHtml(slug);
+    const finalState = readJson(statePath(slug), pendingState);
+    printConsole(finalState);
+    console.log(`\nLaunch complete:
+- HTML: .papermentor/sessions/${slug}/index.html
+- Start Here prompt: .papermentor/sessions/${slug}/pending-prompt.md
+- TUI:  ${cliCommand()} tui --session ${slug}
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- Next: write the Start Here body from the pending prompt, then append it with ${cliCommand()} card --session ${slug} --type start-here --title 'Start Here' --body-file <file>`);
+    return;
+  }
+  const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
   const representativeFigure = detectRepresentativeFigure(text || orientationText, sourceMode);
-  const canExtractVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure });
-  const startHereScaffolded = !args.body;
-  const figureScaffoldShipped = canExtractVisual && !args.body && !args['no-figure'];
+  const launchVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigure });
+  const startHereCard = readJson(cardsPath(slug), { cards: [] }).cards.find((existing) => existing.type === 'start-here');
+  const startHereIsScaffold = !startHereCard || /Not built yet|Not written yet/.test(startHereCard.body || '');
+  const startHereScaffolded = !args.body && startHereIsScaffold;
+  const figureScaffoldShipped = launchVisual.attachedVisual && !args.body && !args['no-figure'] && startHereIsScaffold;
   if (startHereScaffolded) {
     const pendingState = readJson(statePath(slug), {});
     pendingState.startHerePending = true;
@@ -3685,7 +4228,7 @@ function launchSession(args) {
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
   }
-  maybeWriteCropPreview({ slug, source, args, canExtractVisual });
+  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
   const finalState = readJson(statePath(slug), state);
