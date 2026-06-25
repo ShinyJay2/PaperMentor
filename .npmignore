@@ -8,3 +8,9 @@ npm-debug.log*
 *.ppt
 *.pptx
 papermentor-skill-*.tgz
+.claude/
+.github/
+/image.png
+/Screenshot*.png
+/스크린샷*.png
+assets/social-preview.png

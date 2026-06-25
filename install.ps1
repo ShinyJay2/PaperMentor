@@ -32,8 +32,11 @@ function Copy-PaperMentorSkill($Dest) {
   Copy-Item -Recurse -Path (Join-Path $RootDir "templates") -Destination (Join-Path $Dest "templates")
   Copy-Item -Recurse -Path (Join-Path $RootDir "examples") -Destination (Join-Path $Dest "examples")
   Copy-Item -Recurse -Path (Join-Path $RootDir "tests") -Destination (Join-Path $Dest "tests")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "scripts") -Destination (Join-Path $Dest "scripts")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "assets") -Destination (Join-Path $Dest "assets")
+  New-Item -ItemType Directory -Force -Path (Join-Path $Dest "scripts") | Out-Null
+  New-Item -ItemType Directory -Force -Path (Join-Path $Dest "assets") | Out-Null
+  Copy-Item -Path (Join-Path $RootDir "scripts\papermentor-session.mjs") -Destination (Join-Path $Dest "scripts\papermentor-session.mjs")
+  Copy-Item -Recurse -Path (Join-Path $RootDir "assets\fonts") -Destination (Join-Path $Dest "assets\fonts")
+  Copy-Item -Recurse -Path (Join-Path $RootDir "assets\mathjax") -Destination (Join-Path $Dest "assets\mathjax")
 }
 
 function Install-PaperMentorCli($SkillDir) {

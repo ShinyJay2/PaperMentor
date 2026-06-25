@@ -8,7 +8,8 @@
   "scripts": {
     "test": "node scripts/validate.mjs",
     "session": "node scripts/papermentor-session.mjs",
-    "launch": "node scripts/papermentor-session.mjs launch"
+    "launch": "node scripts/papermentor-session.mjs launch",
+    "pack:check": "node scripts/check-package.mjs"
   },
   "keywords": [
     "ai-agent-skill",
@@ -33,5 +34,32 @@
   "bin": {
     "papermentor": "scripts/papermentor-session.mjs",
     "pm": "scripts/papermentor-session.mjs"
-  }
+  },
+  "files": [
+    "README.md",
+    "SKILL.md",
+    "LICENSE",
+    "CONTRIBUTING.md",
+    "SECURITY.md",
+    "CODE_OF_CONDUCT.md",
+    "DESIGN.md",
+    "install.sh",
+    "install.ps1",
+    ".npmignore",
+    "assets/fonts/**",
+    "assets/mathjax/**",
+    "assets/papermentor-demo.svg",
+    "assets/papermentor-hero.svg",
+    "assets/social-preview.svg",
+    "demo/**",
+    "docs/**",
+    "examples/**",
+    "prompts/**",
+    "scripts/papermentor-session.mjs",
+    "scripts/check-package.mjs",
+    "scripts/validate.mjs",
+    "skills/**",
+    "templates/**",
+    "tests/**"
+  ]
 }

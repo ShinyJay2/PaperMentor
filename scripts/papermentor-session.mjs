@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, cpSync, rmSync, mkdtempSync, readdirSync, renameSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, linkSync, rmSync, mkdtempSync, readdirSync, renameSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { basename, dirname, extname, join, resolve, sep, relative } from 'node:path';
 import { createHash } from 'node:crypto';
@@ -353,11 +353,34 @@ function splitChoices(value) {
 
 
 function isUrl(value) {
-  return /^https?:\/\//i.test(String(value || '')) || /^data:/i.test(String(value || ''));
+  return /^https?:\/\//i.test(String(value || ''));
 }
 
 function isHttpUrl(value) {
   return /^https?:\/\//i.test(String(value || ''));
+}
+
+function parseHttpUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    return ['http:', 'https:'].includes(url.protocol) ? url : null;
+  } catch {
+    return null;
+  }
+}
+
+function assertSafeRemoteUrl(value, { label = 'URL', allowHttp = false } = {}) {
+  const url = parseHttpUrl(value);
+  if (!url) throw new Error(`${label} must be an http(s) URL`);
+  if (url.protocol === 'http:' && !allowHttp) {
+    throw new Error(`${label} must use https; pass --allow-insecure-http only for trusted local/test sources`);
+  }
+  return url.href;
+}
+
+function safeMarkdownHref(value) {
+  const url = parseHttpUrl(String(value || '').replace(/&amp;/g, '&'));
+  return url ? url.href : '';
 }
 
 function sourceExtensionFromUrl(value) {
@@ -406,9 +429,25 @@ function sourceCacheFile(url, slugHint = 'source') {
   return join(sourceCacheDir(), `${stem}-${key}${extension}`);
 }
 
+function readFileProbe(path, { headBytes = 4096, tailBytes = 1048576 } = {}) {
+  const { size } = statSync(path);
+  const fd = openSync(path, 'r');
+  try {
+    const head = Buffer.alloc(Math.min(headBytes, size));
+    readSync(fd, head, 0, head.length, 0);
+    if (size <= head.length) return head;
+    const tailLength = Math.min(tailBytes, Math.max(0, size - head.length));
+    const tail = Buffer.alloc(tailLength);
+    readSync(fd, tail, 0, tail.length, Math.max(0, size - tail.length));
+    return Buffer.concat([head, tail]);
+  } finally {
+    closeSync(fd);
+  }
+}
+
 function detectSourceExtensionFromBytes(path) {
-  const buffer = readFileSync(path);
-  const head = buffer.subarray(0, 4096);
+  const probe = readFileProbe(path);
+  const head = probe.subarray(0, 4096);
   const textHead = head.toString('utf8').trimStart();
   if (head.subarray(0, 4).toString() === '%PDF') return '.pdf';
   if (head.length >= 8 && head[0] === 0x89 && head.subarray(1, 4).toString() === 'PNG') return '.png';
@@ -417,7 +456,7 @@ function detectSourceExtensionFromBytes(path) {
   if (head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP') return '.webp';
   if (head.length >= 8 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return '.ppt';
   if (head.subarray(0, 2).toString() === 'PK') {
-    const zipText = buffer.toString('latin1');
+    const zipText = probe.toString('latin1');
     if (zipText.includes('ppt/presentation.xml')) return '.pptx';
     if (zipText.includes('word/document.xml')) return '.docx';
   }
@@ -453,15 +492,17 @@ function finalizeDownloadedSourceFile(path, url) {
   return target;
 }
 
-function downloadSourceIfNeeded(source, slugHint = 'source') {
+function downloadSourceIfNeeded(source, slugHint = 'source', args = {}) {
   if (!isHttpUrl(source)) return resolve(source);
   const curl = commandPath('curl');
   if (!curl) throw new Error('launching from a URL requires `curl` on PATH');
-  const url = normalizePaperUrl(source);
+  const allowInsecureHttp = Boolean(args['allow-insecure-http']);
+  const url = assertSafeRemoteUrl(normalizePaperUrl(source), { label: 'source URL', allowHttp: allowInsecureHttp });
   mkdirSync(sourceCacheDir(), { recursive: true });
   const out = sourceCacheFile(url, slugHint);
   const cached = cachedSourceVariant(out);
   if (cached) return finalizeDownloadedSourceFile(cached, url);
+  const allowedProtocols = allowInsecureHttp ? '=http,https' : '=https';
   try {
     runTool(curl, [
       '-L',
@@ -469,9 +510,9 @@ function downloadSourceIfNeeded(source, slugHint = 'source') {
       '--silent',
       '--show-error',
       '--proto',
-      '=http,https',
+      allowedProtocols,
       '--proto-redir',
-      '=http,https',
+      allowedProtocols,
       '--connect-timeout',
       '15',
       '--max-time',
@@ -960,12 +1001,31 @@ function figureCaption(args) {
   return isProvenanceOnlyCaption(caption) ? '' : caption;
 }
 
+function linkOrCopyFile(source, destination) {
+  mkdirSync(dirname(destination), { recursive: true });
+  rmSync(destination, { force: true });
+  try {
+    linkSync(source, destination);
+  } catch {
+    copyFileSync(source, destination);
+  }
+}
+
+function linkOrCopyDir(source, destination) {
+  if (!existsSync(source)) return;
+  mkdirSync(destination, { recursive: true });
+  for (const entry of readdirSync(source, { withFileTypes: true })) {
+    const sourcePath = join(source, entry.name);
+    const destPath = join(destination, entry.name);
+    if (entry.isDirectory()) linkOrCopyDir(sourcePath, destPath);
+    else if (entry.isFile()) linkOrCopyFile(sourcePath, destPath);
+  }
+}
+
 function copyBundledReportAssets(slug) {
   mkdirSync(assetDir(slug), { recursive: true });
-  const sourceFonts = join(bundledAssetsDir, 'fonts');
-  if (existsSync(sourceFonts)) cpSync(sourceFonts, join(assetDir(slug), 'fonts'), { recursive: true });
-  const sourceMathJax = join(bundledAssetsDir, 'mathjax');
-  if (existsSync(sourceMathJax)) cpSync(sourceMathJax, join(assetDir(slug), 'mathjax'), { recursive: true });
+  linkOrCopyDir(join(bundledAssetsDir, 'fonts'), join(assetDir(slug), 'fonts'));
+  linkOrCopyDir(join(bundledAssetsDir, 'mathjax'), join(assetDir(slug), 'mathjax'));
 }
 
 
@@ -1537,7 +1597,10 @@ function prepareFigure(slug, cardId, args) {
   if (!source) return null;
 
   let src = String(source);
-  if (!isUrl(src)) {
+  const remoteFigureRequested = Boolean(args['figure-url']);
+  if (remoteFigureRequested || isUrl(src)) {
+    src = assertSafeRemoteUrl(src, { label: 'figure URL' });
+  } else {
     const absoluteSource = resolve(src);
     if (!existsSync(absoluteSource)) throw new Error(`figure file not found: ${src}`);
     mkdirSync(assetDir(slug), { recursive: true });
@@ -3594,7 +3657,10 @@ function formatInline(value) {
   s = s
     .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
     .replace(/(^|[^\w$])_(?=\S)(.+?)(?<=\S)_(?![\w$])/g, "$1<em>$2</em>")
-    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, "<a href=\"$2\" target=\"_blank\" rel=\"noopener\">$1</a>");
+    .replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, (_match, label, href) => {
+      const safeHref = safeMarkdownHref(href);
+      return safeHref ? `<a href=\"${escapeHtml(safeHref)}\" target=\"_blank\" rel=\"noopener\">${label}</a>` : label;
+    });
   const restore = new RegExp(L + "(\\d+)" + R, "g");
   return s.replace(restore, (_m, idx) => stash[Number(idx)]);
 }
@@ -5171,7 +5237,7 @@ function launchSession(args) {
   const input = args.source || args.input || args._[1];
   if (!input) throw new Error('launch requires a source URL or local file: launch <paper-url-or-file>');
   const sourceSeed = sourceSeedFromInput(input, args);
-  const source = downloadSourceIfNeeded(input, sourceSeed);
+  const source = downloadSourceIfNeeded(input, sourceSeed, args);
   const { slug } = createLaunchShell({ input, source, args });
   const { text, orientationText } = extractLaunchTexts(source, args);
   const { state, sourceMode, sections, blocks } = updateLaunchNavigation({ slug, source, args, text });

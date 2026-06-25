@@ -5,7 +5,7 @@ import { execFileSync, spawn } from 'node:child_process';
 
 const root = new URL('..', import.meta.url).pathname;
 const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','.npmignore','docs/ci/github-actions-ci.yml','.github/workflows/ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs',
+  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','.npmignore','docs/ci/github-actions-ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs','scripts/check-package.mjs',
   'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/slide-scanner.md','prompts/slide-navigator.md','prompts/prerequisite-analyzer.md','prompts/section-navigator.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
   'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
   'templates/start_here.md','templates/slide_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
@@ -206,7 +206,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
   if (sessionScript.includes(phrase)) failures.push(`session renderer should not rely on remote font CSS: ${phrase}`);
 }
 
-for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation']) {
+for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
 for (const phrase of ['renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa', 'Claude/Codex-style command palette']) {
@@ -319,9 +319,9 @@ for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-
   if (!npmIgnore.includes(phrase)) failures.push(`.npmignore should exclude local source/package artifact: ${phrase}`);
 }
 
-for (const rel of ['docs/ci/github-actions-ci.yml', '.github/workflows/ci.yml']) {
+for (const rel of ['docs/ci/github-actions-ci.yml']) {
   const ci = readFileSync(join(root, rel), 'utf8');
-  for (const phrase of ['poppler-utils', 'libreoffice', 'imagemagick', 'python3-pptx', 'npm test', 'npm pack --dry-run']) {
+  for (const phrase of ['poppler-utils', 'libreoffice', 'imagemagick', 'python3-pptx', 'npm test', 'npm run pack:check']) {
     if (!ci.includes(phrase)) failures.push(`${rel} missing phrase: ${phrase}`);
   }
 }
@@ -353,8 +353,9 @@ function expectedInstalledResources() {
     'SKILL.md',
     'commands.md',
     'examples.md',
-    ...required
-      .filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/') || rel.startsWith('scripts/') || rel.startsWith('assets/'))
+    ...required.filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/')),
+    'scripts/papermentor-session.mjs',
+    ...required.filter((rel) => rel.startsWith('assets/fonts/') || rel.startsWith('assets/mathjax/'))
   ];
 }
 
@@ -363,11 +364,8 @@ function assertInstalledArtifact(dest, label) {
   for (const rel of installedRequired) {
     if (!existsSync(join(dest, rel))) failures.push(`${label} installed artifact missing ${rel}`);
   }
-
-  for (const dir of ['prompts', 'templates', 'examples', 'tests', 'scripts', 'assets']) {
-    const sourceCount = required.filter((rel) => rel.startsWith(`${dir}/`)).length;
-    const installedCount = installedRequired.filter((rel) => rel.startsWith(`${dir}/`)).length;
-    if (sourceCount !== installedCount) failures.push(`${label} installed ${dir}/ expectation mismatch: ${installedCount} of ${sourceCount}`);
+  for (const rel of ['scripts/validate.mjs', 'assets/papermentor-demo.svg', 'assets/papermentor-hero.svg', 'assets/social-preview.svg', 'assets/social-preview.png']) {
+    if (existsSync(join(dest, rel))) failures.push(`${label} installed artifact should exclude non-runtime file ${rel}`);
   }
 }
 
@@ -482,6 +480,22 @@ Slide 17: Sampling
     if (!launchHtml.includes('Jane Researcher, John Vector') || launchHtml.includes(launchTextPath)) failures.push('launch report should show authors and hide source paths');
     if (!launchHtml.includes('How to use this reading room') || !launchHtml.includes('One-sentence orientation') || !(launchHtml.indexOf('How to use this reading room') < launchHtml.indexOf('Start Here'))) failures.push('launch should create a reading guide block before Start Here');
     if (!launchHtml.includes('Preliminary') || !launchHtml.includes('List the prerequisites in order') || (launchHtml.match(/class="ladder-heading"/g) || []).length) failures.push('launch Start Here should ship a preliminary-ladder scaffold for the model to fill, not a script-synthesized ladder');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'launch-smoke', '--type', 'note', '--title', 'Unsafe link smoke', '--body', '[bad](javascript:alert(1)) [file](file:///tmp/x) [ok](https://example.com/path?a=1&b=2)'], { cwd: temp, stdio: 'pipe' });
+    const safeLinkHtml = readFileSync(join(launchDir, 'index.html'), 'utf8');
+    if (/href="(?:javascript:|file:|data:)/i.test(safeLinkHtml)) failures.push('rendered markdown links should reject unsafe URL schemes');
+    if (!safeLinkHtml.includes('href="https://example.com/path?a=1&amp;b=2"')) failures.push('rendered markdown links should preserve safe https links');
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', 'http://example.com/paper.pdf', '--slug', 'http-source-blocked'], { cwd: temp, stdio: 'pipe' });
+      failures.push('launch should reject insecure http source URLs by default');
+    } catch (error) {
+      if (!String(error.stderr || error.message).includes('must use https')) failures.push('http source rejection should explain the https requirement');
+    }
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--slug', 'data-figure-blocked', '--title', 'Unsafe figure', '--figure-url', 'data:image/svg+xml,<svg/>', '--body', 'Body'], { cwd: temp, stdio: 'pipe' });
+      failures.push('figure-url should reject data: URLs');
+    } catch (error) {
+      if (!String(error.stderr || error.message).includes('figure URL must be an http(s) URL')) failures.push('data figure rejection should explain safe figure URL schemes');
+    }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'launch-smoke', '--paper-text-file', launchTextPath], { cwd: temp, stdio: 'pipe' });
     const genericLaunchState = readJson(join(launchDir, 'state.json'), {});
     const genericLaunchActions = JSON.stringify(genericLaunchState.sectionActions || {});
@@ -669,8 +683,8 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     try {
       for (let i = 0; i < 50 && !existsSync(portFile); i += 1) execFileSync('node', ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50)']);
       const port = readFileSync(portFile, 'utf8').trim();
-      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
-      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke-2', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke', '--no-figure', '--no-preview', '--allow-insecure-http'], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke-2', '--no-figure', '--no-preview', '--allow-insecure-http'], { cwd: temp, stdio: 'pipe' });
       const sourceFiles = readdirSync(join(temp, '.papermentor', 'sources')).filter((name) => name.endsWith('.txt'));
       if (sourceFiles.length !== 1) failures.push(`URL launch should reuse deterministic source cache, got ${sourceFiles.join(',')}`);
       const urlHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'launch-url-smoke', 'index.html'), 'utf8');

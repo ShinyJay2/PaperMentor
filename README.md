@@ -105,6 +105,8 @@ Windows PowerShell:
 iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
 ```
 
+For stricter supply-chain control, clone a tagged release or pinned commit, inspect it, then run `./install.sh codex` locally instead of piping from `main`.
+
 Install locations:
 
 ```text
@@ -231,7 +233,9 @@ Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturall
 
 Paper-related interruptions are not dumped into the report as chat logs. PaperMentor logs turns in `turns.jsonl`, then automatically promotes useful understanding repairs into polished blocks with a visible **User question**, missing dependency, answer, paper reconnection, and resume point. Meta/tooling chatter stays out of HTML unless you explicitly say `save this` or `add this to report`; `don't save this` keeps it out.
 
-Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies these font files into the skill, and each generated session copies them into `.papermentor/sessions/<paper-slug>/assets/fonts/`, so the report typography works after installing the skill without remote font CSS.
+Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies only runtime assets into the skill, and each generated session hardlinks bundled fonts/MathJax when the filesystem supports it, falling back to copies when needed. The report typography and LaTeX rendering work offline without remote font or MathJax CSS.
+
+Remote paper/slide downloads require HTTPS by default because local native tools parse the downloaded file. For trusted local test servers only, pass `--allow-insecure-http`.
 
 ---
 
@@ -336,7 +340,7 @@ templates/            output structures
 examples/             concrete behavior examples
 demo/                 sample paper and reference outputs
 tests/                human review checklists
-assets/               README and social preview images
+assets/               runtime fonts/MathJax plus lightweight README SVGs
 ```
 
 Validation:
