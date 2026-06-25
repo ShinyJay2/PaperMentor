@@ -21,8 +21,13 @@ jobs:
         run: |
           node --check scripts/papermentor-session.mjs
           node --check scripts/validate.mjs
+          node --check scripts/install.mjs
+          node --check scripts/manifest.mjs
+          node --check scripts/sync-manifest.mjs
           bash -n install.sh
       - name: Validate skill and runtime
         run: npm test
+      - name: Manifest sync check
+        run: npm run manifest:check
       - name: Package contents and size check
         run: npm run pack:check

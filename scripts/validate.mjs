@@ -2,17 +2,11 @@ import { existsSync, readFileSync, statSync, mkdtempSync, rmSync, writeFileSync,
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { execFileSync, spawn } from 'node:child_process';
+import { loadManifest, packageFiles, repoRoot, runtimeInstallDestinations } from './manifest.mjs';
 
-const root = new URL('..', import.meta.url).pathname;
-const required = [
-  'README.md','SKILL.md','LICENSE','CONTRIBUTING.md','SECURITY.md','CODE_OF_CONDUCT.md','install.sh','install.ps1','package.json','.npmignore','docs/ci/github-actions-ci.yml','assets/papermentor-hero.svg','assets/papermentor-demo.svg','assets/social-preview.svg','assets/fonts/README.md','assets/fonts/satoshi/Satoshi-300.woff2','assets/fonts/satoshi/Satoshi-400.woff2','assets/fonts/satoshi/Satoshi-500.woff2','assets/fonts/satoshi/Satoshi-700.woff2','assets/fonts/satoshi/Satoshi-900.woff2','assets/fonts/pretendard/PretendardVariable.woff2','assets/mathjax/README.md','assets/mathjax/LICENSE.txt','assets/mathjax/tex-svg.js','scripts/papermentor-session.mjs','scripts/check-package.mjs',
-  'prompts/paper-scanner.md','prompts/source-mode-detector.md','prompts/slide-scanner.md','prompts/slide-navigator.md','prompts/prerequisite-analyzer.md','prompts/section-navigator.md','prompts/equation-analyzer.md','prompts/derivation-tracer.md','prompts/dependency-tracer.md','prompts/proof-analyzer.md','prompts/method-analyzer.md','prompts/confusion-resolver.md','prompts/final-insight-extractor.md','prompts/visualization-planner.md',
-  'skills/papermentor/SKILL.md','skills/papermentor/commands.md','skills/papermentor/examples.md',
-  'templates/start_here.md','templates/slide_start_here.md','templates/paper_map.md','templates/prerequisite_ladder.md','templates/equation_card.md','templates/derivation_trace.md','templates/dependency_trace.md','templates/proof_walkthrough.md','templates/method_dissection.md','templates/confusion_response.md','templates/recursive_why.md','templates/final_insight.md','templates/visualization_card.md','templates/conceptual_diagram.md','templates/concept_ladder.md','templates/example_walkthrough.md','templates/slide_explanation.md','templates/missing_narration.md','templates/slide_transition.md','templates/interactive_console.md','templates/session_state.json','templates/reading_dashboard.md',
-  'examples/korean_equation_explanation.md','examples/derivation_trace_example.md','examples/dependency_trace_example.md','examples/confusion_sign_magnitude_example.md','examples/final_insight_example.md','examples/interactive_session_example.md','examples/turboquant_prerequisite_ladder_example.md','examples/golden_quality_contracts.md',
-  'tests/latex_quality_checklist.md','tests/atomic_equation_checklist.md','tests/derivation_trace_checklist.md','tests/dependency_trace_checklist.md','tests/no_handwave_checklist.md','tests/korean_support_checklist.md','tests/visualization_checklist.md','tests/figure_explanation_checklist.md','tests/report_rendering_checklist.md','tests/source_mode_checklist.md','tests/slide_mode_checklist.md','tests/prerequisite_depth_checklist.md',
-  'demo/sample-paper.md','demo/sample-session.md','demo/report/index.html','demo/report/assets/drifting-method-demo.svg','demo/outputs/paper_map.md','demo/outputs/equation_card.md','demo/outputs/derivation_trace.md','demo/outputs/final_insight.md'
-];
+const root = repoRoot;
+const manifest = loadManifest(root);
+const required = packageFiles(root, manifest);
 
 const failures = [];
 
@@ -349,14 +343,7 @@ for (const forbidden of ['Compare training-time drifting with inference-time dif
 }
 
 function expectedInstalledResources() {
-  return [
-    'SKILL.md',
-    'commands.md',
-    'examples.md',
-    ...required.filter((rel) => rel.startsWith('prompts/') || rel.startsWith('templates/') || rel.startsWith('examples/') || rel.startsWith('tests/')),
-    'scripts/papermentor-session.mjs',
-    ...required.filter((rel) => rel.startsWith('assets/fonts/') || rel.startsWith('assets/mathjax/'))
-  ];
+  return runtimeInstallDestinations(root, manifest);
 }
 
 function assertInstalledArtifact(dest, label) {

@@ -81,38 +81,61 @@ Interrupt anytime: `Pause. Why did the sign flip here?` PaperMentor answers the 
 
 ## Install
 
-Codex:
+PaperMentor installs the same skill into Codex and/or Claude Code from one manifest-backed installer. It requires Node.js 18+ and git on PATH for one-line remote installs.
+
+Codex only:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash
 ```
 
-Claude Code:
+Claude Code only:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s claude
+curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s -- claude
 ```
 
-Both:
+Codex + Claude Code:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s all
+curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash -s -- all
 ```
 
 Windows PowerShell:
 
 ```powershell
-iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 | iex
+iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.ps1 -OutFile install.ps1
+.\install.ps1 codex     # or: .\install.ps1 claude / .\install.ps1 all
 ```
 
-For stricter supply-chain control, clone a tagged release or pinned commit, inspect it, then run `./install.sh codex` locally instead of piping from `main`.
+Local/pinned install:
+
+```bash
+git clone https://github.com/ShinyJay2/PaperMentor.git
+cd PaperMentor
+./install.sh codex       # or: ./install.sh claude / ./install.sh all
+```
+
+For stricter supply-chain control, clone a tagged release or pinned commit, inspect it, then run the local installer instead of piping from `main`.
 
 Install locations:
 
 ```text
-Codex:       ~/.codex/skills/papermentor
-Claude Code: ~/.claude/skills/papermentor
+Codex:        ~/.codex/skills/papermentor
+Claude Code:  ~/.claude/skills/papermentor
+CLI aliases:  ~/.local/bin/papermentor and ~/.local/bin/pm
+Windows CLI:  ~/.papermentor/bin/papermentor.cmd and ~/.papermentor/bin/pm.cmd
 ```
+
+Useful installer options:
+
+```bash
+./install.sh all --no-cli
+./install.sh codex --bin-dir ~/.local/bin
+CODEX_HOME=/custom/codex CLAUDE_HOME=/custom/claude ./install.sh all
+```
+
+Under the hood, `install.sh` / `install.ps1` clone or update `~/.papermentor/repo` when needed, then delegate to `node scripts/install.mjs`. The Node installer reads `papermentor.manifest.json`, copies only runtime skill files, and writes the `pm` / `papermentor` CLI wrappers.
 
 ---
 
@@ -334,19 +357,23 @@ Every visualization plan includes a **question**, **concept**, **visual encoding
 ## Project anatomy
 
 ```text
-prompts/              specialized tutor modes
-skills/papermentor/   installable Skill entrypoint
-templates/            output structures
-examples/             concrete behavior examples
-demo/                 sample paper and reference outputs
-tests/                human review checklists
-assets/               runtime fonts/MathJax plus lightweight README SVGs
+papermentor.manifest.json  single source of truth for install/package files
+scripts/install.mjs         manifest-backed Codex/Claude installer
+prompts/                    specialized tutor modes
+skills/papermentor/         installable Skill entrypoint
+templates/                  output structures
+examples/                   concrete behavior examples
+demo/                       sample paper and reference outputs
+tests/                      human review checklists
+assets/                     runtime fonts/MathJax plus lightweight README SVGs
 ```
 
 Validation:
 
 ```bash
 npm test
+npm run manifest:check
+npm run pack:check
 ```
 
 The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, sample-demo artifacts, and install-smoke coverage for both Codex and Claude Code.

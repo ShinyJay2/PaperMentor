@@ -9,7 +9,10 @@
     "test": "node scripts/validate.mjs",
     "session": "node scripts/papermentor-session.mjs",
     "launch": "node scripts/papermentor-session.mjs launch",
-    "pack:check": "node scripts/check-package.mjs"
+    "pack:check": "node scripts/check-package.mjs",
+    "install:skill": "node scripts/install.mjs",
+    "manifest:check": "node scripts/sync-manifest.mjs --check",
+    "manifest:write": "node scripts/sync-manifest.mjs --write"
   },
   "keywords": [
     "ai-agent-skill",
@@ -43,9 +46,11 @@
     "SECURITY.md",
     "CODE_OF_CONDUCT.md",
     "DESIGN.md",
+    "package.json",
     "install.sh",
     "install.ps1",
     ".npmignore",
+    "papermentor.manifest.json",
     "assets/fonts/**",
     "assets/mathjax/**",
     "assets/papermentor-demo.svg",
@@ -56,6 +61,9 @@
     "examples/**",
     "prompts/**",
     "scripts/papermentor-session.mjs",
+    "scripts/install.mjs",
+    "scripts/manifest.mjs",
+    "scripts/sync-manifest.mjs",
     "scripts/check-package.mjs",
     "scripts/validate.mjs",
     "skills/**",

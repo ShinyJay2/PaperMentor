@@ -1,0 +1,91 @@
+{
+  "schema": "papermentor.distribution.v1",
+  "install": [
+    {
+      "from": "skills/papermentor/**",
+      "to": "."
+    },
+    {
+      "from": "prompts/**",
+      "to": "prompts"
+    },
+    {
+      "from": "templates/**",
+      "to": "templates"
+    },
+    {
+      "from": "examples/**",
+      "to": "examples"
+    },
+    {
+      "from": "tests/**",
+      "to": "tests"
+    },
+    {
+      "from": "scripts/papermentor-session.mjs",
+      "to": "scripts/papermentor-session.mjs"
+    },
+    {
+      "from": "assets/fonts/**",
+      "to": "assets/fonts"
+    },
+    {
+      "from": "assets/mathjax/**",
+      "to": "assets/mathjax"
+    }
+  ],
+  "package": {
+    "files": [
+      "README.md",
+      "SKILL.md",
+      "LICENSE",
+      "CONTRIBUTING.md",
+      "SECURITY.md",
+      "CODE_OF_CONDUCT.md",
+      "DESIGN.md",
+      "package.json",
+      "install.sh",
+      "install.ps1",
+      ".npmignore",
+      "papermentor.manifest.json",
+      "assets/fonts/**",
+      "assets/mathjax/**",
+      "assets/papermentor-demo.svg",
+      "assets/papermentor-hero.svg",
+      "assets/social-preview.svg",
+      "demo/**",
+      "docs/**",
+      "examples/**",
+      "prompts/**",
+      "scripts/papermentor-session.mjs",
+      "scripts/install.mjs",
+      "scripts/manifest.mjs",
+      "scripts/sync-manifest.mjs",
+      "scripts/check-package.mjs",
+      "scripts/validate.mjs",
+      "skills/**",
+      "templates/**",
+      "tests/**"
+    ],
+    "forbidden": [
+      ".claude/**",
+      ".github/**",
+      ".omx/**",
+      ".omc/**",
+      ".papermentor/**",
+      "image.png",
+      "Screenshot*.png",
+      "스크린샷*.png",
+      "assets/social-preview.png",
+      "*.pdf",
+      "*.ppt",
+      "*.pptx",
+      "*.key"
+    ],
+    "limits": {
+      "maxPackedBytes": 3500000,
+      "maxUnpackedBytes": 5500000,
+      "maxFiles": 130
+    }
+  }
+}

@@ -1,5 +1,7 @@
 param(
-  [string]$Platform = $(if ($env:PAPERMENTOR_TARGET) { $env:PAPERMENTOR_TARGET } else { "codex" })
+  [string]$Platform = $(if ($env:PAPERMENTOR_TARGET) { $env:PAPERMENTOR_TARGET } else { "codex" }),
+  [Parameter(ValueFromRemainingArguments = $true)]
+  [string[]]$ExtraArgs
 )
 
 $ErrorActionPreference = "Stop"
@@ -8,7 +10,7 @@ $RepoUrl = if ($env:PAPERMENTOR_REPO_URL) { $env:PAPERMENTOR_REPO_URL } else { "
 $CacheDir = if ($env:PAPERMENTOR_HOME) { Join-Path $env:PAPERMENTOR_HOME "repo" } else { Join-Path $HOME ".papermentor\repo" }
 $RootDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 
-if (-not (Test-Path (Join-Path $RootDir "skills\papermentor"))) {
+if (-not (Test-Path (Join-Path $RootDir "scripts\install.mjs")) -or -not (Test-Path (Join-Path $RootDir "papermentor.manifest.json"))) {
   if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
     throw "PaperMentor install requires git for one-line remote installation."
   }
@@ -22,70 +24,8 @@ if (-not (Test-Path (Join-Path $RootDir "skills\papermentor"))) {
   $RootDir = $CacheDir
 }
 
-function Copy-PaperMentorSkill($Dest) {
-  New-Item -ItemType Directory -Force -Path (Split-Path -Parent $Dest) | Out-Null
-  if (Test-Path $Dest) { Remove-Item -Recurse -Force $Dest }
-  New-Item -ItemType Directory -Force -Path $Dest | Out-Null
-
-  Copy-Item -Recurse -Path (Join-Path $RootDir "skills\papermentor\*") -Destination $Dest
-  Copy-Item -Recurse -Path (Join-Path $RootDir "prompts") -Destination (Join-Path $Dest "prompts")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "templates") -Destination (Join-Path $Dest "templates")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "examples") -Destination (Join-Path $Dest "examples")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "tests") -Destination (Join-Path $Dest "tests")
-  New-Item -ItemType Directory -Force -Path (Join-Path $Dest "scripts") | Out-Null
-  New-Item -ItemType Directory -Force -Path (Join-Path $Dest "assets") | Out-Null
-  Copy-Item -Path (Join-Path $RootDir "scripts\papermentor-session.mjs") -Destination (Join-Path $Dest "scripts\papermentor-session.mjs")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "assets\fonts") -Destination (Join-Path $Dest "assets\fonts")
-  Copy-Item -Recurse -Path (Join-Path $RootDir "assets\mathjax") -Destination (Join-Path $Dest "assets\mathjax")
+if (-not (Get-Command node -ErrorAction SilentlyContinue)) {
+  throw "PaperMentor install requires Node.js 18+ on PATH."
 }
 
-function Install-PaperMentorCli($SkillDir) {
-  if ($env:PAPERMENTOR_INSTALL_CLI -eq "0") { return }
-  $BinDir = if ($env:PAPERMENTOR_BIN_DIR) { $env:PAPERMENTOR_BIN_DIR } else { Join-Path $HOME ".papermentor\bin" }
-  New-Item -ItemType Directory -Force -Path $BinDir | Out-Null
-  $CmdPath = Join-Path $BinDir "papermentor.cmd"
-  $PmPath = Join-Path $BinDir "pm.cmd"
-  $ScriptPath = Join-Path $SkillDir "scripts\papermentor-session.mjs"
-  @"
-@echo off
-set PAPERMENTOR_CLI=papermentor
-node "$ScriptPath" %*
-"@ | Set-Content -Encoding ASCII -Path $CmdPath
-  @"
-@echo off
-set PAPERMENTOR_CLI=pm
-node "$ScriptPath" %*
-"@ | Set-Content -Encoding ASCII -Path $PmPath
-  Write-Host "PaperMentor CLI installed: $CmdPath"
-  Write-Host "PaperMentor palette shortcut installed: $PmPath"
-  if (-not (($env:PATH -split ';') -contains $BinDir)) {
-    Write-Host "Note: add $BinDir to PATH to run 'papermentor' from any shell."
-  }
-}
-
-function Install-Codex() {
-  $CodexHome = if ($env:CODEX_HOME) { $env:CODEX_HOME } else { Join-Path $HOME ".codex" }
-  $Dest = Join-Path $CodexHome "skills\papermentor"
-  Copy-PaperMentorSkill $Dest
-  Write-Host "PaperMentor installed for Codex: $Dest"
-  Install-PaperMentorCli $Dest
-}
-
-function Install-Claude() {
-  $ClaudeHome = if ($env:CLAUDE_HOME) { $env:CLAUDE_HOME } else { Join-Path $HOME ".claude" }
-  $Dest = Join-Path $ClaudeHome "skills\papermentor"
-  Copy-PaperMentorSkill $Dest
-  Write-Host "PaperMentor installed for Claude Code: $Dest"
-  Install-PaperMentorCli $Dest
-}
-
-switch ($Platform.ToLowerInvariant()) {
-  "codex" { Install-Codex }
-  "claude" { Install-Claude }
-  "claude-code" { Install-Claude }
-  "all" { Install-Codex; Install-Claude }
-  "both" { Install-Codex; Install-Claude }
-  default { throw "Usage: install.ps1 [codex|claude|all]" }
-}
-
-Write-Host 'Try: pm <paper.pdf-or-url>'
+& node (Join-Path $RootDir "scripts\install.mjs") $Platform @ExtraArgs
