@@ -6,6 +6,18 @@ Use this prompt to write the first real Start Here HTML block for slide-based Pa
 
 Write a finished teaching block that orients the reader before they enter individual slide topics. The output must read like a tutor explaining the conceptual path, not like a planning table, rubric, or metadata dump.
 
+## Topic grouping responsibility
+
+The script only extracts slide text and folds obvious repeated-title/build slides. It must not decide semantic topic boundaries with hard-coded words.
+
+Before writing the final Start Here body, read the detected topics as a teacher. If the navigator topics are too fragmented or wrongly grouped, first replace them with your own learner-facing grouping using:
+
+```bash
+papermentor sections --session <slug> --mode slide-deck --sections "<topic A>|<topic B>|<topic C>"
+```
+
+Group by teaching dependency and conceptual phase. Do not rely on keyword matching.
+
 ## Required output shape
 
 ### `## One-sentence orientation`

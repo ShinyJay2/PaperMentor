@@ -904,8 +904,8 @@ FID and ablations evaluate sample quality.`);
     if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide-deck slide explanation should complete the slides reading-path step');
     if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide-deck slide explanation should advance to missing narration');
 
-    const outlineSlideText = join(temp, 'outline-slides.txt');
-    writeFileSync(outlineSlideText, `Slide 1: Convex Optimization
+    const numberedOnlySlideText = join(temp, 'numbered-only-slides.txt');
+    writeFileSync(numberedOnlySlideText, `Slide 1: Convex Optimization
 - Why convexity matters.
 
 Slide 2: 1. Introduction
@@ -921,22 +921,11 @@ Slide 5: 2. Convex sets
 - Sets closed under convex combinations.
 
 Slide 6: Convex set
-- theta x + (1-theta)y stays in C.
-
-Slide 7: Hyperplanes and halfspaces
-- a^T x = b and a^T x <= b.
-
-Slide 8: 3. Convex functions
-- Function curvature controls optimization.
-
-Slide 9: First order condition
-- f(y) >= f(x) + grad f(x)^T (y-x).`);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Convex Slides', '--source', 'convex-slides.pdf', '--slug', 'outline-slides', '--mode', 'slide-deck'], { cwd: temp, stdio: 'pipe' });
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'outline-slides', '--mode', 'slide-deck', '--paper-text-file', outlineSlideText], { cwd: temp, stdio: 'pipe' });
-    state = readJson(join(temp, '.papermentor', 'sessions', 'outline-slides', 'state.json'), {});
-    for (const expected of ['Slides 2–4 — 1. Introduction', 'Slides 5–7 — 2. Convex sets', 'Slides 8–9 — 3. Convex functions']) {
-      if (!state.paperSections?.includes(expected)) failures.push(`slide outline grouping missing ${expected}, got ${JSON.stringify(state.paperSections)}`);
-    }
+- theta x + (1-theta)y stays in C.`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Numbered Only Slides', '--source', 'numbered-only-slides.pdf', '--slug', 'numbered-only-slides', '--mode', 'slide-deck'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'numbered-only-slides', '--mode', 'slide-deck', '--paper-text-file', numberedOnlySlideText], { cwd: temp, stdio: 'pipe' });
+    state = readJson(join(temp, '.papermentor', 'sessions', 'numbered-only-slides', 'state.json'), {});
+    if (state.paperSections?.some((section) => /^Slides 2–4 — 1\. Introduction|^Slides 5–6 — 2\. Convex sets/.test(section))) failures.push('slide grouping should not infer semantic sections from numbered titles; the LLM regroup prompt owns that judgment');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Method Paper', '--source', 'paper.pdf', '--slug', 'method-paper', '--mode', 'auto'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'method-paper', '--mode', 'auto', '--paper-text-file', paperText], { cwd: temp, stdio: 'pipe' });

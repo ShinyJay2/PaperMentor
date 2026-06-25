@@ -528,6 +528,21 @@ function inferSlideDeckTitleFromText(text) {
     .filter(Boolean)
     .slice(0, 40);
   const candidates = [];
+  lines.slice(0, 8).forEach((line, index) => {
+    for (const span of [2, 3]) {
+      const chunk = lines.slice(index, index + span);
+      if (chunk.length !== span) continue;
+      if (chunk.some((part) => part.length > 45 || /^(?:https?:\/\/|www\.)/i.test(part) || /^[•▪◦-]\s/.test(part))) continue;
+      const combined = cleanTitleCandidate(chunk.join(' ').replace(/\s*[-–—]\s*/g, ' - '));
+      if (!combined || combined.length < 6 || combined.length > 120 || isBadMetadataTitle(combined)) continue;
+      const hasHangul = /[가-힣]/.test(combined);
+      if (!hasHangul) continue;
+      candidates.push({
+        value: combined,
+        score: 32 - index * 0.4 + (/[—–-]\s*[^—–-]+/.test(combined) ? 5 : 0)
+      });
+    }
+  });
   lines.forEach((line, index) => {
     const parts = unique([line, ...line.split(/\s{2,}/)]).map(cleanTitleCandidate).filter(Boolean);
     for (const part of parts) {
@@ -732,6 +747,7 @@ Use this timeline as the Start Here map. Read each topic as a temporal build: ea
 function slideStartHereWriterPrompt({ state, sections = [] }) {
   const topics = sections.length ? sections : ['No slide topics detected yet'];
   const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type start-here --title 'Start Here' --location 'Start Here' --body-file <your-markdown-file> --choices ${shellQuote(topics.join('|'))}`;
+  const regroupCommand = `${cliCommand()} sections --session ${shellQuote(state.slug)} --mode slide-deck --sections "<topic A>|<topic B>|<topic C>"`;
   return `# PaperMentor Slide Start Here Writer Prompt
 
 You are writing the first real teaching block for a slide-based PaperMentor reading room.
@@ -746,6 +762,16 @@ Append the finished Markdown to HTML with:
 - Mode: Slides
 - Detected slide topics:
 ${topics.map((topic, index) => `  ${index + 1}. ${topic}`).join('\n')}
+
+## Topic grouping responsibility
+
+The script only performs structural extraction and repeated-title/build folding. It must not decide semantic topic boundaries with hard-coded words.
+
+Before writing the final Start Here body, read the detected topics as a teacher and decide the learner-facing topic timeline yourself. If the extracted topic list is too fragmented or wrongly grouped, first replace the navigator topics with your own semantic grouping:
+
+\`${regroupCommand}\`
+
+Use your grouped topics in the \`--sections\` value, separated by \`|\`. Group by teaching dependency and conceptual phase, not by matching title keywords. After regrouping, write the Start Here body and append it with the card command above.
 
 ## What to write
 
@@ -1701,87 +1727,6 @@ function groupConsecutiveSlideBlocks(blocks) {
   });
 }
 
-function meaningfulOutlineTitle(topic) {
-  const value = cleanHeadingTitle(topic);
-  if (!value) return '';
-  const lower = value.toLowerCase();
-  if (/^(outline|agenda|contents?|overview|summary|references?|appendix)$/.test(lower)) return '';
-  if (/^(slide|page)\s+\d+$/i.test(value)) return '';
-  if (/copyright|all rights reserved|©/.test(lower)) return '';
-  return value;
-}
-
-function numberedOutlineAnchor(topic) {
-  const match = cleanHeadingTitle(topic).match(/^(\d{1,2})\.\s+(.{3,90})$/);
-  if (!match) return '';
-  const title = meaningfulOutlineTitle(match[2]);
-  return title ? `${match[1]}. ${title}` : '';
-}
-
-function outlineCandidateLinesFromBlock(block) {
-  const parts = slideTitleParts(block.title);
-  if (!/\b(outline|agenda|contents?)\b/i.test(parts.topic || '')) return [];
-  return String(block.body || '')
-    .split(/\n/)
-    .map((line) => cleanHeadingTitle(line.replace(/^\s*(?:[-•▪◦]|\d{1,2}[.)])\s*/, '')))
-    .map(meaningfulOutlineTitle)
-    .filter((line) => line && line.length >= 4 && line.length <= 80);
-}
-
-function outlineAnchorFromCandidates(topic, candidates = []) {
-  const normalizedTopic = normalizeSlideTopic(topic);
-  if (!normalizedTopic) return '';
-  const candidate = candidates.find((item) => {
-    const normalizedCandidate = normalizeSlideTopic(item);
-    return normalizedCandidate
-      && (normalizedTopic === normalizedCandidate
-        || normalizedTopic.startsWith(`${normalizedCandidate} `)
-        || normalizedCandidate.startsWith(`${normalizedTopic} `));
-  });
-  return candidate || '';
-}
-
-function combineSlideBlockRange(blocks, start, end, title) {
-  const slice = blocks.slice(start, end + 1);
-  const first = slideTitleParts(slice[0]?.title || '');
-  const last = slideTitleParts(slice[slice.length - 1]?.title || '');
-  const startSlide = first.slideNumber;
-  const endSlide = last.endSlide || last.slideNumber || startSlide;
-  return {
-    title: `${slideRangeLabel(startSlide, endSlide)} — ${title}`,
-    body: slice.map((block) => block.body).join('\n\n---\n\n').trim().slice(0, 42000)
-  };
-}
-
-function groupSlideBlocksByOutline(blocks) {
-  if (!Array.isArray(blocks) || blocks.length < 6) return blocks;
-  const outlineCandidates = unique(blocks.slice(0, 12).flatMap(outlineCandidateLinesFromBlock)).slice(0, 12);
-  const anchors = [];
-  const seenTitles = new Set();
-  blocks.forEach((block, index) => {
-    const topic = slideTitleParts(block.title).topic;
-    const anchor = numberedOutlineAnchor(topic) || outlineAnchorFromCandidates(topic, outlineCandidates);
-    const key = normalizeSlideTopic(anchor);
-    if (!anchor || seenTitles.has(key)) return;
-    seenTitles.add(key);
-    anchors.push({ index, title: anchor });
-  });
-  if (anchors.length < 2) return blocks;
-  const grouped = [];
-  let cursor = 0;
-  for (let i = 0; i < anchors.length; i += 1) {
-    const anchor = anchors[i];
-    if (anchor.index > cursor) grouped.push(...blocks.slice(cursor, anchor.index));
-    const nextIndex = anchors[i + 1]?.index ?? blocks.length;
-    const end = nextIndex - 1;
-    if (end > anchor.index) grouped.push(combineSlideBlockRange(blocks, anchor.index, end, anchor.title));
-    else grouped.push(blocks[anchor.index]);
-    cursor = nextIndex;
-  }
-  if (cursor < blocks.length) grouped.push(...blocks.slice(cursor));
-  return grouped.slice(0, 80);
-}
-
 function extractSlideBlocks(text, preferredSections = []) {
   const source = String(text || '').replace(/\r/g, '');
   const markers = [];
@@ -1810,7 +1755,7 @@ function extractSlideBlocks(text, preferredSections = []) {
     const next = markers[index + 1]?.index ?? source.length;
     return { title: item.title, body: source.slice(item.index, next).trim().slice(0, 16000) };
   });
-  return groupSlideBlocksByOutline(groupConsecutiveSlideBlocks(slideBlocks)).slice(0, 80);
+  return groupConsecutiveSlideBlocks(slideBlocks).slice(0, 80);
 }
 
 function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
