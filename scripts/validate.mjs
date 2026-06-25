@@ -1137,7 +1137,7 @@ function validateAllBlockTypes() {
       equation: '## Equation role\n\nThis training objective makes the generator output imitate a stop-gradient drift target.\n\n## Symbol roles\n\n- $x$ — generated sample.\n- $V_{p,q}(x)$ — drift vector.\n- $\\operatorname{stopgrad}$ — fixed target operator.',
       derivation: '## Transition\n\n### Previous equation\n\n$$x^{+}=x+V_{p,q}(x)$$\n\n### Next equation\n\n$$\\mathcal{L}=\\mathbb{E}\\left[\\left\\|x-\\operatorname{stopgrad}(x^{+})\\right\\|_2^2\\right]$$\n\n- Operation: substitute $x^{+}$.\n- Property used: definition of the drift target.\n- Assumption invoked: target is fixed by $\\operatorname{stopgrad}$.\n- Why valid: the target branch should not receive gradient.',
       dependency: '## Backward dependencies\n\n- Definition of pushforward.\n- Definition of drift field.\n- Stop-gradient training target.\n\n## Forward dependencies\n\n- Training objective.\n- Equilibrium claim.\n\n## Missing dependency check\n\nThe reader must know why $q=p_{\\mathrm{data}}$ implies near-zero drift.',
-      proof: '## Proof strategy\n\nShow that when the generated distribution equals the data distribution, the expected drift vanishes.\n\n## Line-by-line proof table\n\n| Line | Claim | Dependency |\n| --- | --- | --- |\n| 1 | $q=p_{\\mathrm{data}}$ | equilibrium assumption |\n| 2 | $V_{p,q}(x)\\approx 0$ | drift definition |\n| 3 | objective is minimized | squared norm nonnegativity |',
+      proof: '## Claim statement\n\nAt equilibrium, the drift objective is minimized.\n\n## Notation and objects\n\n$q$ is the generated distribution, $p_{\\mathrm{data}}$ is fixed, and $V_{p,q}(x)$ is the drift vector averaged over generated samples.\n\n## Line transition microscope\n\n### Transition 1 → 2\n\nPrevious line:\n\n$$q=p_{\\mathrm{data}}$$\n\nNext line:\n\n$$V_{p,q}(x)\\approx 0$$\n\nWhat changed: substitute the equilibrium distribution into the drift definition; the density mismatch term cancels, so the expected vector field vanishes.\n\n## Cancellation / substitution audit\n\nThe substituted definition is $q=p_{\\mathrm{data}}$; the recognized expectation is over $x\\sim q$.\n\n## Reconstruction checkpoint\n\nThe reader should be able to explain why matching distributions removes the drift signal.',
       confusion: '## Paused location\n\nEq. (6), inside $\\operatorname{stopgrad}(x+V_{p,q}(x))$.\n\n## Missing dependency\n\nThe user is missing why the target branch is frozen.\n\n## Minimal example\n\nIf both prediction and target move together, the loss can collapse without learning the intended direction.\n\n## Resume point\n\nReturn to Eq. (6) and trace which side receives gradient.',
       'recursive-why': '## Recursive why\n\n| Layer | Why question | Answer | Missing dependency | Stop? |\n| --- | --- | --- | --- | --- |\n| 1 | Why stopgrad? | Freeze target. | gradient flow | no |\n| 2 | Why freeze target? | Avoid chasing a moving target. | optimization objective | yes |\n\n## Root dependency\n\nUnderstand which computational graph branch receives gradient.',
       visualization: '## Visualization card\n\n- Question: Why does drift move samples toward data?\n- Concept: vector field on generated samples.\n- Visual encoding: arrows from generated points to nearby data structure.\n- What to observe: arrows shrink as distributions match.\n- Conclusion: the field is a conceptual guide for training.\n- Limitation: this does not prove convergence.',
@@ -1173,7 +1173,7 @@ function validateAllBlockTypes() {
     for (const phrase of ['Prerequisite ladder', 'Method dissection', 'Training objective', 'Derivation trace', 'Dependency trace', 'Proof walkthrough', 'Confusion repair', 'Recursive why', 'Visualization card', 'Final insight']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing stage phrase: ${phrase}`);
     }
-    for (const phrase of ['MathJax', 'assets/mathjax/tex-svg.js', '<ol>', '<table>', '<th>Line</th>', 'User question', 'Why is stopgrad used here?', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
+    for (const phrase of ['MathJax', 'assets/mathjax/tex-svg.js', '<ol>', '<table>', 'Line transition microscope', 'User question', 'Why is stopgrad used here?', 'class="paper-figure"', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {
       if (!html.includes(phrase)) failures.push(`all-block HTML missing structural phrase: ${phrase}`);
     }
     if (!html.includes('class="ladder-heading"')) failures.push('all-block HTML should style numbered ladder headings for long prerequisite ladders');
@@ -1228,7 +1228,7 @@ The final insight is that calibration is not a post-processing trick; it is enfo
       equation: 'Show the equation before any prose',
       derivation: 'Trace only one transition at a time',
       dependency: 'Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims',
-      proof: 'Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims',
+      proof: 'Use a line transition microscope rather than a fixed overview table',
       confusion: 'Answer the user',
       'recursive-why': 'Make each why-layer strictly deeper',
       visualization: 'Use visualization only for relationship, sequence, geometry, dependency, or flow confusion',
@@ -1307,14 +1307,63 @@ Theorem 2 has two subclaims: the estimator is unbiased, $\\mathbb{E}[\\langle y,
 
 Condition on $\\tilde{x}_{\\mathrm{mse}}$, prove the QJL residual is unbiased, then use the QJL variance bound to control distortion.
 
-## Line-by-line proof
+## Notation and objects
 
-| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
-| --- | --- | --- | --- | --- |
-| $\\tilde{x}=\\tilde{x}_{\\mathrm{mse}}+\\tilde{x}_{\\mathrm{qjl}}$ | substitute Algorithm 2 line 12 | Algorithm 2 | dimensions match | splits reconstruction into MSE part and residual part |
-| $\\mathbb{E}[\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle\\mid\\tilde{x}_{\\mathrm{mse}}]=\\langle y,r\\rangle$ | condition and apply unbiasedness | Lemma 4 | $r$ is fixed under conditioning | closes the expectation subclaim |
-| $\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle+\\langle y,r\\rangle=\\langle y,x\\rangle$ | substitute $r=x-\\tilde{x}_{\\mathrm{mse}}$ | residual definition | same inner product space | proves unbiasedness |
-| $\\operatorname{Var}(\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle)\\le \\frac{\\pi}{2d}\\|r\\|_2^2\\|y\\|_2^2$ | apply variance bound | Lemma 4 | QJL randomness independent after conditioning | starts the distortion bound |
+$\\tilde{x}_{\\mathrm{mse}}$ is the fixed MSE reconstruction under conditioning, $r=x-\\tilde{x}_{\\mathrm{mse}}$ is the residual, $\\tilde{x}_{\\mathrm{qjl}}$ is the random QJL residual estimate, and $y$ is the query vector held fixed while the QJL randomness is averaged.
+
+## Line transition microscope
+
+### Transition 1 → 2
+
+Previous line:
+
+$$\\tilde{x}=\\tilde{x}_{\\mathrm{mse}}+\\tilde{x}_{\\mathrm{qjl}}$$
+
+Next line:
+
+$$\\mathbb{E}[\\langle y,\\tilde{x}\\rangle\\mid\\tilde{x}_{\\mathrm{mse}}]=\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle+\\mathbb{E}[\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle\\mid\\tilde{x}_{\\mathrm{mse}}]$$
+
+What changed: substitute the decomposition into the inner product, distribute $\\langle y,\\cdot\\rangle$ over the sum, then move the fixed term $\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle$ outside the conditional expectation.
+
+### Transition 2 → 3
+
+Previous line:
+
+$$\\mathbb{E}[\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle\\mid\\tilde{x}_{\\mathrm{mse}}]$$
+
+Next line:
+
+$$\\langle y,r\\rangle$$
+
+What changed: apply Lemma 4's unbiasedness statement to the QJL residual estimator. The residual $r=x-\\tilde{x}_{\\mathrm{mse}}$ is fixed under the conditioning event.
+
+### Transition 3 → 4
+
+Previous line:
+
+$$\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle+\\langle y,r\\rangle$$
+
+Next line:
+
+$$\\langle y,x\\rangle$$
+
+What changed: substitute $r=x-\\tilde{x}_{\\mathrm{mse}}$, distribute the inner product, and cancel $+\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle$ with $-\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle$.
+
+### Transition 4 → 5
+
+Previous line:
+
+$$\\operatorname{Var}(\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle)$$
+
+Next line:
+
+$$\\operatorname{Var}(\\langle y,\\tilde{x}_{\\mathrm{qjl}}\\rangle)\\le \\frac{\\pi}{2d}\\|r\\|_2^2\\|y\\|_2^2$$
+
+What changed: invoke Lemma 4's variance bound; no algebra cancels here, the operation is applying an inequality in the correct upper-bound direction.
+
+## Cancellation / substitution audit
+
+Substitutions: $\\tilde{x}=\\tilde{x}_{\\mathrm{mse}}+\\tilde{x}_{\\mathrm{qjl}}$ and $r=x-\\tilde{x}_{\\mathrm{mse}}$. Cancellation: $\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle-\\langle y,\\tilde{x}_{\\mathrm{mse}}\\rangle=0$. Expectation regrouping: fixed MSE terms leave the conditional expectation; only QJL randomness remains averaged.
 
 ## Expectation / conditioning audit
 
@@ -1327,6 +1376,10 @@ The inequality direction comes from the QJL variance upper bound; it upper-bound
 ## Closure
 
 The first three lines prove unbiasedness, while the final variance line proves the error/distortion part of Theorem 2.
+
+## Proof coverage / compression audit
+
+This fixture covers every conceptual transition in the theorem proof and compresses only repeated expectation notation after the conditional proof is complete.
 
 ## Reconstruction checkpoint
 
@@ -1428,14 +1481,51 @@ You should now be able to reconstruct the method as: encode → compare with Eq.
 
 Theorem 2 claims the estimator is unbiased, $\\mathbb{E}[\\hat{g}(x)]=g(x)$, and has bounded variance.
 
-## Line-by-line proof
+## Notation and objects
 
-| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
-| --- | --- | --- | --- | --- |
-| $\\hat{g}(x)=\\frac{1}{m}\\sum_{j=1}^m h_j(x)$ | expand estimator | Definition 1 | samples are exchangeable | exposes the random terms |
-| $\\mathbb{E}[\\hat{g}(x)\\mid x]=\\frac{1}{m}\\sum_j\\mathbb{E}[h_j(x)\\mid x]$ | linearity of conditional expectation | probability preliminaries | $x$ is fixed under conditioning | reduces to one sample |
-| $\\mathbb{E}[h_j(x)\\mid x]=g(x)$ | apply Lemma 1 | Lemma 1 | sampling distribution matches the theorem | proves unbiasedness |
-| $\\operatorname{Var}(\\hat{g}(x))\\le \\sigma^2/m$ | independence variance bound | Lemma 2 | samples independent after conditioning | proves the bound part |
+$x$ is held fixed under conditioning, $h_j(x)$ is the sampled estimator term, $m$ is the number of samples, and $\\hat{g}(x)=m^{-1}\\sum_{j=1}^m h_j(x)$ averages those terms.
+
+## Line transition microscope
+
+### Transition 1 → 2
+
+Previous line:
+
+$$\\hat{g}(x)=\\frac{1}{m}\\sum_{j=1}^m h_j(x)$$
+
+Next line:
+
+$$\\mathbb{E}[\\hat{g}(x)\\mid x]=\\frac{1}{m}\\sum_{j=1}^m\\mathbb{E}[h_j(x)\\mid x]$$
+
+Primitive micro-steps: first put the conditional expectation around both sides; then keep $1/m$ fixed because it is not random; then move the finite sum outside the expectation one term at a time. Each micro-step is a local transformation of the previous expression.
+
+### Transition 2 → 3
+
+Previous line:
+
+$$\\frac{1}{m}\\sum_{j=1}^m\\mathbb{E}[h_j(x)\\mid x]$$
+
+Next line:
+
+$$\\frac{1}{m}\\sum_{j=1}^m g(x)=g(x)$$
+
+Primitive micro-steps: replace each term $\\mathbb{E}[h_j(x)\\mid x]$ using Lemma 1; then recognize the sum contains $m$ identical copies of $g(x)$; finally cancel the scalar factor $m/m$.
+
+### Transition 3 → 4
+
+Previous line:
+
+$$\\operatorname{Var}\\!\\left(\\frac{1}{m}\\sum_{j=1}^m h_j(x)\\right)$$
+
+Next line:
+
+$$\\operatorname{Var}(\\hat{g}(x))\\le \\sigma^2/m$$
+
+Primitive micro-steps: keep the variance operator on the averaged estimator, use the independence condition to remove cross terms, then use Lemma 2's per-sample variance bound.
+
+## Operation audit
+
+The selected proof uses only operations visible in these transitions: expectation is pushed through a fixed scalar and finite sum, identical terms are collapsed, a scalar factor cancels, and a variance bound is applied.
 
 ## Expectation / conditioning audit
 
@@ -1445,6 +1535,10 @@ Conditioning fixes $x$; the only randomness left is the sampling of $h_j$. The l
 
 The variance inequality is an upper bound; it shrinks by $m$ because independent terms add variances and the average contributes $1/m^2$.
 
+## Proof coverage / compression audit
+
+This fixture covers every conceptual displayed transition and compresses no algebra beyond repeated identical summands.
+
 ## Reconstruction checkpoint
 
 You should be able to identify what is fixed, which lemma proves expectation, and which lemma gives the bound.`;
@@ -1452,14 +1546,51 @@ You should be able to identify what is fixed, which lemma proves expectation, an
 
 Proposition 3 states that the objective in Eq. (4), $F(w)=\\sum_i \\ell(y_i x_i^\\top w)+\\lambda\\|w\\|_2^2$, is convex.
 
-## Line-by-line proof
+## Notation and objects
 
-| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
-| --- | --- | --- | --- | --- |
-| $w\\mapsto y_i x_i^\\top w$ | identify affine map | linear algebra | $x_i,y_i$ are fixed data | affine maps preserve convexity under composition |
-| $\\ell(y_i x_i^\\top w)$ | compose convex nondecreasing loss | Lemma 2 | $\\ell$ is convex on its domain | each data term is convex |
-| $\\sum_i \\ell(y_i x_i^\\top w)$ | add terms | convexity closure | finite sum | sum remains convex |
-| $\\lambda\\|w\\|_2^2$ | add quadratic regularizer | norm facts | $\\lambda\\ge0$ | regularizer is convex |
+$w$ is the optimization variable, $x_i,y_i$ are fixed data, $\\ell$ is the loss, and $\\lambda\\ge0$ is a fixed regularization weight.
+
+## Line transition microscope
+
+### Transition 1 → 2
+
+Previous line:
+
+$$w\\mapsto y_i x_i^\\top w$$
+
+Next line:
+
+$$w\\mapsto \\ell(y_i x_i^\\top w)$$
+
+Primitive micro-steps: first identify the inner expression as a function of $w$; then hold $x_i,y_i$ fixed; then apply the paper's composition rule to the outer function $\\ell$.
+
+### Transition 2 → 3
+
+Previous line:
+
+$$\\ell(y_i x_i^\\top w) \\text{ is convex for each } i$$
+
+Next line:
+
+$$\\sum_i \\ell(y_i x_i^\\top w) \\text{ is convex}$$
+
+Primitive micro-steps: add the first two convex terms, preserve convexity under that addition, then repeat the same local step over the finite index set.
+
+### Transition 3 → 4
+
+Previous line:
+
+$$\\sum_i \\ell(y_i x_i^\\top w)$$
+
+Next line:
+
+$$F(w)=\\sum_i \\ell(y_i x_i^\\top w)+\\lambda\\|w\\|_2^2$$
+
+Primitive micro-steps: introduce the regularizer, use $\\lambda\\ge0$ so scaling preserves convexity, then add it to the already convex data-fit term.
+
+## Operation audit
+
+The selected proof repeatedly transforms a statement about one function into a statement about a larger expression; each transition preserves convexity by a local rule named in the surrounding proof text.
 
 ## Expectation / conditioning audit
 
@@ -1469,6 +1600,10 @@ There is no stochastic conditioning in this proof; all $x_i,y_i$ are treated as 
 
 The key inequality is Jensen's definition of convexity: $F(\\alpha u+(1-\\alpha)v)\\le \\alpha F(u)+(1-\\alpha)F(v)$ for $\\alpha\\in[0,1]$.
 
+## Proof coverage / compression audit
+
+This fixture covers every conceptual proof step; it compresses repeated finite-sum additions into the phrase “repeat over the finite index set.”
+
 ## Reconstruction checkpoint
 
 You should now be able to prove convexity by naming affine composition, finite-sum closure, and nonnegative quadratic regularization.`;
@@ -1476,14 +1611,51 @@ You should now be able to prove convexity by naming affine composition, finite-s
 
 Lemma 4 proves by induction that after $t$ dynamic-programming updates, Eq. (7) satisfies the error bound $\\|V_t-V^\\star\\|_\\infty\\le \\gamma^t\\|V_0-V^\\star\\|_\\infty$.
 
-## Line-by-line proof
+## Notation and objects
 
-| Proof line | Operation | Dependency | Hidden assumption | Why valid / progress toward claim |
-| --- | --- | --- | --- | --- |
-| $t=0$ | base case | norm definition | no update applied | bound is equality |
-| $V_{t+1}=TV_t$ and $V^\\star=TV^\\star$ | substitute Bellman operator | Eq. (7), fixed point theorem | same operator $T$ | converts value error into operator error |
-| $\\|TV_t-TV^\\star\\|_\\infty\\le\\gamma\\|V_t-V^\\star\\|_\\infty$ | apply contraction inequality | Lemma 3 | $0\\le\\gamma<1$ | contracts the previous error |
-| $\\le\\gamma^{t+1}\\|V_0-V^\\star\\|_\\infty$ | use induction hypothesis | induction assumption | hypothesis holds for $t$ | closes the step |
+$T$ is the Bellman update operator, $V^\\star$ is its fixed point, $\\gamma$ is the contraction factor, and $\\|\\cdot\\|_\\infty$ measures the largest statewise error.
+
+## Line transition microscope
+
+### Transition 1 → 2
+
+Previous line:
+
+$$\\|V_{t+1}-V^\\star\\|_\\infty$$
+
+Next line:
+
+$$\\|TV_t-TV^\\star\\|_\\infty$$
+
+Primitive micro-steps: replace $V_{t+1}$ with $TV_t$; replace $V^\\star$ with $TV^\\star$; keep the norm unchanged around the expression.
+
+### Transition 2 → 3
+
+Previous line:
+
+$$\\|TV_t-TV^\\star\\|_\\infty$$
+
+Next line:
+
+$$\\|TV_t-TV^\\star\\|_\\infty\\le\\gamma\\|V_t-V^\\star\\|_\\infty$$
+
+Primitive micro-steps: identify the two inputs to $T$ as $V_t$ and $V^\\star$, then apply Lemma 3's contraction statement to those exact inputs.
+
+### Transition 3 → 4
+
+Previous line:
+
+$$\\gamma\\|V_t-V^\\star\\|_\\infty$$
+
+Next line:
+
+$$\\gamma^{t+1}\\|V_0-V^\\star\\|_\\infty$$
+
+Primitive micro-steps: substitute the induction hypothesis for $\\|V_t-V^\\star\\|_\\infty$; then multiply the outside $\\gamma$ into $\\gamma^t$.
+
+## Operation audit
+
+The selected proof uses fixed-point replacement, contraction of the transformed error, and exponent arithmetic. Each micro-step changes exactly one local part of the expression.
 
 ## Expectation / conditioning audit
 
@@ -1492,6 +1664,10 @@ The Bellman expectation is already inside $T$; the proof does not resample traje
 ## Inequality / bound audit
 
 The only inequality is the contraction bound. Its direction matters: it upper-bounds the next error by $\\gamma$ times the previous error.
+
+## Proof coverage / compression audit
+
+This fixture covers the base-case-to-induction-step structure and compresses only the trivial base case $t=0$.
 
 ## Reconstruction checkpoint
 

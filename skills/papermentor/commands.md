@@ -227,7 +227,7 @@ Behavior:
 
 - resolves sessions from `--sessions`, `--recent`, or `--all`;
 - finds proof blocks plus theorem/lemma/proposition-like blocks;
-- applies the proof teaching-quality checks for claim restatement, line-by-line operations/dependencies, expectation/conditioning and bound/inequality coverage, and reconstruction checkpoints;
+- applies the proof teaching-quality checks for claim restatement, line-transition microscope coverage, term-level operation audits inferred from the selected proof, domain-specific operations when present, and reconstruction checkpoints;
 - writes `.papermentor/proof-audit-report.json`.
 
 Example:
@@ -418,8 +418,9 @@ Required output:
 
 - theorem/claim statement;
 - proof strategy;
-- line-by-line proof table;
-- dependencies used per line;
+- notation and object definitions;
+- line transition microscope: previous line, next line, and the exact operation(s) between them;
+- term-level operation audit inferred from the selected proof itself, without forcing the proof into a predefined operation menu;
 - hidden assumptions;
 - minimal example when abstract;
 - why the final line proves the claim.

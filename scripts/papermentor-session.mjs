@@ -3842,9 +3842,12 @@ function stageQualityRules(type) {
       '- Include both backward dependencies needed to understand the current item and forward dependencies that reuse it later.'
     ],
     proof: [
-      '- Walk the actual proof, not just the theorem intuition. Quote or rewrite each proof line before explaining it.',
+      '- Walk the actual proof, not just the theorem intuition. Quote or rewrite the previous line and next line for each transition.',
+      '- Use a line transition microscope rather than a fixed overview table: infer the actual operation from the displayed math and explain how it transforms the previous line into the next.',
+      '- If a displayed transition compresses multiple operations, insert reconstructed intermediate lines and break it down until each micro-step is one primitive local transformation.',
+      '- Define the proof notation first, especially random variables, conditioning events, indicators, denominators, distributions, and what is fixed versus averaged over.',
+      '- Audit term movement at the right level for the selected proof. Do not use a predefined operation menu; infer the operation from the previous line, next line, and surrounding proof text.',
       '- Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims; do not stop after the first claim.',
-      '- For each line, state the algebraic/logical operation, dependency, hidden assumption, and why the line proves progress toward the claim.',
       '- Add a proof coverage / compression audit: say whether every proof line is covered, or name exactly which repeated algebra is compressed and why that is safe.',
       '- Close by explaining why the final line is sufficient for the theorem statement.'
     ],
@@ -3939,7 +3942,9 @@ function evaluateCardQuality(card) {
     ],
     proof: [
       [/Claim statement|Claim/i, 8, 'proof block should restate the claim'],
-      [/line-by-line|Proof line|\|.*Operation.*Dependency/i, 12, 'proof block should walk lines with operations/dependencies'],
+      [/Line transition microscope|Transition\s+\d+\s*(?:→|->|to)\s*\d+|Previous line[\s\S]+Next line/i, 14, 'proof block should explain transitions between adjacent proof lines'],
+      [/Notation and objects|Symbol|random variable|conditioning event|indicator|denominator|distribution|fixed|averaged/i, 10, 'proof block should define proof notation and what is fixed versus random'],
+      [/operation audit|term-by-term|term movement|what changed|previous line[\s\S]+next line/i, 12, 'proof block should audit the actual term-level operation used in each proof transition'],
       [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present'],
       [/Proof coverage|Coverage audit|Completeness audit|compression audit|compressed|omitted|every proof line|full formal proof/i, 10, 'proof block should state whether it covers every proof line or compresses/omits repeated algebra']
     ],
@@ -4157,7 +4162,7 @@ function proofAuditForSession(slug) {
     if (card.type === 'proof') return true;
     if (['reading-guide', 'start-here'].includes(card.type)) return false;
     const text = `${card.title}\n${card.body || ''}`;
-    return /proof walkthrough|prove|proof of|line-by-line proof|claim statement|theorem\s+\d+|lemma\s+\d+|proposition\s+\d+/i.test(text);
+    return /proof walkthrough|prove|proof of|line transition microscope|claim statement|theorem\s+\d+|lemma\s+\d+|proposition\s+\d+/i.test(text);
   });
   const results = proofCards.map((card) => evaluateCardQuality({ ...card, type: 'proof' }));
   return {
