@@ -3802,8 +3802,6 @@ const ansi = {
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
   green: '\x1b[32m',
-  black: '\x1b[30m',
-  bgGreen: '\x1b[42m',
   red: '\x1b[31m',
   amber: '\x1b[33m',
   inverse: '\x1b[7m',
@@ -4833,18 +4831,12 @@ function executePaletteItem(item, slug) {
 
 
 function paperMentorMascotLines() {
-  const block = (color) => `${color}██${ansi.reset}`;
-  const G = block(ansi.green);
-  const F = `${ansi.bgGreen}  ${ansi.reset}`;
-  const Eye = `${ansi.bgGreen}${ansi.black}━━${ansi.reset}`;
-  const Smile = `${ansi.bgGreen}${ansi.black}━━${ansi.reset}`;
-  const E = '  ';
   return [
-    `${E}${E}${F}${F}${F}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
-    `${G}${E}${F}${Eye}${F}${Eye}${F}${E}${G}`,
-    `${E}${E}${F}${F}${Smile}${F}${F}${E}${ansi.dim}PaperMentor pet${ansi.reset}`,
-    `${E}${E}${E}${F}${F}${F}`,
-    `${E}${E}${G}${E}${E}${G}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
+    `   ${ansi.green}╭────╮${ansi.reset}  ${ansi.bold}${ansi.green}Pori${ansi.reset}`,
+    ` ${ansi.green}╭─│${ansi.reset}${ansi.bold}━  ━${ansi.reset}${ansi.green}│─╮${ansi.reset}  ${ansi.dim}PaperMentor pet${ansi.reset}`,
+    `   ${ansi.green}│  ▾ │${ansi.reset}`,
+    `   ${ansi.green}╰─┬┬─╯${ansi.reset}  ${ansi.dim}read slowly, ask precisely${ansi.reset}`,
+    `     ${ansi.green}╯╰${ansi.reset}`
   ];
 }
 
