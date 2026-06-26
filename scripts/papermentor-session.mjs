@@ -3802,6 +3802,8 @@ const ansi = {
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
   green: '\x1b[32m',
+  black: '\x1b[30m',
+  bgGreen: '\x1b[42m',
   red: '\x1b[31m',
   amber: '\x1b[33m',
   inverse: '\x1b[7m',
@@ -3856,6 +3858,28 @@ function boxLine(content = '', width = 84, color = ansi.cyan) {
   const innerWidth = Math.max(1, width - 4);
   const fitted = fitVisible(content, innerWidth);
   return `${color}│${ansi.reset} ${padVisible(fitted, innerWidth)} ${color}│${ansi.reset}`;
+}
+
+function wrapPlainText(text, width) {
+  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const lines = [];
+  let line = '';
+  for (const word of words) {
+    const next = line ? `${line} ${word}` : word;
+    if (visibleLength(next) <= width || !line) {
+      line = next;
+    } else {
+      lines.push(line);
+      line = word;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length ? lines : [''];
+}
+
+function boxWrappedText(content = '', width = 84, color = ansi.cyan, style = '') {
+  const innerWidth = Math.max(1, width - 4);
+  return wrapPlainText(stripAnsi(content), innerWidth).map((line) => boxLine(`${style}${line}${style ? ansi.reset : ''}`, width, color));
 }
 
 function isTopicPickerOpen(state) {
@@ -4811,25 +4835,28 @@ function executePaletteItem(item, slug) {
 function paperMentorMascotLines() {
   const block = (color) => `${color}██${ansi.reset}`;
   const G = block(ansi.green);
+  const F = `${ansi.bgGreen}  ${ansi.reset}`;
+  const Eye = `${ansi.bgGreen}${ansi.black}━━${ansi.reset}`;
+  const Smile = `${ansi.bgGreen}${ansi.black}━━${ansi.reset}`;
   const E = '  ';
   return [
-    `${E}${G}${G}${G}${G}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
-    `${G}${G}${G}${G}${G}${G}`,
-    `${G}${E}${G}${G}${E}${G}${E}${ansi.dim}PaperMentor pet${ansi.reset}`,
-    `${G}${G}${E}${E}${G}${G}`,
-    `${E}${G}${E}${E}${G}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
+    `${E}${E}${F}${F}${F}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
+    `${G}${E}${F}${Eye}${F}${Eye}${F}${E}${G}`,
+    `${E}${E}${F}${F}${Smile}${F}${F}${E}${ansi.dim}PaperMentor pet${ansi.reset}`,
+    `${E}${E}${E}${F}${F}${F}`,
+    `${E}${E}${G}${E}${E}${G}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
   ];
 }
 
 function learningQuote(date = new Date()) {
+  // Public-domain/classic quote references:
+  // - Aristotle, Metaphysics I.1, MIT Classics Archive.
+  // - Confucius, Analects II.11/15/17, Project Gutenberg / Wikisource Legge translation.
   const quotes = [
-    '배움은 빠르게 넘기는 일이 아니라, 막힌 줄을 끝까지 밝히는 일이다.',
-    'A theorem becomes yours only after every hidden step stops being hidden.',
-    '좋은 독해는 요약이 아니라 재구성이다.',
-    'If an equation feels obvious, ask what operation was silently performed.',
-    '오늘의 목표: 한 문장을 외우기보다 한 전이를 설명할 수 있게 되기.',
-    'Understanding starts where the slide stopped explaining.',
-    'Proofs are not walls of symbols; they are small legal moves.'
+    'All men by nature desire to know. — Aristotle, Metaphysics I.1',
+    'Learning without thought is labour lost; thought without learning is perilous. — Confucius, Analects II.15',
+    'When you know a thing, to hold that you know it; and when you do not know a thing, to allow that you do not know it; this is knowledge. — Confucius, Analects II.17',
+    'If a man keeps cherishing his old knowledge, so as continually to be acquiring new, he may be a teacher of others. — Confucius, Analects II.11'
   ];
   const day = Math.floor(date.getTime() / 86400000);
   return quotes[((day % quotes.length) + quotes.length) % quotes.length];
@@ -4843,12 +4870,12 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true } =
   const rows = [
     top,
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}${learningQuote()}${ansi.reset}`, width, ansi.green),
+    ...boxWrappedText(learningQuote(), width, ansi.green, ansi.dim),
     boxLine('', width, ansi.green),
     ...paperMentorMascotLines().map((line) => boxLine(line, width, ansi.green)),
     boxLine('', width, ansi.green),
-    boxLine(`${ansi.bold}Drop a paper or lecture slides:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
-    boxLine(`${ansi.dim}After a room opens, choose sections/topics with ↑/↓ or type a question here.${ansi.reset}`, width, ansi.green)
+    boxLine(`${ansi.bold}Add source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
+    boxLine(`${ansi.dim}Then choose topics with ↑/↓, or ask here.${ansi.reset}`, width, ansi.green)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
