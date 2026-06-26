@@ -387,10 +387,10 @@ function validateSessionHelper() {
     if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source:') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
+    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source') || !welcomeOutput.includes('Reading Room') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
     if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
+    if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor dependency doctor', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
@@ -705,7 +705,7 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor Skill', 'reading room', '↑/↓ move', 'Enter select', 'o open HTML']) {
+    for (const phrase of ['✦ PaperMentor', 'reading room', '↑/↓ move', 'Enter select', 'o open HTML']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
@@ -921,7 +921,7 @@ FID and ablations evaluate sample quality.`);
       if (!slideActions.some((action) => action.includes(phrase))) failures.push(`slide actions missing ${phrase}`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!slideTui.includes('Slides') || !slideTui.includes('PaperMentor Skill') || !slideTui.includes('reading room')) failures.push('slide TUI should show the slide reading room');
+    if (!slideTui.includes('Slides') || !slideTui.includes('✦ PaperMentor') || !slideTui.includes('reading room')) failures.push('slide TUI should show the slide reading room');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     const slidePendingActionPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'pending-prompt.md'), 'utf8');

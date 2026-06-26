@@ -3,7 +3,7 @@ name: papermentor
 description: Interactive research-paper and slide understanding tutor. Use for deep paper/slide understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, missing slide narration, interruption handling, recursive why, Korean/English tutoring, conceptual visualization planning, and final insight extraction. Do not use for generic summaries, blog export, reviewer simulation, or quiz generation.
 ---
 
-# PaperMentor Skill
+# PaperMentor
 
 Debug the user's understanding of a research paper or slide. Do not provide a high-level summary unless it is part of a source map. Keep the reading location explicit and always repair the missing dependency that caused confusion.
 

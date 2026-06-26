@@ -3913,6 +3913,54 @@ function boxWrappedText(content = '', width = 84, color = ansi.cyan, style = '')
   return wrapPlainText(stripAnsi(content), innerWidth).map((line) => boxLine(`${style}${line}${style ? ansi.reset : ''}`, width, color));
 }
 
+function boxTwoColumnRows({ leftTitle = '', leftLines = [], rightTitle = '', rightLines = [], width = 84, color = ansi.green } = {}) {
+  const innerWidth = Math.max(1, width - 4);
+  if (innerWidth < 68) {
+    return [
+      ...boxWrappedText(`${leftTitle}: ${leftLines.join(' · ')}`, width, color),
+      ...boxWrappedText(`${rightTitle}: ${rightLines.join(' · ')}`, width, color)
+    ];
+  }
+  const gap = '   ';
+  const colWidth = Math.max(20, Math.floor((innerWidth - gap.length) / 2));
+  const normalize = (title, lines) => [
+    `${ansi.bold}${title}${ansi.reset}`,
+    ...lines.flatMap((line) => wrapPlainText(stripAnsi(line), colWidth))
+  ];
+  const left = normalize(leftTitle, leftLines);
+  const right = normalize(rightTitle, rightLines);
+  const count = Math.max(left.length, right.length);
+  const rows = [];
+  for (let i = 0; i < count; i += 1) {
+    const l = fitVisible(left[i] || '', colWidth);
+    const r = fitVisible(right[i] || '', colWidth);
+    rows.push(boxLine(`${padVisible(l, colWidth)}${gap}${padVisible(r, colWidth)}`, width, color));
+  }
+  return rows;
+}
+
+function cardTypeCounts(cards = []) {
+  const counts = {};
+  for (const card of cards || []) counts[card.type || 'note'] = (counts[card.type || 'note'] || 0) + 1;
+  return counts;
+}
+
+function compactBlockSummary(cards = [], state = {}) {
+  const counts = cardTypeCounts(cards);
+  const pieces = [];
+  if (counts['start-here']) pieces.push(`Start Here ${counts['start-here']}`);
+  if (counts.prerequisite) pieces.push(`Prelim ${counts.prerequisite}`);
+  if (counts.equation) pieces.push(`Equation ${counts.equation}`);
+  if (counts.derivation) pieces.push(`Derivation ${counts.derivation}`);
+  if (counts.dependency) pieces.push(`Dependency ${counts.dependency}`);
+  if (counts.proof) pieces.push(`Proof ${counts.proof}`);
+  if (counts.method) pieces.push(`Method ${counts.method}`);
+  const total = (cards || []).length;
+  if (!pieces.length) pieces.push(`${total} HTML block${total === 1 ? '' : 's'}`);
+  if (state.pendingBlockType) pieces.push(`pending ${state.pendingBlockType}`);
+  return pieces.slice(0, 5).join(' · ');
+}
+
 function isTopicPickerOpen(state) {
   return Boolean(state?.topicPickerOpen);
 }
@@ -3956,16 +4004,17 @@ function renderTuiScreen(state, selected = 0) {
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}reading room${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset} ${ansi.dim}reading room${ansi.reset}`, width, ansi.green),
     ...boxWrappedText('Keys: ↑/↓ move · Enter select · b/← topics · / ask · o open HTML · n new · r Start Here · e export · q quit', width, ansi.green, ansi.dim),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    ...boxWrappedText(`Current room: ${state.title}`, width, ansi.green),
-    ...boxWrappedText(`HTML: ${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}`, width, ansi.green),
-    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHereStatus}   ${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}   ${ansi.dim}Mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}`, width, ansi.green),
-    ...boxWrappedText(`Current topic: ${focus}`, width, ansi.green),
-    ...(state.pendingBlockPrompt
-      ? boxWrappedText(`Pending prompt: ${state.pendingBlockPrompt}`, width, ansi.green)
-      : boxWrappedText('Runner: choose an item; explanations are appended to HTML, not dumped here', width, ansi.green)),
+    ...boxTwoColumnRows({
+      width,
+      color: ansi.green,
+      leftTitle: 'Room',
+      leftLines: [state.title, `Mode: ${sourceModeLabel(state.sourceMode)}`, `Topic: ${focus}`],
+      rightTitle: 'HTML blocks',
+      rightLines: [`Start Here: ${stripAnsi(startHereStatus)}`, compactBlockSummary(cards.cards || [], state), state.pendingBlockPrompt ? `Prompt: ${state.pendingBlockPrompt}` : 'Pick an item to append a block']
+    }),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
@@ -4831,13 +4880,17 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
   const figureText = state.figureQualityWarning ? `${ansi.amber}review crop${ansi.reset}` : `${ansi.dim}ok/no figure warning${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}main menu${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset} ${ansi.dim}main menu${ansi.reset}`, width, ansi.green),
     ...boxWrappedText('Keys: ↑/↓ move · Enter select · / ask · o open HTML · v QA · c crop · n new · r Start Here · e export · q quit', width, ansi.green, ansi.dim),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    ...boxWrappedText(`Current room: ${title}`, width, ansi.green),
-    ...boxWrappedText(`HTML: ${html}`, width, ansi.green),
-    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Quality:${ansi.reset} ${qualityText}   ${ansi.dim}Figure:${ansi.reset} ${figureText}`, width, ansi.green),
-    ...boxWrappedText(`Current topic: ${topic}`, width, ansi.green),
+    ...boxTwoColumnRows({
+      width,
+      color: ansi.green,
+      leftTitle: summary ? 'Room' : 'Start',
+      leftLines: summary ? [title, `Topic: ${topic}`, `HTML: ${html}`] : ['Drop Source: PDF · PPT/PPTX · URL', 'Or paste an HTTPS/arXiv/Drive link'],
+      rightTitle: summary ? 'Status' : 'What opens',
+      rightLines: summary ? [`Start Here: ${stripAnsi(startHere)}`, `Quality: ${stripAnsi(qualityText)}`, `Figure: ${stripAnsi(figureText)}`] : ['HTML report + arrow-key TUI', 'Sections/topics, blocks, questions']
+    }),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.green)
   ];
@@ -4895,9 +4948,15 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
     top,
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
     ...boxWrappedText(quote, width, ansi.green, ansi.dim),
-    boxLine('', width, ansi.green),
-    boxLine(`${ansi.bold}Drop Source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
-    boxLine(`${ansi.dim}Then choose topics with ↑/↓, or ask here.${ansi.reset}`, width, ansi.green)
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    ...boxTwoColumnRows({
+      width,
+      color: ansi.green,
+      leftTitle: 'Drop Source',
+      leftLines: ['PDF · PPT/PPTX · URL', 'paste a path or link'],
+      rightTitle: 'Reading Room',
+      rightLines: ['HTML + arrow-key TUI', 'topics, blocks, questions']
+    })
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
