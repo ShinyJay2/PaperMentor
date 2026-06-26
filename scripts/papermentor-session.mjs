@@ -4229,7 +4229,8 @@ function stageQualityRules(type) {
     ],
     proof: [
       '- Walk the actual proof, not just the theorem intuition. Quote or rewrite the previous line and next line for each transition.',
-      '- Use a line transition microscope rather than a fixed overview table: infer the actual operation from the displayed math and explain how it transforms the previous line into the next.',
+      '- Use a line transition microscope as subsection narration, not a fixed overview table: infer the actual operation from the displayed math and explain how it transforms the previous line into the next.',
+      '- Do not output Markdown tables or HTML tables for proof walkthroughs. Never use columns such as Proof line / Operation / Dependency / Hidden assumption / Why valid; expand those ideas as prose bullets under the exact transition.',
       '- If a displayed transition compresses multiple operations, insert reconstructed intermediate lines and break it down until each micro-step is one primitive local transformation.',
       '- Define the proof notation first, especially random variables, conditioning events, indicators, denominators, distributions, and what is fixed versus averaged over.',
       '- Audit term movement at the right level for the selected proof. Do not use a predefined operation menu; infer the operation from the previous line, next line, and surrounding proof text.',
@@ -4329,6 +4330,7 @@ function evaluateCardQuality(card) {
     proof: [
       [/Claim statement|Claim/i, 8, 'proof block should restate the claim'],
       [/Line transition microscope|Transition\s+\d+\s*(?:→|->|to)\s*\d+|Previous line[\s\S]+Next line/i, 14, 'proof block should explain transitions between adjacent proof lines'],
+      [!/(?:^|\n)\s*\|\s*(?:Proof line|Line)\s*\|\s*(?:Operation|Claim)\s*\||<table[\s>]/i.test(body), 12, 'proof block should not use fixed proof tables; use transition microscope subsections instead'],
       [/Notation and objects|Symbol|random variable|conditioning event|indicator|denominator|distribution|fixed|averaged/i, 10, 'proof block should define proof notation and what is fixed versus random'],
       [/operation audit|term-by-term|term movement|what changed|previous line[\s\S]+next line/i, 12, 'proof block should audit the actual term-level operation used in each proof transition'],
       [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present'],
@@ -4356,7 +4358,8 @@ function evaluateCardQuality(card) {
     ]
   };
   for (const [pattern, points, issue] of (typeChecks[type] || [])) {
-    addQualityCheck(result, pattern.test(body), points, issue);
+    const condition = typeof pattern === 'boolean' ? pattern : pattern.test(body);
+    addQualityCheck(result, condition, points, issue);
   }
   if (card.figure) {
     addQualityCheck(result, /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports/i.test(body), 12, 'figure block should contain the fixed element-by-element figure reading schema');
