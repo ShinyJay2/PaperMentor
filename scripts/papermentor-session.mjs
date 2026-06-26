@@ -4830,19 +4830,6 @@ function executePaletteItem(item, slug) {
 }
 
 
-function paperMentorMascotLines() {
-  const P = `${ansi.green}██${ansi.reset}`;
-  const E = '  ';
-  return [
-    `      ${P}${P}${P}`,
-    `      ${P}${P}${P}`,
-    `   ${ansi.green}--${ansi.reset}${P}${E}${P}${ansi.green}--${ansi.reset}`,
-    `      ${P}${P}${P}`,
-    `      ${P}${P}${P}`,
-    `       ${ansi.green}/  \\${ansi.reset}`
-  ];
-}
-
 function learningQuote(date = new Date()) {
   // Public-domain/classic quote references:
   // - Aristotle, Metaphysics I.1, MIT Classics Archive.
@@ -4866,8 +4853,6 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true } =
     top,
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
     ...boxWrappedText(learningQuote(), width, ansi.green, ansi.dim),
-    boxLine('', width, ansi.green),
-    ...paperMentorMascotLines().map((line) => boxLine(line, width, ansi.green)),
     boxLine('', width, ansi.green),
     boxLine(`${ansi.bold}Add source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
     boxLine(`${ansi.dim}Then choose topics with ↑/↓, or ask here.${ansi.reset}`, width, ansi.green)
