@@ -3802,8 +3802,6 @@ const ansi = {
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
   green: '\x1b[32m',
-  black: '\x1b[30m',
-  gray: '\x1b[90m',
   red: '\x1b[31m',
   amber: '\x1b[33m',
   inverse: '\x1b[7m',
@@ -4813,19 +4811,13 @@ function executePaletteItem(item, slug) {
 function paperMentorMascotLines() {
   const block = (color) => `${color}██${ansi.reset}`;
   const G = block(ansi.green);
-  const K = block(ansi.black);
-  const D = block(ansi.gray);
   const E = '  ';
   return [
-    `${E}${E}${D}${E}${E}${E}${E}${E}${E}${E}${E}${D}`,
-    `${E}${D}${E}${E}${E}${G}${G}${G}${G}${G}${E}${E}${D}`,
-    `${E}${E}${E}${G}${G}${G}${G}${G}${G}${G}${G}${E}`,
-    `${E}${E}${G}${G}${G}${G}${G}${G}${G}${G}${G}${G}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
-    `${D}${D}${G}${G}${K}${G}${G}${G}${G}${K}${G}${G}${D}${D}`,
-    `${E}${E}${G}${G}${G}${G}${G}${G}${G}${G}${G}${G}${E}`,
-    `${E}${E}${E}${G}${G}${G}${K}${K}${K}${G}${G}${E}${ansi.dim}PaperMentor${ansi.reset}`,
-    `${E}${E}${D}${E}${G}${G}${G}${G}${G}${G}${E}${D}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`,
-    `${E}${D}${E}${E}${E}${G}${G}${E}${G}${G}${E}${E}${D}`
+    `${E}${G}${G}${G}${G}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
+    `${G}${G}${G}${G}${G}${G}`,
+    `${G}${E}${G}${G}${E}${G}${E}${ansi.dim}PaperMentor pet${ansi.reset}`,
+    `${G}${G}${E}${E}${G}${G}`,
+    `${E}${G}${E}${E}${G}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
   ];
 }
 
@@ -4847,14 +4839,16 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true } =
   const width = terminalBoxWidth(88);
   const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
-  const prompt = input || `${ansi.dim}paste a paper, slides, URL, or ask a question${ansi.reset}`;
+  const prompt = input || `${ansi.dim}drop file/url or type a question${ansi.reset}`;
   const rows = [
     top,
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
     boxLine(`${ansi.dim}${learningQuote()}${ansi.reset}`, width, ansi.green),
     boxLine('', width, ansi.green),
     ...paperMentorMascotLines().map((line) => boxLine(line, width, ansi.green)),
-    boxLine('', width, ansi.green)
+    boxLine('', width, ansi.green),
+    boxLine(`${ansi.bold}Drop a paper or lecture slides:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
+    boxLine(`${ansi.dim}After a room opens, choose sections/topics with ↑/↓ or type a question here.${ansi.reset}`, width, ansi.green)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
