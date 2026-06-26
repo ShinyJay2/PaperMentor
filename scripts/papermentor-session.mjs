@@ -4831,11 +4831,14 @@ function executePaletteItem(item, slug) {
 
 
 function paperMentorMascotLines() {
+  const P = `${ansi.green}██${ansi.reset}`;
+  const E = '  ';
   return [
-    `      ${ansi.green}+----+${ansi.reset}`,
-    `      ${ansi.green}|${ansi.reset} ${ansi.bold}-  -${ansi.reset} ${ansi.green}|${ansi.reset}`,
-    `      ${ansi.green}|${ansi.reset}  ${ansi.bold}v${ansi.reset}  ${ansi.green}|${ansi.reset}`,
-    `      ${ansi.green}+----+${ansi.reset}`
+    `        ${P}${P}${P}${P}`,
+    `      ${P}${P}${P}${P}${P}${P}`,
+    `      ${P}${E}${P}${P}${E}${P}`,
+    `      ${P}${P}${P}${P}${P}${P}`,
+    `        ${P}${P}${P}${P}`
   ];
 }
 
