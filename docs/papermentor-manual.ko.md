@@ -175,7 +175,7 @@ pm https://arxiv.org/pdf/2602.04770
 pm open
 ```
 
-화살표 기반 palette로 계속 진행:
+화살표 기반 TUI로 계속 진행:
 
 ```bash
 pm go
@@ -335,10 +335,10 @@ PaperMentor는 대표 그림을 script score로 고르지 않는다.
 사용자용 간단 명령:
 
 ```bash
-pm                         # palette 열기
+pm                         # 메인 메뉴 열기
 pm <file-or-url>           # reading room 시작
 pm open                    # HTML 열기
-pm go                      # TUI/palette 계속
+pm go                      # TUI 계속
 pm ask "question"          # 질문하기
 pm qa                      # teaching quality 검사
 pm export                  # PDF export

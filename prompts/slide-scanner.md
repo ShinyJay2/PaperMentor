@@ -22,6 +22,5 @@ For each selected slide, generate actions such as:
 - Connect this slide to the previous and next slide.
 - Draw a generated conceptual diagram only when the confusion is relational or sequential.
 - Ask anything about this slide.
-- Chat about this slide.
 
 Generated diagrams must be deterministic mono-tone SVG, labeled as PaperMentor conceptual diagrams, and never presented as figures from the source slides.

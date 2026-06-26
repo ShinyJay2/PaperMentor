@@ -19,7 +19,7 @@ Consecutive slides that share a title are usually **build/animation steps of one
 On entering a slide, the CLI shows a generic menu (reconstruct narration / read figure / decode equations / how it builds on earlier slides / continue / ask / chat). Read the slide and **replace it with a tailored menu** for *this* slide via:
 
 ```bash
-papermentor section --session <slug> --index <n> --choices "Reconstruct the narration for this slide|Read the <specific figure>|Decode <the boxed equation>|How this builds on slide <k>|Continue to the next slide|Ask anything about this slide|Chat about this slide"
+papermentor section --session <slug> --index <n> --choices "Reconstruct the narration for this slide|Read the <specific figure>|Decode <the boxed equation>|How this builds on slide <k>|Continue to the next slide|Ask anything about this slide"
 ```
 
 Match the actions to what the slide actually holds — a figure-only slide leads with figure reading; an equation slide leads with the boxed equation; a transition slide leads with narration + the build-on link. Do not word-match titles or score; just read the slide. The chosen action renders an HTML block via the usual runner (use `templates/slide_explanation.md`, `templates/missing_narration.md`, `templates/slide_transition.md`).

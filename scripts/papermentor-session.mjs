@@ -2233,8 +2233,7 @@ function slideActionProfile(section, body) {
     `Decode the equations on ${title}`,
     `How ${title} builds on the earlier slides`,
     `Continue to the next slide`,
-    `Ask anything about ${title}`,
-    `Chat about this slide`
+    `Ask anything about ${title}`
   ];
 }
 
@@ -2331,7 +2330,8 @@ function selectSection(args) {
   const index = Number(args.index || args.choice || 0);
   const section = raw || (index ? state.paperSections?.[index - 1] : '');
   if (!section) throw new Error('section requires --section <name> or --index <n>');
-  const providedChoices = splitChoices(args.choices);
+  const rawProvidedChoices = splitChoices(args.choices);
+  const providedChoices = rawProvidedChoices.length ? sanitizeSectionActions(rawProvidedChoices, section, { ensureAsk: true }) : [];
   const key = sectionKey(section);
   if (providedChoices.length) {
     state.sectionActions = state.sectionActions || {};
@@ -2339,7 +2339,7 @@ function selectSection(args) {
     if (state.sectionMenuPending?.key === key) delete state.sectionMenuPending;
     clearPendingPrompt(state);
   }
-  const existingActions = state.sectionActions?.[key];
+  const existingActions = sanitizeSectionActions(state.sectionActions?.[key] || [], section);
   const actions = providedChoices.length
     ? providedChoices
     : existingActions?.length ? existingActions : sectionMenuPendingChoices(section);
@@ -3859,12 +3859,29 @@ function boxLine(content = '', width = 84, color = ansi.cyan) {
 }
 
 function wrapPlainText(text, width) {
-  const words = String(text || '').split(/\s+/).filter(Boolean);
+  const maxWidth = Math.max(1, Number(width) || 1);
+  const tokens = String(text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let line = '';
-  for (const word of words) {
+  const pushLongToken = (token) => {
+    let rest = token;
+    while (visibleLength(rest) > maxWidth) {
+      lines.push(rest.slice(0, maxWidth));
+      rest = rest.slice(maxWidth);
+    }
+    return rest;
+  };
+  for (let word of tokens) {
+    if (visibleLength(word) > maxWidth) {
+      if (line) {
+        lines.push(line);
+        line = '';
+      }
+      word = pushLongToken(word);
+      if (!word) continue;
+    }
     const next = line ? `${line} ${word}` : word;
-    if (visibleLength(next) <= width || !line) {
+    if (visibleLength(next) <= maxWidth || !line) {
       line = next;
     } else {
       lines.push(line);
@@ -3873,6 +3890,22 @@ function wrapPlainText(text, width) {
   }
   if (line) lines.push(line);
   return lines.length ? lines : [''];
+}
+
+function menuItemBoxRows(item, { width = 84, index = 0, active = false } = {}) {
+  const prefix = active ? `${ansi.green}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
+  const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
+  const firstPrefix = `${prefix} ${pointer} `;
+  const continuationPrefix = ' '.repeat(visibleLength(firstPrefix));
+  const innerWidth = Math.max(1, width - 4);
+  const textWidth = Math.max(12, innerWidth - visibleLength(firstPrefix));
+  const lines = wrapPlainText(stripAnsi(item), textWidth);
+  const style = active ? ansi.bold : '';
+  const color = active ? ansi.green : ansi.cyan;
+  return lines.map((line, lineIndex) => {
+    const lead = lineIndex === 0 ? firstPrefix : continuationPrefix;
+    return boxLine(`${lead}${style}${line}${style ? ansi.reset : ''}`, width, color);
+  });
 }
 
 function boxWrappedText(content = '', width = 84, color = ansi.cyan, style = '') {
@@ -3896,6 +3929,7 @@ function currentMenuLabel(state) {
 
 function currentMenuItems(state) {
   if (isChoosingTopic(state)) return state.paperSections || [];
+  if (state?.currentSection && !state.currentMode) return sanitizeSectionActions(state.nextChoices || [], state.currentSection);
   return state.nextChoices || [];
 }
 
@@ -3922,16 +3956,16 @@ function renderTuiScreen(state, selected = 0) {
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}command palette${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}↑/↓ move · Enter select · b/← topics · / ask · o open HTML · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}reading room${ansi.reset}`, width, ansi.green),
+    ...boxWrappedText('Keys: ↑/↓ move · Enter select · b/← topics · / ask · o open HTML · n new · r Start Here · e export · q quit', width, ansi.green, ansi.dim),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(state.title, 70)}${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}${ansi.reset}`, width, ansi.green),
+    ...boxWrappedText(`Current room: ${state.title}`, width, ansi.green),
+    ...boxWrappedText(`HTML: ${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}`, width, ansi.green),
     boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHereStatus}   ${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}   ${ansi.dim}Mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}`, width, ansi.green),
-    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(focus, 72)}`, width, ansi.green),
-    state.pendingBlockPrompt
-      ? boxLine(`${ansi.dim}Pending prompt:${ansi.reset} ${ansi.amber}${trim(state.pendingBlockPrompt, 68)}${ansi.reset}`, width, ansi.green)
-      : boxLine(`${ansi.dim}Runner:${ansi.reset} choose an item; explanations are appended to HTML, not dumped here`, width, ansi.green),
+    ...boxWrappedText(`Current topic: ${focus}`, width, ansi.green),
+    ...(state.pendingBlockPrompt
+      ? boxWrappedText(`Pending prompt: ${state.pendingBlockPrompt}`, width, ansi.green)
+      : boxWrappedText('Runner: choose an item; explanations are appended to HTML, not dumped here', width, ansi.green)),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
@@ -3941,14 +3975,9 @@ function renderTuiScreen(state, selected = 0) {
   entries.forEach((item, offset) => {
     const index = start + offset;
     const active = index === selected;
-    const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
-    const prefix = active ? `${ansi.green}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
-    const text = active ? `${ansi.bold}${item}${ansi.reset}` : item;
-    rows.push(boxLine(`${prefix} ${pointer} ${trim(text, Math.max(24, width - 24))}`, width, active ? ansi.green : ansi.cyan));
+    rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
   if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} item(s) below${ansi.reset}`, width, ansi.cyan));
-  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Palette:${ansi.reset} pm open · pm go · pm ask "…" · pm <file-or-url>  ${ansi.dim}(also: ${cliCommand()} open)${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -3967,12 +3996,26 @@ function shellQuote(value) {
   return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
+function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false } = {}) {
+  const seen = new Set();
+  const cleaned = [];
+  for (const choice of choices) {
+    const text = String(choice || '').trim();
+    if (!text || /^chat about (?:this )?(?:section|slide)\b/i.test(text)) continue;
+    const key = text.toLowerCase().replace(/\s+/g, ' ');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(text);
+  }
+  if (ensureAsk && section && !cleaned.some((choice) => /^ask anything about\b/i.test(choice))) cleaned.push(`Ask anything about ${section}`);
+  return cleaned;
+}
+
 function sectionMenuPendingChoices(section) {
-  return [
+  return sanitizeSectionActions([
     `Generate content-adapted choices from ${section} excerpt`,
-    `Ask anything about ${section}`,
-    `Chat about this section`
-  ];
+    `Ask anything about ${section}`
+  ], section, { ensureAsk: true });
 }
 
 function writeSectionMenuPrompt(state, section) {
@@ -3980,7 +4023,7 @@ function writeSectionMenuPrompt(state, section) {
   const key = sectionKey(section);
   const index = Math.max(0, (state.paperSections || []).indexOf(section)) + 1;
   const insight = ensureSectionInsight(state, section) || {};
-  const command = `${cliCommand()} section --session ${shellQuote(slug)} --index ${index || '<section-index>'} --choices ${shellQuote('Action A|Action B|…|Ask anything about ' + section + '|Chat about this section')}`;
+  const command = `${cliCommand()} section --session ${shellQuote(slug)} --index ${index || '<section-index>'} --choices ${shellQuote('Action A|Action B|…|Ask anything about ' + section)}`;
   const prompt = `# PaperMentor Section Menu Prompt
 
 You are generating the next TUI choices for one selected paper section. The CLI script must not invent generic actions; you must read the actual section excerpt and write a content-adapted menu.
@@ -4018,10 +4061,9 @@ ${insight.sourceExcerpt || insight.preview || '(section excerpt unavailable; use
 
 Create 4–8 actions that are specific enough that they could only belong to this section of this paper. Good actions name the actual object, promise, equation role, proof obligation, conceptual gap, or method mechanism in the excerpt.
 
-Always end with:
+Always end with exactly one open question action:
 
 - Ask anything about ${section}
-- Chat about this section
 
 Then run exactly one command to install the menu into the TUI:
 
@@ -4584,7 +4626,7 @@ function applyTuiChoice(state, selected, options = {}) {
     state.lastChoiceKind = 'section';
     delete state.topicPickerOpen;
     const key = sectionKey(choice);
-    const actions = state.sectionActions?.[key];
+    const actions = sanitizeSectionActions(state.sectionActions?.[key] || [], choice);
     if (actions?.length) {
       clearPendingPrompt(state);
       state.nextChoices = actions;
@@ -4688,7 +4730,7 @@ function runTui(args) {
     } else if (key === '/') {
       state.currentMode = 'chat';
       state.currentFocus = `Ask anything about ${state.currentSection || state.title}`;
-      state.nextChoices = [`Ask anything about ${state.currentSection || state.title}`, `Chat about this section`, 'Return to section choices'];
+      state.nextChoices = [`Ask anything about ${state.currentSection || state.title}`, 'Return to section choices'];
       writeJson(statePath(state.slug), state);
       draw();
     } else if (key === 'o') {
@@ -4789,28 +4831,24 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
   const figureText = state.figureQualityWarning ? `${ansi.amber}review crop${ansi.reset}` : `${ansi.dim}ok/no figure warning${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}Claude/Codex-style command palette${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open · v QA · c crop · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}main menu${ansi.reset}`, width, ansi.green),
+    ...boxWrappedText('Keys: ↑/↓ move · Enter select · / ask · o open HTML · v QA · c crop · n new · r Start Here · e export · q quit', width, ansi.green, ansi.dim),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(title, 70)}${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${trim(html, 78)}${ansi.reset}`, width, ansi.green),
+    ...boxWrappedText(`Current room: ${title}`, width, ansi.green),
+    ...boxWrappedText(`HTML: ${html}`, width, ansi.green),
     boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Quality:${ansi.reset} ${qualityText}   ${ansi.dim}Figure:${ansi.reset} ${figureText}`, width, ansi.green),
-    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 76)}`, width, ansi.green),
+    ...boxWrappedText(`Current topic: ${topic}`, width, ansi.green),
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.green)
   ];
   items.forEach((item, index) => {
     const active = index === selected;
-    const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
-    const prefix = active ? `${ansi.green}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
-    rows.push(boxLine(`${prefix} ${pointer} ${active ? `${ansi.bold}${item}${ansi.reset}` : item}`, width, active ? ansi.green : ansi.cyan));
+    rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
   if (recent.length) {
     rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
     rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 3).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.green));
   }
-  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm qa · pm export`, width, ansi.green));
   rows.push(bottom);
   return { screen: rows.join('\n'), items };
 }
@@ -5657,10 +5695,10 @@ function usage(options = {}) {
     console.log(`PaperMentor
 
 User commands:
-  pm                         open the command palette
+  pm                         open the main menu
   pm <file-or-url>           start a reading room
   pm open                    open the latest/current HTML
-  pm go                      continue in the arrow-key palette
+  pm go                      continue in the arrow-key reading room
   pm ask "question"          ask about the current topic
   pm qa                      score current HTML blocks for teaching quality
   pm export                  export the latest/current room as PDF

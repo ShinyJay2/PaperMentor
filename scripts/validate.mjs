@@ -204,7 +204,7 @@ for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'un
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
 for (const phrase of ['renderWelcomeScreen', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
-  if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified palette phrase: ${phrase}`);
+  if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified main-menu phrase: ${phrase}`);
 }
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
   failures.push('session helper must not use a paper-specific I-JEPA preliminary ladder branch');
@@ -306,7 +306,7 @@ for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section
 
 const packageJson = readJson(join(root, 'package.json'), {});
 if (packageJson.bin?.papermentor !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a papermentor CLI bin');
-if (packageJson.bin?.pm !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a pm palette CLI bin');
+if (packageJson.bin?.pm !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a pm main-menu CLI bin');
 if (!packageJson.scripts?.launch?.includes('papermentor-session.mjs launch')) failures.push('package.json should expose npm run launch');
 const npmIgnore = readFileSync(join(root, '.npmignore'), 'utf8');
 for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-skill-*.tgz']) {
@@ -366,7 +366,7 @@ function validateInstalledArtifact() {
     const installedHelp = execFileSync('papermentor', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedHelp.includes('pm <file-or-url>') || !installedHelp.includes('papermentor launch <paper-url-or-file>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor/pm commands, not development node script paths');
     const installedPalette = execFileSync('pm', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified palette commands');
+    if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified main-menu commands');
     const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedDoctor.includes('"status": "ok"') || !installedDoctor.includes('"python3-pptx"')) failures.push('installed papermentor doctor should run through the installed CLI shim');
 
@@ -390,7 +390,7 @@ function validateSessionHelper() {
     if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source:') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
     if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('pm <file>') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified command palette');
+    if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor dependency doctor', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
@@ -705,7 +705,7 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor Skill', 'command palette', '↑/↓ move', 'Enter select', 'o open HTML', 'pm open']) {
+    for (const phrase of ['PaperMentor Skill', 'reading room', '↑/↓ move', 'Enter select', 'o open HTML']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
@@ -917,11 +917,11 @@ FID and ablations evaluate sample quality.`);
     let state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
     if (state.sourceMode !== 'slide') failures.push(`slide source mode not detected: ${state.sourceMode}`);
     const slideActions = Object.values(state.sectionActions || {}).flat();
-    for (const phrase of ['Reconstruct the', 'builds on the earlier slides', 'Continue to the next slide', 'Chat about this slide']) {
+    for (const phrase of ['Reconstruct the', 'builds on the earlier slides', 'Continue to the next slide', 'Ask anything about']) {
       if (!slideActions.some((action) => action.includes(phrase))) failures.push(`slide actions missing ${phrase}`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!slideTui.includes('Slides') || !slideTui.includes('PaperMentor Skill') || !slideTui.includes('command palette')) failures.push('slide TUI should show the slide command palette');
+    if (!slideTui.includes('Slides') || !slideTui.includes('PaperMentor Skill') || !slideTui.includes('reading room')) failures.push('slide TUI should show the slide reading room');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     const slidePendingActionPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'pending-prompt.md'), 'utf8');

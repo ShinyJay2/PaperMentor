@@ -49,7 +49,7 @@ function installUnixWrappers({ skillDir, binDir }) {
   writeExecutable(papermentor, `#!/usr/bin/env bash\nset -euo pipefail\nexport PAPERMENTOR_CLI="papermentor"\nexec node ${bashQuote(script)} "$@"\n`);
   writeExecutable(pm, `#!/usr/bin/env bash\nset -euo pipefail\nexport PAPERMENTOR_CLI="pm"\nexec node ${bashQuote(script)} "$@"\n`);
   console.log(`PaperMentor CLI installed: ${papermentor}`);
-  console.log(`PaperMentor palette shortcut installed: ${pm}`);
+  console.log(`PaperMentor pm shortcut installed: ${pm}`);
   if (!String(process.env.PATH || '').split(':').includes(binDir)) {
     console.log(`Note: add ${binDir} to PATH to run \`papermentor\` from any shell.`);
   }
@@ -63,7 +63,7 @@ function installWindowsWrappers({ skillDir, binDir }) {
   writeFileSync(papermentor, `@echo off\r\nset PAPERMENTOR_CLI=papermentor\r\nnode "${script}" %*\r\n`);
   writeFileSync(pm, `@echo off\r\nset PAPERMENTOR_CLI=pm\r\nnode "${script}" %*\r\n`);
   console.log(`PaperMentor CLI installed: ${papermentor}`);
-  console.log(`PaperMentor palette shortcut installed: ${pm}`);
+  console.log(`PaperMentor pm shortcut installed: ${pm}`);
   if (!String(process.env.PATH || '').split(';').includes(binDir)) {
     console.log(`Note: add ${binDir} to PATH to run 'papermentor' from any shell.`);
   }

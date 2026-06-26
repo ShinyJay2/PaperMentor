@@ -36,10 +36,10 @@ papermentor doctor
 
 User-facing surface:
 
-- `pm` opens the Claude/Codex-style command palette.
+- `pm` opens the Claude/Codex-style main menu.
 - `pm <file-or-url>` starts a reading room.
 - `pm open` opens the latest/current HTML.
-- `pm go` resumes the arrow-key palette.
+- `pm go` resumes the arrow-key reading room.
 - `pm ask "..."` creates a pending HTML answer prompt for the current topic.
 - `pm qa` scores generated HTML blocks for teaching quality and flags shallow/missing structure.
 - `pm export` exports the latest/current room.
@@ -81,7 +81,7 @@ Branching navigator behavior:
   - Related Work: cited methods/papers, family comparisons, and citation-following actions.
   - Method sections: equations, propositions, assumptions, algorithms, figures, derivation transitions, and compact method overview.
   - Experiment sections: metrics, tables/figures, claims supported by results, and limitations.
-- Every section menu must include `Ask anything about <section>` and `Chat about this section`.
+- Every section menu must include exactly one open question action: `Ask anything about <section>`.
 - When section content or user confusion is relational, sequential, spatial, or dependency-based, include a visual repair action such as `Draw method pipeline`, `Map equation dependencies`, or `Build concept prerequisite graph`.
 - Mode/item menu: dynamically detected objects inside the selected section, e.g. `Explain Eq. (1) pushforward symbol by symbol`, `Trace Eq. (4) → Eq. (6)`, or `Build dependency chain for Proposition 3.1`.
 - Result: chosen explanations are appended to the same `index.html` as blocks. CLI output stays short and navigational.
@@ -306,7 +306,7 @@ Required behavior:
   - citation-following and method-family comparisons in Related Work;
   - equations, propositions, algorithms, and assumptions in Method sections;
   - metrics, tables, and claims in Experiments;
-- include `Ask anything about <section>` and `Chat about this section`;
+- include `Ask anything about <section>`;
 - do not write explanations to CLI or HTML during analysis.
 
 Helper:

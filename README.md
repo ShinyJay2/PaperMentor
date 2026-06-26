@@ -245,7 +245,6 @@ The browser view is intentionally minimal: a quiet paper title sheet followed by
 │  04  Explain why stopgrad is used and what would break without it           │
 │  05  Build the dependency chain for the method section                      │
 │  06  Ask anything about 3. Drifting Models for Generation                   │
-│  07  Chat about this section                                                │
 ╰─────────────────────────────────────────────────────────────────────────────╯
 ```
 

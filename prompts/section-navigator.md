@@ -12,7 +12,7 @@ Do not pattern-match on title keywords or count tokens. Just understand the sect
 
 ## What to propose
 
-Offer 4–8 actions that fit *this* section, then always end with `Ask anything about <section>` and `Chat about this section`. Match the action — and the template it will use — to the section's role:
+Offer 4–8 actions that fit *this* section, then always end with `Ask anything about <section>`. Match the action — and the template it will use — to the section's role:
 
 - **Introduction** → the promise/mechanism, the core concepts it names, what gap it claims. (templates/method_dissection.md or a concept explanation)
 - **Related Work** → contrast with the specific families/citations it actually discusses; follow a citation. (templates/dependency_trace.md)
@@ -27,7 +27,7 @@ Name equations by what they actually are (e.g. "Explain Eq. (10): attraction −
 Re-run the section with your tailored list:
 
 ```bash
-papermentor section --session <slug> --index <n> --choices "Action A|Action B|…|Ask anything about <section>|Chat about this section"
+papermentor section --session <slug> --index <n> --choices "Action A|Action B|…|Ask anything about <section>"
 ```
 
 The navigator (and TUI) will then show your menu. When the reader picks one, the existing runner writes the pending block prompt with the matching template and you append the explanation as an HTML card.

@@ -39,5 +39,5 @@ HTML-first rules:
 - Introduction choices should come from motivation, conceptual blockers, and key framing sentences.
 - Related Work choices should follow cited papers/references and compare the method families named in the section.
 - Method choices should expose equations, propositions, assumptions, derivation transitions, and algorithm steps.
-- Always include `Ask anything about <section>` and `Chat about this section`.
+- Always include exactly one open question action: `Ask anything about <section>`.
 - Never put long explanations in CLI; append them to HTML blocks.
