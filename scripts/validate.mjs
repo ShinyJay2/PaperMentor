@@ -387,7 +387,7 @@ function validateSessionHelper() {
     if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('▙▄▄▟') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
+    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('██████▛') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
     if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('pm <file>') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified command palette');
