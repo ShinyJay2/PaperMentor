@@ -1,6 +1,6 @@
 # Prerequisite Analyzer Prompt
 
-This is the prompt for the **Preliminary ladder** in Start Here. It is a prompt, not a form. Do not impose a fixed structure, a required number of parts, mandatory section headers, field tables, or tiers. Write the way a patient tutor answers a beginner.
+This is the prompt for the **Preliminary** section in Start Here. It is a teaching prompt, not a rigid form: do not impose tables, field labels, tiers, or a required number of parts. Write the way a patient tutor answers a beginner. Do not write one long prose wall; separate the needed background into short concept blocks grouped by meaning.
 
 The reader is asking, in their own words, something like:
 
@@ -27,7 +27,6 @@ Let the **source and its audience** decide the rungs, including where the ladder
 Structure the output only this much — no more:
 
 - Title the section **Preliminary** (not "Preliminary ladder", not "예비 사다리").
-- Put the whole order on a single `flow:` line — `flow: A → B → C → …` renders as a block diagram strip. For a longer chain (roughly 6+ steps), split it into 2–4 labeled **phase groups** with ` || ` and a leading `[label]`, e.g. `flow: [basics] A → B || [model] C → D` — each group renders as a labeled cluster with breathing room. Use short labels per box (a symbol or 1–2 words), not full sentences.
-- Then write **each prerequisite as its own `### N. concept` block** (each renders as a card): explain it **clearly in a few plain sentences** (not a one-liner) — what it is and how it works — grounded in a concrete numeric example with real numbers. Then **show how and where it is actually used in this paper**: write out the real equation or figure it appears in and explain what the concept is within it (which term/symbol it is). **Do not stamp a fixed label like `→ 논문:` on every block** — write the paper usage as a normal explanatory sentence. Be clear and direct: no extended metaphors or analogies.
-- **Not every paper is ladder-shaped.** For surveys, systems/empirical/benchmark papers, or papers whose difficulty is conceptual (a clever proof, a counterintuitive idea) rather than a bottom-up prerequisite chain, keep the `flow:` very short or omit it entirely and let the concept blocks carry the explanation. Never pad a long linear chain where the real dependencies aren't linear — the `flow:` strip is a single left-to-right line, not a branching/merging graph, so don't try to encode true branches in it.
-- No tables, no field lists, no tiers, no per-item form. The `flow:` strip (when it fits) plus one tight block per concept is the entire structure.
+- Separate the explanation into concept blocks by meaning. Each block should teach one core concept clearly in a few plain sentences, ground it in a concrete numeric or symbolic example when useful, and show how it is used in this paper by naming the exact equation, figure, symbol, theorem, or claim it unlocks.
+- **Not every paper is ladder-shaped.** For surveys, systems/empirical/benchmark papers, or papers whose difficulty is conceptual rather than bottom-up, group the blocks by the way the reader will actually understand the source.
+- No tables, no field lists, no tiers, no per-item form. Keep the blocks natural and readable; do not force a fixed ladder or schema.

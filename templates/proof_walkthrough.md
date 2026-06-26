@@ -14,7 +14,7 @@ Define every symbol, random variable, conditioning event, index, distribution, d
 
 ## Line transition microscope
 
-Use subsection-by-subsection narration, not a table. Do not use Markdown tables or HTML tables anywhere in proof walkthroughs. For each adjacent pair of proof lines, show:
+For each adjacent pair of proof lines, show:
 
 ### Transition N → N+1
 
@@ -32,8 +32,7 @@ Next line:
 
 What changed:
 
-- reconstructed intermediate lines, if the displayed transition compresses more than one operation:
-- primitive micro-steps, one local transformation per bullet:
+- primitive micro-steps, if the displayed transition compresses more than one operation:
 - operation inferred from the displayed math:
 - term-by-term movement:
 - local symbol changes:
@@ -42,7 +41,7 @@ What changed:
 - hidden condition needed for the move:
 - why this move advances the claim:
 
-Do not skip from one displayed proof line to the next with only prose such as "therefore" or "by definition"; the point is to infer and explain whatever operation the selected proof actually uses. If several operations are compressed into one displayed transition, insert reconstructed intermediate lines and keep splitting until each micro-step is one primitive local transformation. Never summarize transitions as columns like Proof line / Operation / Dependency / Hidden assumption / Why valid; expand those ideas as local prose under the exact transition.
+Do not skip from one displayed proof line to the next with only prose such as "therefore" or "by definition"; the point is to infer and explain whatever operation the selected proof actually uses. If several operations are compressed into one displayed transition, insert reconstructed intermediate lines and keep splitting until each micro-step is one primitive local transformation.
 
 ## Expectation / conditioning audit
 

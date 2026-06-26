@@ -4,27 +4,13 @@
 
 Write exactly one sentence explaining what the paper is doing. It should name the problem, the object being transformed/predicted/proved, and the main method idea.
 
-## Preliminary ladder
+## Preliminary
 
-Build the prerequisite concepts the reader needs before entering the sections. This is not a topic list and not extracted keywords. It must read like a tutor explaining the exact background needed for this paper. Start from primitive concepts when needed, then climb to the paper's notation, method, objective, assumptions, and reconstruction.
+Build the prerequisite concepts the reader needs before entering the sections. This is not a topic list and not extracted keywords. It must read like a tutor explaining the exact background needed for this paper. Start where the genuine difficulty begins for this paper's likely reader, then climb to the paper's notation, method, objective, assumptions, and reconstruction.
 
-First list the prerequisites in dependency order, then teach each one from zero, in that order, like a patient tutor. Use numbered concept cards. For every card include:
+Do not write one long prose wall. Separate the needed background into short concept blocks grouped by meaning. Each block should teach one core concept in a few clear paragraphs, use a small example or equation when it helps, and connect the concept to the paper's actual notation, equation, figure, theorem, or claim. End with one precise reconstruction sentence: what the reader should now be able to say about the paper.
 
-- **Why needed here:** why this concept is required for this paper.
-- **Minimal explanation + concrete numeric example:** plain language grounded in real numbers, not abstract prose (e.g. 2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] → 0.01+0.01=0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimate where `90,110,95,105` average to `100`).
-- **Notation / paper object it unlocks:** exact symbols, variables, figures, equations, or claims.
-- **Where it appears:** section, figure, equation, algorithm, theorem, or claim.
-- **Diagnostic check:** one question the reader should now be able to answer.
-
-Do not stop at broad labels like “linear algebra”, “probability”, “optimization”, “self-supervised learning”, or “transformers”. Decompose them into the exact concepts used here. Do not output only paper-specific labels like a model acronym; first explain the prerequisites that make that label readable. After the cards, reconstruct the target paragraph/problem in one precise sentence, re-translate it into the reader's domain (e.g. an LLM/embedding framing), and name what to study next.
-
-Example shape for a quantization paper:
-
-1. Bit → binary string → vector → $\mathbb{R}^d$ → function $Q$ → quantization → lossy compression → expectation → MSE → inner product → unbiased estimator → final reconstruction.
-
-Example shape for a self-supervised vision paper:
-
-1. Image → patch → vector/embedding → representation → encoder → context block → target block → mask/index set $B_i$ → predictor → loss/objective → $\ell_2$ norm → moving-average target encoder → final reconstruction.
+Do not use tables. Do not force a fixed ladder, schema, or repeated field labels such as “Why needed”, “Minimal explanation”, “Where it appears”, or “Diagnostic check”. Those are internal checks only.
 
 ## Figure explanation under image
 

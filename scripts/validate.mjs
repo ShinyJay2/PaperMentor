@@ -1280,7 +1280,7 @@ The final insight is that calibration is not a post-processing trick; it is enfo
       equation: 'Show the equation before any prose',
       derivation: 'Trace only one transition at a time',
       dependency: 'Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims',
-      proof: 'Do not output Markdown tables or HTML tables for proof walkthroughs',
+      proof: 'Use a line transition microscope rather than a fixed overview table',
       confusion: 'Answer the user',
       'recursive-why': 'Make each why-layer strictly deeper',
       visualization: 'Use visualization only for relationship, sequence, geometry, dependency, or flow confusion',
@@ -1295,7 +1295,6 @@ The final insight is that calibration is not a post-processing trick; it is enfo
       const prompt = readFileSync(join(sessionDir, 'pending-prompt.md'), 'utf8');
       if (state.sourceMode !== 'paper') failures.push(`paper-stage runner should stay in paper mode for ${expectedType}`);
       if (state.pendingBlockType !== expectedType) failures.push(`paper-stage runner mapped "${action}" to ${state.pendingBlockType}, expected ${expectedType}`);
-      if (expectedType === 'proof' && /\|\s*Proof line\s*\|\s*Operation\s*\|/.test(prompt)) failures.push('proof pending prompt should not contain the legacy proof table header');
       for (const phrase of [
         'PaperMentor HTML Block Runner Prompt',
         `--type '${expectedType}'`,

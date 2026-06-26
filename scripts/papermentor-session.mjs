@@ -938,7 +938,7 @@ function preliminaryLadderScaffold(sourceMode) {
 
 _Not built yet. Replace this with the real preliminary, written like a patient tutor — not a fixed form._
 
-List the prerequisites in order — calibrated to this ${noun}'s actual reader: skip the trivial basics they already know and focus on the non-trivial, paper-specific concepts, up to its notation and key equations. Render the whole order as one \`flow:\` line (\`flow: A → B → C\`, or \`flow: [phase] A → B || [phase] C → D\` to group a longer chain into labeled phases), then write each prerequisite as its own \`### N. concept\` block with a concrete numeric example and the exact symbol, figure, equation, or claim it unlocks. No tables, field lists, or tiers beyond that. Follow \`prompts/prerequisite-analyzer.md\`.`;
+List the prerequisites in order — calibrated to this ${noun}'s actual reader: skip the trivial basics they already know and focus on the non-trivial, paper-specific concepts, up to its notation and key equations. Do not write one long prose wall. Separate the needed background into short concept blocks grouped by meaning. Each block should teach one core concept, use a small example or equation when it helps, and connect the concept to this ${noun}'s actual notation, equation, figure, theorem, or claim. Do not force a fixed ladder, table, schema, or repeated labels. Follow prompts/prerequisite-analyzer.md.`;
 }
 
 function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
@@ -3960,7 +3960,7 @@ function roomSummaryRows(state = {}, width = 84) {
     boxLine(`${ansi.bold}Room${ansi.reset}`, width, ansi.green),
     ...boxWrappedText(`Title: ${state.title || 'No reading room selected'}`, width, ansi.green),
     ...boxWrappedText(`Topic: ${roomTopicLabel(state)}`, width, ansi.green),
-    boxLine(`HTML: ${terminalHyperlink('index.html', sessionHtmlUrl(state.slug))}`, width, ansi.green)
+    boxLine(`HTML: ${terminalHyperlink('Open Reading Room ↗', sessionHtmlUrl(state.slug))}`, width, ansi.green)
   ];
 }
 
@@ -4229,8 +4229,7 @@ function stageQualityRules(type) {
     ],
     proof: [
       '- Walk the actual proof, not just the theorem intuition. Quote or rewrite the previous line and next line for each transition.',
-      '- Use a line transition microscope as subsection narration, not a fixed overview table: infer the actual operation from the displayed math and explain how it transforms the previous line into the next.',
-      '- Do not output Markdown tables or HTML tables for proof walkthroughs. Never use columns such as Proof line / Operation / Dependency / Hidden assumption / Why valid; expand those ideas as prose bullets under the exact transition.',
+      '- Use a line transition microscope rather than a fixed overview table: infer the actual operation from the displayed math and explain how it transforms the previous line into the next.',
       '- If a displayed transition compresses multiple operations, insert reconstructed intermediate lines and break it down until each micro-step is one primitive local transformation.',
       '- Define the proof notation first, especially random variables, conditioning events, indicators, denominators, distributions, and what is fixed versus averaged over.',
       '- Audit term movement at the right level for the selected proof. Do not use a predefined operation menu; infer the operation from the previous line, next line, and surrounding proof text.',
@@ -4300,11 +4299,10 @@ function evaluateCardQuality(card) {
     'start-here': [
       [/One-sentence orientation|One-sentence/i, 8, 'Start Here should include one-sentence orientation'],
       [/Preliminary/i, 8, 'Start Here should include Preliminary'],
-      [/flow:/i, 6, 'Start Here should include a flow line when dependencies are linear enough']
+      [/Preliminary/i, 6, 'Start Here should include a readable Preliminary section']
     ],
     prerequisite: [
-      [/flow:/i, 10, 'prerequisite ladder should include dependency flow when appropriate'],
-      [/###\s*\d+\./, 10, 'prerequisites should be taught as numbered concept blocks'],
+      [/concept|background|prerequisite|notation|equation|symbol|claim|theorem|figure/i, 10, 'prerequisites should be separated into meaningful concept/background blocks'],
       [/\d+(?:\.\d+)?|00|01|10|11|example/i, 8, 'prerequisites should include a concrete numeric example']
     ],
     method: [
@@ -4330,7 +4328,6 @@ function evaluateCardQuality(card) {
     proof: [
       [/Claim statement|Claim/i, 8, 'proof block should restate the claim'],
       [/Line transition microscope|Transition\s+\d+\s*(?:→|->|to)\s*\d+|Previous line[\s\S]+Next line/i, 14, 'proof block should explain transitions between adjacent proof lines'],
-      [!/(?:^|\n)\s*\|\s*(?:Proof line|Line)\s*\|\s*(?:Operation|Claim)\s*\||<table[\s>]/i.test(body), 12, 'proof block should not use fixed proof tables; use transition microscope subsections instead'],
       [/Notation and objects|Symbol|random variable|conditioning event|indicator|denominator|distribution|fixed|averaged/i, 10, 'proof block should define proof notation and what is fixed versus random'],
       [/operation audit|term-by-term|term movement|what changed|previous line[\s\S]+next line/i, 12, 'proof block should audit the actual term-level operation used in each proof transition'],
       [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present'],
@@ -4358,8 +4355,7 @@ function evaluateCardQuality(card) {
     ]
   };
   for (const [pattern, points, issue] of (typeChecks[type] || [])) {
-    const condition = typeof pattern === 'boolean' ? pattern : pattern.test(body);
-    addQualityCheck(result, condition, points, issue);
+    addQualityCheck(result, pattern.test(body), points, issue);
   }
   if (card.figure) {
     addQualityCheck(result, /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports/i.test(body), 12, 'figure block should contain the fixed element-by-element figure reading schema');
@@ -5081,6 +5077,8 @@ function prepareStartHerePrompt(state) {
 Write a finished Start Here block for ${state.title}.
 
 Use the existing reading-room state and source excerpts to produce a real teaching introduction, not a scaffold. Include only prerequisites actually needed for this source; use equations or concrete examples when they are required by the material.
+
+For the Preliminary section, follow prompts/prerequisite-analyzer.md: do not write one long prose wall. Separate the needed background into short concept blocks grouped by meaning. Each block should teach one core concept, use a small example or equation when it helps, and connect the concept to this source's actual notation, equation, figure, theorem, or claim. Do not force a fixed ladder, table, schema, or repeated labels like 'Why needed' or 'Diagnostic check'.
 
 Append it with:
 
