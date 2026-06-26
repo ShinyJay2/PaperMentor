@@ -4008,7 +4008,7 @@ function renderTuiScreen(state, selected = 0) {
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
-  const visibleItems = items.length ? items : ['Generate content-adapted choices from this excerpt'];
+  const visibleItems = items.length ? items : ['Create section-specific choices'];
   const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
   if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} item(s) above${ansi.reset}`, width, ansi.cyan));
   entries.forEach((item, offset) => {
@@ -4039,7 +4039,9 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false 
   const seen = new Set();
   const cleaned = [];
   for (const choice of choices) {
-    const text = String(choice || '').trim();
+    let text = String(choice || '').trim();
+    const oldPending = text.match(/^Generate content-adapted choices(?: from (.+?) excerpt)?$/i);
+    if (oldPending) text = `Create section-specific choices${oldPending[1] ? ` for ${oldPending[1]}` : ''}`;
     if (!text || /^chat about (?:this )?(?:section|slide)\b/i.test(text)) continue;
     const key = text.toLowerCase().replace(/\s+/g, ' ');
     if (seen.has(key)) continue;
@@ -4052,7 +4054,7 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false 
 
 function sectionMenuPendingChoices(section) {
   return sanitizeSectionActions([
-    `Generate content-adapted choices from ${section} excerpt`,
+    `Create section-specific choices for ${section}`,
     `Ask anything about ${section}`
   ], section, { ensureAsk: true });
 }
@@ -4679,7 +4681,7 @@ function applyTuiChoice(state, selected, options = {}) {
     state.selectedAction = '';
     state.lastChoiceKind = 'topic-picker';
     clearPendingPrompt(state);
-  } else if (/^(?:Section menu pending|Generate content-adapted choices)/i.test(choice)) {
+  } else if (/^(?:Section menu pending|Generate content-adapted choices|Create section-specific choices)/i.test(choice)) {
     writeSectionMenuPrompt(state, state.currentSection || 'current section');
     state.currentFocus = `Waiting for content-adapted menu for ${state.currentSection || 'current section'}`;
     state.selectedAction = '';
@@ -4759,7 +4761,8 @@ function runTui(args) {
   };
   process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
-    const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
+    const normalized = String(chunk).replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+    const keys = normalized.match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
   });
 }
@@ -5001,7 +5004,8 @@ function runPalette(args = {}) {
   };
   process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
-    const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
+    const normalized = String(chunk).replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+    const keys = normalized.match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
   });
 }
