@@ -4834,11 +4834,12 @@ function paperMentorMascotLines() {
   const P = `${ansi.green}██${ansi.reset}`;
   const E = '  ';
   return [
-    `        ${P}${P}${P}${P}`,
-    `      ${P}${P}${P}${P}${P}${P}`,
-    `      ${P}${E}${P}${P}${E}${P}`,
-    `      ${P}${P}${P}${P}${P}${P}`,
-    `        ${P}${P}${P}${P}`
+    `      ${P}${P}${P}`,
+    `      ${P}${P}${P}`,
+    `   ${ansi.green}--${ansi.reset}${P}${E}${P}${ansi.green}--${ansi.reset}`,
+    `      ${P}${P}${P}`,
+    `      ${P}${P}${P}`,
+    `       ${ansi.green}/  \\${ansi.reset}`
   ];
 }
 
