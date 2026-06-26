@@ -3803,6 +3803,8 @@ const ansi = {
   green: '\x1b[32m',
   red: '\x1b[31m',
   amber: '\x1b[33m',
+  white: '\x1b[37m',
+  gray: '\x1b[90m',
   inverse: '\x1b[7m',
   clear: '\x1b[2J\x1b[H',
   hideCursor: '\x1b[?25l',
@@ -4808,10 +4810,19 @@ function executePaletteItem(item, slug) {
 
 
 function paperMentorMascotLines() {
+  const block = (color) => `${color}██${ansi.reset}`;
+  const G = block(ansi.green);
+  const C = block(ansi.cyan);
+  const A = block(ansi.amber);
+  const W = block(ansi.white);
+  const D = block(ansi.gray);
+  const E = '  ';
   return [
-    '      /\\_/\\',
-    '     ( •ᴗ• )   Pori, your proof-reading mentor',
-    '     / >□<\\   Drop a paper, slides, or a question.'
+    `${E}${E}${E}${G}${G}${G}${G}${E}${C}${C}`,
+    `${E}${E}${G}${A}${A}${G}${G}${C}${C}${C}`,
+    `${E}${E}${G}${A}${W}${A}${G}${G}${C}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
+    `${E}${E}${G}${G}${A}${A}${G}${C}${C}${E}${ansi.dim}PaperMentor${ansi.reset}`,
+    `${E}${E}${E}${D}${G}${G}${D}${E}${C}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
   ];
 }
 
@@ -4830,31 +4841,20 @@ function learningQuote(date = new Date()) {
 }
 
 function renderWelcomeScreen({ input = '', status = '' } = {}) {
-  const width = terminalBoxWidth(96);
-  const recent = loadRecentSessions();
+  const width = terminalBoxWidth(88);
   const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const prompt = input || `${ansi.dim}paste a paper, slides, URL, or ask a question${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ Welcome to PaperMentor${ansi.reset} ${ansi.dim}reading room launcher${ansi.reset}`, width, ansi.green),
-    boxLine(`${ansi.dim}/papermentor → drop a PDF, paper URL, PPT/PPTX, slide PDF, or ask what to read next${ansi.reset}`, width, ansi.green),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    ...paperMentorMascotLines().map((line) => boxLine(`${ansi.green}${line}${ansi.reset}`, width, ansi.green)),
-    boxLine(`${ansi.amber}Today:${ansi.reset} ${learningQuote()}`, width, ansi.green),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}Start here${ansi.reset}`, width, ansi.green),
-    boxLine(`Paste or type a source path / URL, then press Enter.`, width, ansi.green),
-    boxLine(`${ansi.dim}Examples:${ansi.reset} ~/Desktop/paper.pdf   ·   ./lecture03.pptx   ·   https://arxiv.org/pdf/...`, width, ansi.green),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.green}›${ansi.reset} ${input || ansi.dim + 'waiting for source…' + ansi.reset}`, width, ansi.green)
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}${learningQuote()}${ansi.reset}`, width, ansi.green),
+    boxLine('', width, ansi.green),
+    ...paperMentorMascotLines().map((line) => boxLine(line, width, ansi.green)),
+    boxLine('', width, ansi.green),
+    boxLine(`${ansi.green}›${ansi.reset} ${prompt}`, width, ansi.green)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
-  if (recent.length) {
-    rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-    rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 2).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.green));
-  }
-  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.dim}Keys:${ansi.reset} Enter launch · ⌫ edit · Ctrl+U clear · o open recent · r recent rooms · q quit`, width, ansi.green));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -4876,8 +4876,19 @@ function runWelcome(args = {}) {
   const launchInput = () => {
     const source = input.trim();
     if (!source) {
-      status = 'Type or paste a PDF/PPT/source URL first.';
+      status = 'Paste a source, or ask after a reading room exists.';
       draw();
+      return;
+    }
+    if (!isSourceLike(source)) {
+      const slug = args.session || args.slug || latestSessionSlug();
+      if (!slug) {
+        status = 'Questions work after a room exists. Paste a paper or slides first.';
+        draw();
+        return;
+      }
+      cleanup();
+      askCurrentSession({ ...args, session: slug, text: source });
       return;
     }
     cleanup();
@@ -4899,12 +4910,10 @@ function runWelcome(args = {}) {
   process.stdin.setEncoding('utf8');
   draw();
   const handleKey = (key) => {
-    if (key === '\u0003' || key === 'q') { cleanup(); process.exit(0); }
+    if (key === '\u0003') { cleanup(); process.exit(0); }
     if (key === '\r' || key === '\n') return launchInput();
     if (key === '\u007f' || key === '\b') { input = input.slice(0, -1); status = ''; draw(); return; }
     if (key === '\u0015') { input = ''; status = ''; draw(); return; }
-    if (key === 'o' && !input) { cleanup(); openLatestSession(args); process.exit(0); }
-    if (key === 'r' && !input) { cleanup(); listRecentSessions(); process.exit(0); }
     if (key >= ' ' && key !== '\u007f') { input += key; status = ''; draw(); }
   };
   process.on('SIGWINCH', draw);
