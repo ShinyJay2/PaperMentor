@@ -203,7 +203,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
-for (const phrase of ['renderWelcomeScreen', 'read slowly, ask precisely', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
+for (const phrase of ['renderWelcomeScreen', 'paperMentorMascotLines', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified palette phrase: ${phrase}`);
 }
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
@@ -387,7 +387,7 @@ function validateSessionHelper() {
     if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
-    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Pori') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
+    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('●  ●') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
     if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('pm <file>') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified command palette');

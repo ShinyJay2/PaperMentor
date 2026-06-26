@@ -4832,11 +4832,11 @@ function executePaletteItem(item, slug) {
 
 function paperMentorMascotLines() {
   return [
-    `   ${ansi.green}╭────╮${ansi.reset}  ${ansi.bold}${ansi.green}Pori${ansi.reset}`,
-    ` ${ansi.green}╭─│${ansi.reset}${ansi.bold}━  ━${ansi.reset}${ansi.green}│─╮${ansi.reset}  ${ansi.dim}PaperMentor pet${ansi.reset}`,
-    `   ${ansi.green}│  ▾ │${ansi.reset}`,
-    `   ${ansi.green}╰─┬┬─╯${ansi.reset}  ${ansi.dim}read slowly, ask precisely${ansi.reset}`,
-    `     ${ansi.green}╯╰${ansi.reset}`
+    `      ${ansi.green}╭──────╮${ansi.reset}`,
+    `   ${ansi.green}╭──│${ansi.reset} ${ansi.bold}●  ●${ansi.reset} ${ansi.green}│──╮${ansi.reset}`,
+    `      ${ansi.green}│  ${ansi.reset}${ansi.bold}⌣${ansi.reset}${ansi.green}   │${ansi.reset}`,
+    `      ${ansi.green}╰──┬┬──╯${ansi.reset}`,
+    `         ${ansi.green}╰╯${ansi.reset}`
   ];
 }
 
