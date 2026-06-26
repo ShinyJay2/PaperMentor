@@ -3819,7 +3819,37 @@ function stripAnsi(value) {
 }
 
 function visibleLength(value) {
-  return stripAnsi(value).length;
+  return displayWidth(stripAnsi(value));
+}
+
+function charDisplayWidth(char) {
+  if (!char) return 0;
+  const code = char.codePointAt(0);
+  if (code === 0) return 0;
+  if (code < 32 || (code >= 0x7f && code < 0xa0)) return 0;
+  if (
+    code >= 0x1100 && (
+      code <= 0x115f ||
+      code === 0x2329 ||
+      code === 0x232a ||
+      (code >= 0x2e80 && code <= 0xa4cf && code !== 0x303f) ||
+      (code >= 0xac00 && code <= 0xd7a3) ||
+      (code >= 0xf900 && code <= 0xfaff) ||
+      (code >= 0xfe10 && code <= 0xfe19) ||
+      (code >= 0xfe30 && code <= 0xfe6f) ||
+      (code >= 0xff00 && code <= 0xff60) ||
+      (code >= 0xffe0 && code <= 0xffe6) ||
+      (code >= 0x1f300 && code <= 0x1f64f) ||
+      (code >= 0x1f900 && code <= 0x1f9ff)
+    )
+  ) return 2;
+  return 1;
+}
+
+function displayWidth(value) {
+  let width = 0;
+  for (const char of String(value || '')) width += charDisplayWidth(char);
+  return width;
 }
 
 function padVisible(value, width) {
@@ -3828,16 +3858,31 @@ function padVisible(value, width) {
   return `${text}${' '.repeat(pad)}`;
 }
 
+function sliceVisiblePlain(value, width) {
+  const maxWidth = Math.max(0, Number(width) || 0);
+  let out = '';
+  let used = 0;
+  for (const char of String(value || '')) {
+    const next = charDisplayWidth(char);
+    if (used + next > maxWidth) break;
+    out += char;
+    used += next;
+  }
+  return out;
+}
+
 function fitVisible(value, width) {
   const text = String(value || '');
   if (visibleLength(text) <= width) return text;
-  return trim(stripAnsi(text), Math.max(1, width));
+  const plain = stripAnsi(text);
+  if (width <= 1) return sliceVisiblePlain(plain, Math.max(0, width));
+  return `${sliceVisiblePlain(plain, Math.max(1, width - 1))}…`;
 }
 
 function terminalBoxWidth(defaultWidth = 96) {
   const columns = Number(process.stdout?.columns || process.env.COLUMNS || 0);
   if (!columns) return defaultWidth;
-  return Math.max(52, Math.min(defaultWidth, columns - 1));
+  return Math.max(12, Math.min(defaultWidth, columns - 1));
 }
 
 function terminalItemLimit(defaultLimit = 14) {
@@ -3868,8 +3913,9 @@ function wrapPlainText(text, width) {
   const pushLongToken = (token) => {
     let rest = token;
     while (visibleLength(rest) > maxWidth) {
-      lines.push(rest.slice(0, maxWidth));
-      rest = rest.slice(maxWidth);
+      const head = sliceVisiblePlain(rest, maxWidth);
+      lines.push(head);
+      rest = rest.slice(head.length);
     }
     return rest;
   };
@@ -4019,6 +4065,21 @@ function renderTuiScreen(state, selected = 0) {
   if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} item(s) below${ansi.reset}`, width, ansi.cyan));
   rows.push(bottom);
   return rows.join('\n');
+}
+
+function parseTuiKeys(chunk) {
+  const text = String(chunk || '').replace(/\r\n/g, '\r').replace(/\n/g, '\r');
+  return text.match(/\x1b\[[ABCD]|\x1bO[ABCD]|[\s\S]/g) || [];
+}
+
+function normalizeTuiKey(key) {
+  const applicationCursor = {
+    '\x1bOA': '\x1b[A',
+    '\x1bOB': '\x1b[B',
+    '\x1bOC': '\x1b[C',
+    '\x1bOD': '\x1b[D'
+  };
+  return applicationCursor[key] || key;
 }
 
 
@@ -4724,10 +4785,12 @@ function runTui(args) {
   }
 
   const draw = () => {
-    process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}`);
+    const items = tuiMenuItems(state);
+    selected = Math.max(0, Math.min(selected, Math.max(0, items.length - 1)));
+    process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}\x1b[J`);
   };
   const cleanup = () => {
-    process.stdin.setRawMode(false);
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.stdin.pause();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
@@ -4742,7 +4805,8 @@ function runTui(args) {
   process.stdin.resume();
   process.stdin.setEncoding('utf8');
   draw();
-  const handleKey = (key) => {
+  const handleKey = (rawKey) => {
+    const key = normalizeTuiKey(rawKey);
     const items = tuiMenuItems(state);
     if (key === '\u0003') {
       cleanup();
@@ -4754,16 +4818,22 @@ function runTui(args) {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
     } else if (key === '\r' || key === '\n') {
+      const selectedChoice = items[selected] || '';
       state = applyTuiChoice(state, selected, { tui: true });
-      selected = 0;
+      const updatedItems = tuiMenuItems(state);
+      if (state.lastChoiceKind === 'section-menu') {
+        const sameIndex = updatedItems.findIndex((item) => item === selectedChoice);
+        const pendingIndex = updatedItems.findIndex((item) => /Create section-specific choices/i.test(item));
+        selected = Math.max(0, sameIndex >= 0 ? sameIndex : pendingIndex >= 0 ? pendingIndex : Math.min(selected, updatedItems.length - 1));
+      } else {
+        selected = 0;
+      }
       draw();
     }
   };
   process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
-    const normalized = String(chunk).replace(/\r\n/g, '\r').replace(/\n/g, '\r');
-    const keys = normalized.match(/\x1b\[[ABCD]|[\s\S]/g) || [];
-    for (const key of keys) handleKey(key);
+    for (const key of parseTuiKeys(chunk)) handleKey(key);
   });
 }
 
@@ -4973,10 +5043,11 @@ function runPalette(args = {}) {
   let current = render();
   const draw = () => {
     current = render();
-    process.stdout.write(`${ansi.clear}${current.screen}`);
+    selected = Math.max(0, Math.min(selected, Math.max(0, current.items.length - 1)));
+    process.stdout.write(`${ansi.clear}${current.screen}\x1b[J`);
   };
   const cleanup = () => {
-    process.stdin.setRawMode(false);
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
     process.stdin.pause();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
@@ -4985,7 +5056,8 @@ function runPalette(args = {}) {
   process.stdin.resume();
   process.stdin.setEncoding('utf8');
   draw();
-  const handleKey = (key) => {
+  const handleKey = (rawKey) => {
+    const key = normalizeTuiKey(rawKey);
     const items = current.items;
     if (key === '\u0003') {
       cleanup();
@@ -5004,9 +5076,7 @@ function runPalette(args = {}) {
   };
   process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
-    const normalized = String(chunk).replace(/\r\n/g, '\r').replace(/\n/g, '\r');
-    const keys = normalized.match(/\x1b\[[ABCD]|[\s\S]/g) || [];
-    for (const key of keys) handleKey(key);
+    for (const key of parseTuiKeys(chunk)) handleKey(key);
   });
 }
 
