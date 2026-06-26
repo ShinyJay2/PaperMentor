@@ -4,6 +4,7 @@ import { execFileSync, spawnSync } from 'node:child_process';
 import { basename, dirname, extname, join, resolve, sep, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import readline from 'node:readline';
 
 const root = process.cwd();
 const scriptDir = dirname(fileURLToPath(import.meta.url));
@@ -3803,8 +3804,6 @@ const ansi = {
   green: '\x1b[32m',
   red: '\x1b[31m',
   amber: '\x1b[33m',
-  white: '\x1b[37m',
-  gray: '\x1b[90m',
   inverse: '\x1b[7m',
   clear: '\x1b[2J\x1b[H',
   hideCursor: '\x1b[?25l',
@@ -4812,17 +4811,15 @@ function executePaletteItem(item, slug) {
 function paperMentorMascotLines() {
   const block = (color) => `${color}██${ansi.reset}`;
   const G = block(ansi.green);
-  const C = block(ansi.cyan);
-  const A = block(ansi.amber);
-  const W = block(ansi.white);
-  const D = block(ansi.gray);
   const E = '  ';
   return [
-    `${E}${E}${E}${G}${G}${G}${G}${E}${C}${C}`,
-    `${E}${E}${G}${A}${A}${G}${G}${C}${C}${C}`,
-    `${E}${E}${G}${A}${W}${A}${G}${G}${C}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
-    `${E}${E}${G}${G}${A}${A}${G}${C}${C}${E}${ansi.dim}PaperMentor${ansi.reset}`,
-    `${E}${E}${E}${D}${G}${G}${D}${E}${C}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
+    `${E}${E}${G}${E}${E}${E}${E}${G}`,
+    `${E}${G}${G}${E}${E}${G}${G}${G}`,
+    `${E}${G}${G}${G}${G}${G}${G}${G}`,
+    `${E}${G}${E}${G}${G}${E}${G}${E}${ansi.bold}${ansi.green}Pori${ansi.reset}`,
+    `${E}${G}${G}${G}${G}${G}${G}${G}`,
+    `${E}${E}${G}${E}${E}${G}${E}${E}${ansi.dim}PaperMentor${ansi.reset}`,
+    `${E}${E}${G}${G}${G}${G}${E}${E}${ansi.dim}read slowly, ask precisely${ansi.reset}`
   ];
 }
 
@@ -4840,7 +4837,7 @@ function learningQuote(date = new Date()) {
   return quotes[((day % quotes.length) + quotes.length) % quotes.length];
 }
 
-function renderWelcomeScreen({ input = '', status = '' } = {}) {
+function renderWelcomeScreen({ input = '', status = '', includePrompt = true } = {}) {
   const width = terminalBoxWidth(88);
   const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
@@ -4851,47 +4848,37 @@ function renderWelcomeScreen({ input = '', status = '' } = {}) {
     boxLine(`${ansi.dim}${learningQuote()}${ansi.reset}`, width, ansi.green),
     boxLine('', width, ansi.green),
     ...paperMentorMascotLines().map((line) => boxLine(line, width, ansi.green)),
-    boxLine('', width, ansi.green),
-    boxLine(`${ansi.green}›${ansi.reset} ${prompt}`, width, ansi.green)
+    boxLine('', width, ansi.green)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
-  return rows.join('\n');
+  return `${rows.join('\n')}${includePrompt ? `\n\n${ansi.green}›${ansi.reset} ${prompt}` : ''}`;
 }
 
 function runWelcome(args = {}) {
-  let input = args.input || args.source || '';
   let status = '';
   const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
   if (snapshot) {
-    console.log(renderWelcomeScreen({ input, status }));
+    console.log(renderWelcomeScreen({ input: args.input || args.source || '', status }));
     return;
   }
-  const draw = () => process.stdout.write(`${ansi.clear}${renderWelcomeScreen({ input, status })}`);
-  const cleanup = () => {
-    process.stdin.setRawMode(false);
-    process.stdin.pause();
-    process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
-  };
-  const launchInput = () => {
-    const source = input.trim();
+  const launchInput = (value) => {
+    const source = String(value || '').trim();
     if (!source) {
       status = 'Paste a source, or ask after a reading room exists.';
-      draw();
+      askLine();
       return;
     }
     if (!isSourceLike(source)) {
       const slug = args.session || args.slug || latestSessionSlug();
       if (!slug) {
         status = 'Questions work after a room exists. Paste a paper or slides first.';
-        draw();
+        askLine();
         return;
       }
-      cleanup();
       askCurrentSession({ ...args, session: slug, text: source });
       return;
     }
-    cleanup();
     const slug = launchSession({ ...args, _: ['launch', source], source });
     if (slug && process.stdin.isTTY && process.stdout.isTTY) {
       const state = readStateForSlug(slug);
@@ -4904,25 +4891,18 @@ function runWelcome(args = {}) {
       runTui({ session: slug });
     }
   };
-  process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
-  draw();
-  const handleKey = (key) => {
-    if (key === '\u0003') { cleanup(); process.exit(0); }
-    if (key === '\r' || key === '\n') return launchInput();
-    if (key === '\u007f' || key === '\b') { input = input.slice(0, -1); status = ''; draw(); return; }
-    if (key === '\u0015') { input = ''; status = ''; draw(); return; }
-    if (key >= ' ' && key !== '\u007f') { input += key; status = ''; draw(); }
+  const askLine = () => {
+    process.stdout.write(`${ansi.clear}${renderWelcomeScreen({ status, includePrompt: false })}\n\n`);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question(`${ansi.green}›${ansi.reset} `, (answer) => {
+      rl.close();
+      status = '';
+      launchInput(answer);
+    });
   };
-  process.on('SIGWINCH', draw);
-  process.stdin.on('data', (chunk) => {
-    // Treat bracketed paste and normal typing as text; keep arrow/control sequences inert.
-    const raw = String(chunk);
-    if (/^\x1b\[/.test(raw)) return;
-    for (const ch of raw) handleKey(ch);
-  });
+  const initial = args.input || args.source || '';
+  if (initial) return launchInput(initial);
+  askLine();
 }
 
 function runPalette(args = {}) {
