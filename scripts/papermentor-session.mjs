@@ -4830,21 +4830,25 @@ function executePaletteItem(item, slug) {
 }
 
 
-function learningQuote(date = new Date()) {
+function learningQuotes() {
   // Public-domain/classic quote references:
   // - Aristotle, Metaphysics I.1, MIT Classics Archive.
   // - Confucius, Analects II.11/15/17, Project Gutenberg / Wikisource Legge translation.
-  const quotes = [
+  return [
     'All men by nature desire to know. — Aristotle, Metaphysics I.1',
     'Learning without thought is labour lost; thought without learning is perilous. — Confucius, Analects II.15',
     'When you know a thing, to hold that you know it; and when you do not know a thing, to allow that you do not know it; this is knowledge. — Confucius, Analects II.17',
     'If a man keeps cherishing his old knowledge, so as continually to be acquiring new, he may be a teacher of others. — Confucius, Analects II.11'
   ];
-  const day = Math.floor(date.getTime() / 86400000);
-  return quotes[((day % quotes.length) + quotes.length) % quotes.length];
 }
 
-function renderWelcomeScreen({ input = '', status = '', includePrompt = true } = {}) {
+function learningQuote({ deterministic = false } = {}) {
+  const quotes = learningQuotes();
+  if (deterministic) return quotes[0];
+  return quotes[Math.floor(Math.random() * quotes.length)] || quotes[0];
+}
+
+function renderWelcomeScreen({ input = '', status = '', includePrompt = true, quote = learningQuote() } = {}) {
   const width = terminalBoxWidth(88);
   const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
@@ -4852,7 +4856,7 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true } =
   const rows = [
     top,
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
-    ...boxWrappedText(learningQuote(), width, ansi.green, ansi.dim),
+    ...boxWrappedText(quote, width, ansi.green, ansi.dim),
     boxLine('', width, ansi.green),
     boxLine(`${ansi.bold}Add source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
     boxLine(`${ansi.dim}Then choose topics with ↑/↓, or ask here.${ansi.reset}`, width, ansi.green)
@@ -4866,9 +4870,10 @@ function runWelcome(args = {}) {
   let status = '';
   const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
   if (snapshot) {
-    console.log(renderWelcomeScreen({ input: args.input || args.source || '', status }));
+    console.log(renderWelcomeScreen({ input: args.input || args.source || '', status, quote: learningQuote({ deterministic: true }) }));
     return;
   }
+  const launchQuote = learningQuote();
   const launchInput = (value) => {
     const source = String(value || '').trim();
     if (!source) {
@@ -4899,7 +4904,7 @@ function runWelcome(args = {}) {
     }
   };
   const askLine = () => {
-    process.stdout.write(`${ansi.clear}${renderWelcomeScreen({ status, includePrompt: false })}\n\n`);
+    process.stdout.write(`${ansi.clear}${renderWelcomeScreen({ status, includePrompt: false, quote: launchQuote })}\n\n`);
     const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
     rl.question(`${ansi.green}›${ansi.reset} `, (answer) => {
       rl.close();
