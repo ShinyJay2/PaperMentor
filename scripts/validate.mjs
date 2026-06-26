@@ -203,7 +203,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
-for (const phrase of ['renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa', 'Claude/Codex-style command palette']) {
+for (const phrase of ['renderWelcomeScreen', 'Pori, your proof-reading mentor', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified palette phrase: ${phrase}`);
 }
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
@@ -386,6 +386,8 @@ function validateSessionHelper() {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
     if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
+    const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    if (!welcomeOutput.includes('Welcome to PaperMentor') || !welcomeOutput.includes('Pori') || !welcomeOutput.includes('waiting for source')) failures.push('pm --snapshot should render the PaperMentor welcome/upload launcher');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!paletteOutput.includes('✦ PaperMentor Skill') || !paletteOutput.includes('pm <file>') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified command palette');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });

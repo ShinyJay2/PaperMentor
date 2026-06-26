@@ -4612,7 +4612,7 @@ function runTui(args) {
   if (!slug) throw new Error('tui requires --session <slug>');
   let state = readJson(statePath(slug), null);
   if (!state) throw new Error(`session not found: ${slug}`);
-  let selected = Math.min(Number(args.cursor || 0), Math.max(0, currentMenuItems(state).length - 1));
+  let selected = Math.min(Number(args.cursor || 0), Math.max(0, tuiMenuItems(state).length - 1));
   if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
     console.log(renderTuiScreen(state, selected));
     return;
@@ -4638,7 +4638,7 @@ function runTui(args) {
   process.stdin.setEncoding('utf8');
   draw();
   const handleKey = (key) => {
-    const items = currentMenuItems(state);
+    const items = tuiMenuItems(state);
     if (key === '\u0003' || key === 'q') {
       cleanup();
       process.exit(0);
@@ -4684,6 +4684,7 @@ function runTui(args) {
       process.exit(0);
     }
   };
+  process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
     const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
@@ -4805,6 +4806,116 @@ function executePaletteItem(item, slug) {
   console.log(`Start a new room with:\n\n  ${cliCommand()} <file-or-url>\n`);
 }
 
+
+function paperMentorMascotLines() {
+  return [
+    '      /\\_/\\',
+    '     ( •ᴗ• )   Pori, your proof-reading mentor',
+    '     / >□<\\   Drop a paper, slides, or a question.'
+  ];
+}
+
+function learningQuote(date = new Date()) {
+  const quotes = [
+    '배움은 빠르게 넘기는 일이 아니라, 막힌 줄을 끝까지 밝히는 일이다.',
+    'A theorem becomes yours only after every hidden step stops being hidden.',
+    '좋은 독해는 요약이 아니라 재구성이다.',
+    'If an equation feels obvious, ask what operation was silently performed.',
+    '오늘의 목표: 한 문장을 외우기보다 한 전이를 설명할 수 있게 되기.',
+    'Understanding starts where the slide stopped explaining.',
+    'Proofs are not walls of symbols; they are small legal moves.'
+  ];
+  const day = Math.floor(date.getTime() / 86400000);
+  return quotes[((day % quotes.length) + quotes.length) % quotes.length];
+}
+
+function renderWelcomeScreen({ input = '', status = '' } = {}) {
+  const width = terminalBoxWidth(96);
+  const recent = loadRecentSessions();
+  const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const rows = [
+    top,
+    boxLine(`${ansi.bold}${ansi.green}✦ Welcome to PaperMentor${ansi.reset} ${ansi.dim}reading room launcher${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}/papermentor → drop a PDF, paper URL, PPT/PPTX, slide PDF, or ask what to read next${ansi.reset}`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    ...paperMentorMascotLines().map((line) => boxLine(`${ansi.green}${line}${ansi.reset}`, width, ansi.green)),
+    boxLine(`${ansi.amber}Today:${ansi.reset} ${learningQuote()}`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}Start here${ansi.reset}`, width, ansi.green),
+    boxLine(`Paste or type a source path / URL, then press Enter.`, width, ansi.green),
+    boxLine(`${ansi.dim}Examples:${ansi.reset} ~/Desktop/paper.pdf   ·   ./lecture03.pptx   ·   https://arxiv.org/pdf/...`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.green}›${ansi.reset} ${input || ansi.dim + 'waiting for source…' + ansi.reset}`, width, ansi.green)
+  ];
+  if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
+  if (recent.length) {
+    rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+    rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 2).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.green));
+  }
+  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+  rows.push(boxLine(`${ansi.dim}Keys:${ansi.reset} Enter launch · ⌫ edit · Ctrl+U clear · o open recent · r recent rooms · q quit`, width, ansi.green));
+  rows.push(bottom);
+  return rows.join('\n');
+}
+
+function runWelcome(args = {}) {
+  let input = args.input || args.source || '';
+  let status = '';
+  const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
+  if (snapshot) {
+    console.log(renderWelcomeScreen({ input, status }));
+    return;
+  }
+  const draw = () => process.stdout.write(`${ansi.clear}${renderWelcomeScreen({ input, status })}`);
+  const cleanup = () => {
+    process.stdin.setRawMode(false);
+    process.stdin.pause();
+    process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
+  };
+  const launchInput = () => {
+    const source = input.trim();
+    if (!source) {
+      status = 'Type or paste a PDF/PPT/source URL first.';
+      draw();
+      return;
+    }
+    cleanup();
+    const slug = launchSession({ ...args, _: ['launch', source], source });
+    if (slug && process.stdin.isTTY && process.stdout.isTTY) {
+      const state = readStateForSlug(slug);
+      if (state?.paperSections?.length) {
+        state.topicPickerOpen = true;
+        state.currentMode = '';
+        state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} topic`;
+        writeJson(statePath(slug), state);
+      }
+      runTui({ session: slug });
+    }
+  };
+  process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
+  process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  draw();
+  const handleKey = (key) => {
+    if (key === '\u0003' || key === 'q') { cleanup(); process.exit(0); }
+    if (key === '\r' || key === '\n') return launchInput();
+    if (key === '\u007f' || key === '\b') { input = input.slice(0, -1); status = ''; draw(); return; }
+    if (key === '\u0015') { input = ''; status = ''; draw(); return; }
+    if (key === 'o' && !input) { cleanup(); openLatestSession(args); process.exit(0); }
+    if (key === 'r' && !input) { cleanup(); listRecentSessions(); process.exit(0); }
+    if (key >= ' ' && key !== '\u007f') { input += key; status = ''; draw(); }
+  };
+  process.on('SIGWINCH', draw);
+  process.stdin.on('data', (chunk) => {
+    // Treat bracketed paste and normal typing as text; keep arrow/control sequences inert.
+    const raw = String(chunk);
+    if (/^\x1b\[/.test(raw)) return;
+    for (const ch of raw) handleKey(ch);
+  });
+}
+
 function runPalette(args = {}) {
   let slug = args.session || args.slug || latestSessionSlug();
   let selected = Math.max(0, Number(args.index || args.cursor || 1) - 1);
@@ -4882,6 +4993,7 @@ function runPalette(args = {}) {
       process.exit(0);
     }
   };
+  process.on('SIGWINCH', draw);
   process.stdin.on('data', (chunk) => {
     const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
@@ -4919,7 +5031,16 @@ function openLatestSession(args = {}) {
 
 function goLatestSession(args = {}) {
   const slug = requireSessionSlug(args, 'go');
-  return runTui({ ...args, session: slug });
+  const state = readStateForSlug(slug);
+  if (state?.paperSections?.length) {
+    state.topicPickerOpen = true;
+    state.currentMode = '';
+    state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} topic`;
+    state.selectedAction = '';
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+  }
+  return runTui({ ...args, session: slug, cursor: 0 });
 }
 
 function askCurrentSession(args = {}) {
@@ -5494,7 +5615,7 @@ function launchSession(args) {
 - Start Here prompt: .papermentor/sessions/${slug}/pending-prompt.md
 - TUI:  ${cliCommand()} tui --session ${slug}
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- Next: write the Start Here body from the pending prompt, then append it with ${cliCommand()} card --session ${slug} --type start-here --title 'Start Here' --body-file <file>`);
-    return;
+    return slug;
   }
   const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
   const representativeFigureCandidates = normalizeSourceMode(sourceMode) === 'paper'
@@ -5527,6 +5648,7 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   if (finalState.representativeFigurePrompt) {
     console.log(`- Representative figure selection prompt: ${finalState.representativeFigurePrompt}`);
   }
+  return slug;
 }
 
 function usage(options = {}) {
@@ -5590,7 +5712,9 @@ if (args.help || args.h || command === 'help' || command === '--help' || command
   process.exit(0);
 }
 try {
-  if (!command || command === 'menu' || command === 'palette') {
+  if (!command || command === '/papermentor' || command === 'papermentor') {
+    runWelcome(args);
+  } else if (command === 'menu' || command === 'palette') {
     runPalette(args);
   } else if (isSourceLike(command)) {
     launchSession({ ...args, _: ['launch', command], source: args.source || command });

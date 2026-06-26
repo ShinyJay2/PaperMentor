@@ -154,10 +154,15 @@ pm https://arxiv.org/pdf/2602.04770
 
 PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative method/system figure when it can, and writes a crop preview for quick recropping.
 
-Open the command palette any time:
+Open the PaperMentor launcher any time. It shows the mascot, a short learning quote, and a Claude/Codex-style input box where you can paste a paper URL, local PDF, slide PDF, PPT, or PPTX:
 
 ```bash
 pm
+```
+
+After a source is loaded, continue with the section/slide navigator:
+
+```bash
 pm open
 pm go
 pm ask "What does this equation mean?"
