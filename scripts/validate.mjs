@@ -684,18 +684,17 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
-    if (navState.currentSection !== '3. Drifting Models for Generation' || !navState.nextChoices?.some((choice) => choice.includes('Decode key equations'))) failures.push('section command should show section-local action choices');
+    if (navState.currentSection !== '3. Drifting Models for Generation' || !navState.nextChoices?.some((choice) => choice.includes('Section menu pending')) || navState.pendingBlockType !== 'section-menu') failures.push('section command should request a model-authored section menu instead of showing generic fallback actions');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (1) pushforward symbol by symbol|Explain Eq. (6) training objective symbol by symbol'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.currentMode !== 'equations' || navState.detectedItems?.length !== 2 || !navState.nextChoices?.[0]?.includes('Eq. (1)')) failures.push('mode command should store dynamic section-local equation choices');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
-    // Paper section menus are generic plumbing (no word-matching / scoring); the model
-    // tailors them on entry by reading the section and re-running `section --choices`.
+    // Paper section menus are model-authored from the section excerpt. The script must
+    // not seed generic Map/Decode/Trace/Connect menus or word-matched/scored menus.
     for (const key of ['1-introduction', '2-related-work', '3-drifting-models-for-generation']) {
       const acts = navState.sectionActions?.[key] || [];
-      if (!acts.some((c) => c.includes('Ask anything about')) || !acts.some((c) => c.includes('Decode key equations'))) failures.push(`analyze should seed a generic uniform section menu for ${key}`);
-      if (acts.some((c) => /pushforward distribution|Sohl-Dickstein|Map equation dependencies|Unpack "/.test(c))) failures.push(`paper section menu must not be word-matched/scored: ${key}`);
+      if (acts.length) failures.push(`analyze should not seed script-authored paper section menus for ${key}`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3', '--choices', 'Explain Eq. (10): attraction minus repulsion|Ask anything about 3. Drifting Models for Generation'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
@@ -708,7 +707,8 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
-    if (navState.lastChoiceKind !== 'section' || navState.pendingBlockPrompt || existsSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'))) failures.push('run should select a section without writing a pending HTML prompt');
+    const sectionMenuPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'), 'utf8');
+    if (navState.lastChoiceKind !== 'section' || navState.pendingBlockType !== 'section-menu' || !sectionMenuPrompt.includes('PaperMentor Section Menu Prompt')) failures.push('run should select a section and write a pending section-menu prompt for model-authored choices');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (6) $(touch should-not-run) symbol by symbol|Ask anything about Eq. (6)'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'generative-modeling-via-drifting', '--index', '1'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});

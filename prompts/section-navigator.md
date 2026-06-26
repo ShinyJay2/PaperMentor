@@ -1,6 +1,8 @@
 # Section Navigator Prompt
 
-When the reader enters a section, the CLI shows a **generic** menu (Map / Decode equations / Trace derivations / Connect dependencies / Ask anything / Chat). Your job is to **replace it with a tailored menu** for that specific section — by reading the section, not by word-matching or scoring.
+When the reader enters a section, the CLI must **not** invent a generic menu. If no model-authored menu exists yet, the helper writes a `pending-prompt.md` containing the section title, source excerpt, local equation snippets, concepts, and citations. Your job is to read that evidence and install a tailored menu for that specific section — by understanding the section, not by word-matching, scoring, or using fixed fallback labels.
+
+Never use placeholder actions such as `Map <section>`, `Decode key equations`, `Trace derivations`, or `Connect dependencies`. Those are forbidden as user-facing section choices because they hide the fact that the menu has not adapted to the source.
 
 ## How to classify a section
 

@@ -347,7 +347,7 @@ function hasForbiddenDiagramSubstitute(markdown) {
 }
 
 function splitChoices(value) {
-  if (!value) return [];
+  if (!value || value === true) return [];
   return String(value).split('|').map((x) => x.trim()).filter(Boolean);
 }
 
@@ -1626,15 +1626,11 @@ function prepareFigure(slug, cardId, args) {
 // Generic, uniform section menu — no word-matching or scoring. The model tailors a
 // section's menu on entry by reading its title+content and re-running `section
 // --choices`. See prompts/section-navigator.md.
-function defaultSectionActions(section) {
-  return [
-    `Map ${section}: what it covers and its role`,
-    `Decode key equations in ${section}`,
-    `Trace derivations in ${section}`,
-    `Connect dependencies in ${section}`,
-    `Ask anything about ${section}`,
-    `Chat about this section`
-  ];
+function defaultSectionActions(_section) {
+  // Paper section menus are LLM-authored from the section excerpt. Do not ship
+  // generic Map/Decode/Trace/Connect fallback actions here: fake specificity is
+  // worse than an explicit pending menu prompt.
+  return [];
 }
 
 function defaultModeItems(mode, section) {
@@ -1651,6 +1647,97 @@ function defaultModeItems(mode, section) {
 
 function sectionKey(section) {
   return slugify(section || 'current-section');
+}
+
+function plainSectionTitle(section) {
+  return String(section || '')
+    .replace(/^\s*\d+(?:\.\d+)*(?:\.|\s)+/g, '')
+    .replace(/^\s*appendix\s+[A-Z]\s*/i, 'Appendix ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function sectionKeyAliases(section) {
+  const raw = String(section || '').trim();
+  const plain = plainSectionTitle(raw);
+  const aliases = [sectionKey(raw), sectionKey(plain)];
+  if (/^appendix\b/i.test(raw)) aliases.push('appendix');
+  return unique(aliases);
+}
+
+function sameSectionTitle(a, b) {
+  const ak = new Set(sectionKeyAliases(a));
+  return sectionKeyAliases(b).some((key) => ak.has(key));
+}
+
+function escapeRegExp(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function lineHeadingIndex(text, title, from = 0) {
+  const clean = String(title || '').trim();
+  if (!clean) return -1;
+  const pattern = new RegExp(`(?:^|\\n)\\s*${escapeRegExp(clean)}\\s*(?:\\n|$)`, 'i');
+  const slice = String(text || '').slice(Math.max(0, from));
+  const match = slice.match(pattern);
+  return match ? Math.max(0, from) + match.index + (match[0].startsWith('\n') ? 1 : 0) : -1;
+}
+
+function sectionExcerptFromSourceText(text, section, sections = []) {
+  const source = String(text || '');
+  const title = plainSectionTitle(section);
+  const rawTitle = String(section || '').trim();
+  const startCandidates = unique([rawTitle, title]).map((candidate) => lineHeadingIndex(source, candidate, 0)).filter((idx) => idx >= 0);
+  if (!startCandidates.length) return '';
+  const start = Math.min(...startCandidates);
+  const currentIndex = (sections || []).findIndex((item) => sameSectionTitle(item, section));
+  const nextCandidates = (sections || [])
+    .slice(Math.max(0, currentIndex + 1))
+    .flatMap((item) => unique([String(item || '').trim(), plainSectionTitle(item)]))
+    .map((candidate) => lineHeadingIndex(source, candidate, start + Math.max(8, title.length)))
+    .filter((idx) => idx > start);
+  const end = nextCandidates.length ? Math.min(...nextCandidates) : Math.min(source.length, start + 9000);
+  return sourceExcerptForPrompt(source.slice(start, end));
+}
+
+function sectionInsightFor(state, section) {
+  const insights = state?.sectionInsights || {};
+  for (const key of sectionKeyAliases(section)) {
+    if (insights[key]) return insights[key];
+  }
+  return null;
+}
+
+function buildSectionInsight(block) {
+  return {
+    equations: detectEquationNumbers(block.body),
+    equationSnippets: detectEquationSnippets(block.body),
+    citations: detectCitations(block.body),
+    concepts: detectConcepts(block.body),
+    preview: block.body.replace(/\s+/g, ' ').slice(0, 500),
+    sourceExcerpt: sourceExcerptForPrompt(block.body)
+  };
+}
+
+function ensureSectionInsight(state, section) {
+  const existing = sectionInsightFor(state, section);
+  if (existing?.sourceExcerpt || existing?.preview) return existing;
+  const source = state?.source || state?.sourceFile;
+  if (!source || !existsSync(resolve(source))) return existing || {};
+  try {
+    const text = extractTextFromSourceFile(source, { raw: true });
+    const blocks = extractSourceBlocks(text, state.paperSections || [], state.sourceMode || 'paper');
+    const block = blocks.find((candidate) => sameSectionTitle(candidate.title, section));
+    const excerpt = block?.body || sectionExcerptFromSourceText(text, section, state.paperSections || []);
+    if (!excerpt) return existing || {};
+    state.sectionInsights = state.sectionInsights || {};
+    const insight = buildSectionInsight({ title: block?.title || section, body: excerpt });
+    state.sectionInsights[sectionKey(section)] = insight;
+    if (block?.title) state.sectionInsights[sectionKey(block.title)] = insight;
+    return insight;
+  } catch {
+    return existing || {};
+  }
 }
 
 function unique(values) {
@@ -2197,15 +2284,9 @@ function analyzePaper(args) {
     const equations = detectEquationNumbers(block.body);
     const citations = detectCitations(block.body);
     const concepts = detectConcepts(block.body);
-    state.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
-    state.sectionInsights[key] = {
-      equations,
-      equationSnippets: detectEquationSnippets(block.body),
-      citations,
-      concepts,
-      preview: block.body.replace(/\s+/g, ' ').slice(0, 500),
-      sourceExcerpt: sourceExcerptForPrompt(block.body)
-    };
+    const sectionActions = actionProfileForSection(block.title, block.body, sourceMode);
+    if (sectionActions.length) state.sectionActions[key] = sectionActions;
+    state.sectionInsights[key] = buildSectionInsight(block);
   }
   state.currentSection = '';
   state.currentMode = '';
@@ -2249,15 +2330,25 @@ function selectSection(args) {
   const index = Number(args.index || args.choice || 0);
   const section = raw || (index ? state.paperSections?.[index - 1] : '');
   if (!section) throw new Error('section requires --section <name> or --index <n>');
-  const actions = splitChoices(args.choices).length
-    ? splitChoices(args.choices)
-    : state.sectionActions?.[sectionKey(section)] || defaultSectionActions(section);
+  const providedChoices = splitChoices(args.choices);
+  const key = sectionKey(section);
+  if (providedChoices.length) {
+    state.sectionActions = state.sectionActions || {};
+    state.sectionActions[key] = providedChoices;
+    if (state.sectionMenuPending?.key === key) delete state.sectionMenuPending;
+    clearPendingPrompt(state);
+  }
+  const existingActions = state.sectionActions?.[key];
+  const actions = providedChoices.length
+    ? providedChoices
+    : existingActions?.length ? existingActions : sectionMenuPendingChoices(section);
   state.currentSection = section;
   state.currentMode = '';
   state.detectedItems = [];
   state.currentLocation = section;
-  state.currentFocus = `Section selected: ${section}`;
+  state.currentFocus = providedChoices.length ? `Section menu installed: ${section}` : `Section selected: ${section}`;
   state.nextChoices = actions;
+  if (!providedChoices.length && !existingActions?.length) writeSectionMenuPrompt(state, section);
   state.updatedAt = now();
   writeJson(statePath(slug), state);
   renderHtml(slug);
@@ -2274,6 +2365,7 @@ function setMode(args) {
   const section = args.section || state.currentSection || 'current section';
   state.currentSection = section;
   state.currentMode = mode;
+  clearPendingPrompt(state);
   state.currentLocation = section;
   state.currentFocus = `${mode} menu for ${section}`;
   state.detectedItems = items;
@@ -2319,7 +2411,7 @@ function diagramKindFromAction(action, fallback = 'method-pipeline') {
 function inferDiagramNodes(kind, state, args) {
   const explicit = splitChoices(args.nodes || args.items);
   if (explicit.length) return explicit.slice(0, 8);
-  const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
+  const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   if (kind === 'equation-dependency' && insight.equations?.length) {
     return insight.equations.slice(0, 6).map((number) => `Eq. (${number})`);
   }
@@ -3709,6 +3801,7 @@ const ansi = {
   blue: '\x1b[34m',
   magenta: '\x1b[35m',
   green: '\x1b[32m',
+  red: '\x1b[31m',
   amber: '\x1b[33m',
   inverse: '\x1b[7m',
   clear: '\x1b[2J\x1b[H',
@@ -3732,58 +3825,107 @@ function padVisible(value, width) {
   return `${text}${' '.repeat(pad)}`;
 }
 
+function fitVisible(value, width) {
+  const text = String(value || '');
+  if (visibleLength(text) <= width) return text;
+  return trim(stripAnsi(text), Math.max(1, width));
+}
+
+function terminalBoxWidth(defaultWidth = 96) {
+  const columns = Number(process.stdout?.columns || process.env.COLUMNS || 0);
+  if (!columns) return defaultWidth;
+  return Math.max(52, Math.min(defaultWidth, columns - 1));
+}
+
+function terminalItemLimit(defaultLimit = 14) {
+  const rows = Number(process.stdout?.rows || process.env.LINES || 0);
+  if (!rows) return defaultLimit;
+  return Math.max(3, Math.min(defaultLimit, rows - 13));
+}
+
+function visibleWindow(items, selected, limit) {
+  const all = items || [];
+  if (all.length <= limit) return { start: 0, entries: all };
+  let start = Math.max(0, selected - Math.floor(limit / 2));
+  start = Math.min(start, Math.max(0, all.length - limit));
+  return { start, entries: all.slice(start, start + limit) };
+}
+
 function boxLine(content = '', width = 84, color = ansi.cyan) {
-  return `${color}│${ansi.reset} ${padVisible(content, width - 4)} ${color}│${ansi.reset}`;
+  const innerWidth = Math.max(1, width - 4);
+  const fitted = fitVisible(content, innerWidth);
+  return `${color}│${ansi.reset} ${padVisible(fitted, innerWidth)} ${color}│${ansi.reset}`;
+}
+
+function isTopicPickerOpen(state) {
+  return Boolean(state?.topicPickerOpen);
+}
+
+function isChoosingTopic(state) {
+  return Boolean((state?.paperSections || []).length && (!state.currentSection || isTopicPickerOpen(state)));
 }
 
 function currentMenuLabel(state) {
-  if ((state.paperSections || []).length && !state.currentSection) return sectionListHeading(state.sourceMode);
+  if (isChoosingTopic(state)) return sectionListHeading(state.sourceMode);
   if (state.currentSection && !state.currentMode) return 'Section actions';
   return 'Choose next';
 }
 
 function currentMenuItems(state) {
-  if ((state.paperSections || []).length && !state.currentSection) return state.paperSections || [];
+  if (isChoosingTopic(state)) return state.paperSections || [];
   return state.nextChoices || [];
+}
+
+function tuiMenuItems(state) {
+  const items = currentMenuItems(state);
+  if (!isChoosingTopic(state) && (state.paperSections || []).length && state.currentSection) {
+    return ['Change topic / section list', ...items];
+  }
+  return items;
 }
 
 function renderTuiScreen(state, selected = 0) {
   const cards = readJson(cardsPath(state.slug), { cards: [] });
-  const width = 96;
-  const items = currentMenuItems(state);
-  const label = state.currentSection ? 'Choose next' : currentMenuLabel(state);
-  const focus = state.currentSection ? `${state.currentSection}${state.currentMode ? ` · ${state.currentMode}` : ''}` : `choose a ${sourceModeNoun(state.sourceMode)} topic`;
+  const width = terminalBoxWidth(96);
+  const items = tuiMenuItems(state);
+  const choosingTopic = isChoosingTopic(state);
+  const label = currentMenuLabel(state);
+  const focus = choosingTopic ? `choose a ${sourceModeNoun(state.sourceMode)} topic` : `${state.currentSection || state.title}${state.currentMode ? ` · ${state.currentMode}` : ''}`;
   const hasStartHere = (cards.cards || []).some((card) => card.type === 'start-here' && !/Not built yet|Not written yet/.test(card.body || ''));
   const startHereStatus = state.startHerePending || state.pendingBlockType === 'start-here'
     ? `${ansi.amber}pending${ansi.reset}`
     : hasStartHere ? `${ansi.green}complete${ansi.reset}` : `${ansi.dim}not started${ansi.reset}`;
-  const top = `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
-  const bottom = `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}command palette${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open HTML · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
-    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(state.title, 70)}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHereStatus}   ${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}   ${ansi.dim}Mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(focus, 72)}`, width, ansi.magenta),
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}command palette${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}↑/↓ move · Enter select · b/← topics · / ask · o open HTML · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(state.title, 70)}${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${state.renderedView || `.papermentor/sessions/${state.slug}/index.html`}${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHereStatus}   ${ansi.dim}Blocks:${ansi.reset} ${cards.cards?.length || 0}   ${ansi.dim}Mode:${ansi.reset} ${sourceModeLabel(state.sourceMode)}`, width, ansi.green),
+    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(focus, 72)}`, width, ansi.green),
     state.pendingBlockPrompt
-      ? boxLine(`${ansi.dim}Pending prompt:${ansi.reset} ${ansi.amber}${trim(state.pendingBlockPrompt, 68)}${ansi.reset}`, width, ansi.magenta)
-      : boxLine(`${ansi.dim}Runner:${ansi.reset} choose an item; explanations are appended to HTML, not dumped here`, width, ansi.magenta),
-    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.magenta)
+      ? boxLine(`${ansi.dim}Pending prompt:${ansi.reset} ${ansi.amber}${trim(state.pendingBlockPrompt, 68)}${ansi.reset}`, width, ansi.green)
+      : boxLine(`${ansi.dim}Runner:${ansi.reset} choose an item; explanations are appended to HTML, not dumped here`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
-  const visibleItems = items.length ? items : ['No dynamic choices yet. Run analyze with source text or ask a question.'];
-  visibleItems.slice(0, 14).forEach((item, index) => {
+  const visibleItems = items.length ? items : ['Section menu pending — generate content-adapted choices from the source excerpt'];
+  const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
+  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} item(s) above${ansi.reset}`, width, ansi.cyan));
+  entries.forEach((item, offset) => {
+    const index = start + offset;
     const active = index === selected;
     const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
-    const prefix = active ? `${ansi.magenta}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
+    const prefix = active ? `${ansi.green}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
     const text = active ? `${ansi.bold}${item}${ansi.reset}` : item;
-    rows.push(boxLine(`${prefix} ${pointer} ${trim(text, 70)}`, width, active ? ansi.magenta : ansi.cyan));
+    rows.push(boxLine(`${prefix} ${pointer} ${trim(text, Math.max(24, width - 24))}`, width, active ? ansi.green : ansi.cyan));
   });
-  rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Palette:${ansi.reset} pm open · pm go · pm ask "…" · pm <file-or-url>  ${ansi.dim}(also: ${cliCommand()} open)${ansi.reset}`, width, ansi.magenta));
+  if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} item(s) below${ansi.reset}`, width, ansi.cyan));
+  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+  rows.push(boxLine(`${ansi.amber}Palette:${ansi.reset} pm open · pm go · pm ask "…" · pm <file-or-url>  ${ansi.dim}(also: ${cliCommand()} open)${ansi.reset}`, width, ansi.green));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -3800,6 +3942,75 @@ function clearPendingPrompt(state) {
 
 function shellQuote(value) {
   return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
+}
+
+function sectionMenuPendingChoices(section) {
+  return [
+    `Section menu pending — generate choices from ${section} excerpt`,
+    `Ask anything about ${section}`,
+    `Chat about this section`
+  ];
+}
+
+function writeSectionMenuPrompt(state, section) {
+  const slug = state.slug;
+  const key = sectionKey(section);
+  const index = Math.max(0, (state.paperSections || []).indexOf(section)) + 1;
+  const insight = ensureSectionInsight(state, section) || {};
+  const command = `${cliCommand()} section --session ${shellQuote(slug)} --index ${index || '<section-index>'} --choices ${shellQuote('Action A|Action B|…|Ask anything about ' + section + '|Chat about this section')}`;
+  const prompt = `# PaperMentor Section Menu Prompt
+
+You are generating the next TUI choices for one selected paper section. The CLI script must not invent generic actions; you must read the actual section excerpt and write a content-adapted menu.
+
+## Hard rule
+
+Do **not** use fixed fallback labels such as \`Map section\`, \`Decode key equations\`, \`Trace derivations\`, or \`Connect dependencies\`. Do **not** choose actions by word-matching the title. Infer the section role and the reader's likely blockers from the excerpt itself.
+
+## Session
+
+- Session: ${slug}
+- Paper: ${state.title || '(untitled)'}
+- Selected section: ${section}
+- Section index: ${index || '(unknown)'}
+
+## Section evidence
+
+### Concepts detected for context only
+
+${(insight.concepts || []).slice(0, 18).map((item) => `- ${item}`).join('\n') || '- (none extracted)'}
+
+### Equation anchors detected for context only
+
+${(insight.equations || []).slice(0, 18).map((item) => `- Eq. (${item})`).join('\n') || '- (none extracted)'}
+
+### Equation/text snippets
+
+${(insight.equationSnippets || []).slice(0, 8).map((item, idx) => `${idx + 1}. ${item}`).join('\n\n') || '(none extracted)'}
+
+### Source excerpt
+
+${insight.sourceExcerpt || insight.preview || '(section excerpt unavailable; use the section title and available session state, but do not fabricate details)'}
+
+## Required output/action
+
+Create 4–8 actions that are specific enough that they could only belong to this section of this paper. Good actions name the actual object, promise, equation role, proof obligation, conceptual gap, or method mechanism in the excerpt.
+
+Always end with:
+
+- Ask anything about ${section}
+- Chat about this section
+
+Then run exactly one command to install the menu into the TUI:
+
+\`\`\`bash
+${command}
+\`\`\`
+`;
+  writeFileSync(promptPath(slug), prompt);
+  state.pendingBlockPrompt = `.papermentor/sessions/${slug}/pending-prompt.md`;
+  state.pendingBlockType = 'section-menu';
+  state.pendingBlockTitle = `Generate section menu — ${section}`;
+  state.sectionMenuPending = { section, key, prompt: state.pendingBlockPrompt, updatedAt: now() };
 }
 
 function actionTypeFromMode(currentMode, sourceMode = 'paper') {
@@ -4279,7 +4490,7 @@ function runProofAudit(args = {}) {
 
 function buildActionPrompt(state, action) {
   const type = actionType(action, state);
-  const insight = state.sectionInsights?.[sectionKey(state.currentSection || '')] || {};
+  const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   const equations = insight.equations?.length ? insight.equations.map((n) => `Eq. (${n})`).join(', ') : 'none detected yet';
   const equationSnippets = insight.equationSnippets?.length ? insight.equationSnippets.map((line) => `- ${line}`).join('\n') : '- none detected yet';
   const concepts = insight.concepts?.length ? insight.concepts.join(', ') : 'none detected yet';
@@ -4301,16 +4512,16 @@ function writePendingActionPrompt(state, action) {
 function renderRunnerConsole(state, action) {
   const width = 82;
   const content = [
-    `${ansi.bold}${ansi.magenta}✦ PaperMentor runner${ansi.reset} ${ansi.dim}choice → block prompt${ansi.reset}`,
+    `${ansi.bold}${ansi.green}✦ PaperMentor runner${ansi.reset} ${ansi.dim}choice → block prompt${ansi.reset}`,
     `${ansi.dim}Action:${ansi.reset} ${trim(action, 62)}`,
     `${ansi.dim}Block type:${ansi.reset} ${state.pendingBlockType}  ${ansi.dim}Prompt:${ansi.reset} ${state.pendingBlockPrompt}`,
     `${ansi.dim}HTML:${ansi.reset} ${state.renderedView}`,
     `${ansi.amber}Next:${ansi.reset} use the pending prompt to write the block body, then append it with the card command.`
   ];
   return [
-    `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`,
-    ...content.map((line) => boxLine(line, width, ansi.magenta)),
-    `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`
+    `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`,
+    ...content.map((line) => boxLine(line, width, ansi.green)),
+    `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`
   ].join('\n');
 }
 
@@ -4336,11 +4547,11 @@ function runChoice(args) {
   }
 }
 
-function applyTuiChoice(state, selected) {
-  const items = currentMenuItems(state);
+function applyTuiChoice(state, selected, options = {}) {
+  const items = options.tui ? tuiMenuItems(state) : currentMenuItems(state);
   const choice = items[selected];
   if (!choice) return state;
-  if ((state.paperSections || []).length && !state.currentSection) {
+  if (isChoosingTopic(state)) {
     state.currentSection = choice;
     state.currentMode = '';
     state.detectedItems = [];
@@ -4348,8 +4559,28 @@ function applyTuiChoice(state, selected) {
     state.currentFocus = `Section selected: ${choice}`;
     state.selectedAction = '';
     state.lastChoiceKind = 'section';
+    delete state.topicPickerOpen;
+    const key = sectionKey(choice);
+    const actions = state.sectionActions?.[key];
+    if (actions?.length) {
+      clearPendingPrompt(state);
+      state.nextChoices = actions;
+    } else {
+      state.nextChoices = sectionMenuPendingChoices(choice);
+      writeSectionMenuPrompt(state, choice);
+    }
+  } else if (/^Change topic \/ section list$/i.test(choice)) {
+    state.topicPickerOpen = true;
+    state.currentMode = '';
+    state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} topic`;
+    state.selectedAction = '';
+    state.lastChoiceKind = 'topic-picker';
     clearPendingPrompt(state);
-    state.nextChoices = state.sectionActions?.[sectionKey(choice)] || defaultSectionActions(choice);
+  } else if (/^Section menu pending/i.test(choice)) {
+    writeSectionMenuPrompt(state, state.currentSection || 'current section');
+    state.currentFocus = `Waiting for content-adapted menu for ${state.currentSection || 'current section'}`;
+    state.selectedAction = '';
+    state.lastChoiceKind = 'section-menu';
   } else {
     state.currentFocus = choice;
     state.selectedAction = choice;
@@ -4417,8 +4648,18 @@ function runTui(args) {
     } else if (key === '\u001b[B' || key === 'j') {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
+    } else if (key === '\u001b[D' || key === 'b') {
+      if ((state.paperSections || []).length && state.currentSection) {
+        state.topicPickerOpen = true;
+        state.currentMode = '';
+        state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} topic`;
+        state.selectedAction = '';
+        clearPendingPrompt(state);
+        selected = 0;
+      }
+      draw();
     } else if (key === '\r' || key === '\n') {
-      state = applyTuiChoice(state, selected);
+      state = applyTuiChoice(state, selected, { tui: true });
       selected = 0;
       draw();
     } else if (key === '/') {
@@ -4444,7 +4685,7 @@ function runTui(args) {
     }
   };
   process.stdin.on('data', (chunk) => {
-    const keys = String(chunk).match(/\x1b\[[AB]|[\s\S]/g) || [];
+    const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
   });
 }
@@ -4504,14 +4745,14 @@ function defaultPaletteItems(slug, summary = null) {
 }
 
 function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) {
-  const width = 96;
+  const width = terminalBoxWidth(96);
   const summary = sessionSummary(slug);
   const state = summary?.state || {};
   const quality = summary ? sessionQualitySummary(slug) : null;
   const recent = loadRecentSessions();
   const items = defaultPaletteItems(summary ? slug : '', summary).filter((item, index, arr) => arr.indexOf(item) === index);
-  const top = `${ansi.magenta}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
-  const bottom = `${ansi.magenta}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const title = summary ? state.title : 'No reading room selected';
   const html = summary ? (state.renderedView || `.papermentor/sessions/${state.slug}/index.html`) : 'Start with: pm <file-or-url>';
   const topic = summary ? (state.currentSection || state.currentLocation || 'choose a topic') : `${recent.length} recent session(s)`;
@@ -4519,33 +4760,33 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
     ? summary.startHereStatus === 'complete' ? `${ansi.green}complete${ansi.reset}` : summary.startHereStatus === 'pending' ? `${ansi.amber}pending${ansi.reset}` : `${ansi.dim}not started${ansi.reset}`
     : `${ansi.dim}none${ansi.reset}`;
   const qualityText = summary
-    ? quality ? `${quality.status === 'pass' ? ansi.green : quality.status === 'review' ? ansi.amber : ansi.magenta}${quality.overall}/100 ${quality.status}${ansi.reset}` : `${ansi.dim}not run${ansi.reset}`
+    ? quality ? `${quality.status === 'pass' ? ansi.green : quality.status === 'review' ? ansi.amber : ansi.red}${quality.overall}/100 ${quality.status}${ansi.reset}` : `${ansi.dim}not run${ansi.reset}`
     : `${ansi.dim}none${ansi.reset}`;
   const figureText = state.figureQualityWarning ? `${ansi.amber}review crop${ansi.reset}` : `${ansi.dim}ok/no figure warning${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.magenta}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}Claude/Codex-style command palette${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open · v QA · c crop · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.magenta),
-    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(title, 70)}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${trim(html, 78)}${ansi.reset}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Quality:${ansi.reset} ${qualityText}   ${ansi.dim}Figure:${ansi.reset} ${figureText}`, width, ansi.magenta),
-    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 76)}`, width, ansi.magenta),
-    `${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.magenta)
+    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor Skill${ansi.reset} ${ansi.dim}Claude/Codex-style command palette${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}↑/↓ move · Enter select · / ask · o open · v QA · c crop · n new · r Start Here · e export · q quit${ansi.reset}`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.dim}Current room:${ansi.reset} ${ansi.bold}${trim(title, 70)}${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}HTML:${ansi.reset} ${ansi.green}${trim(html, 78)}${ansi.reset}`, width, ansi.green),
+    boxLine(`${ansi.dim}Start Here:${ansi.reset} ${startHere}   ${ansi.dim}Quality:${ansi.reset} ${qualityText}   ${ansi.dim}Figure:${ansi.reset} ${figureText}`, width, ansi.green),
+    boxLine(`${ansi.dim}Current topic:${ansi.reset} ${trim(topic, 76)}`, width, ansi.green),
+    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.green)
   ];
   items.forEach((item, index) => {
     const active = index === selected;
     const pointer = active ? `${ansi.inverse}${ansi.bold} ${String(index + 1).padStart(2, '0')} ${ansi.reset}` : `${ansi.dim} ${String(index + 1).padStart(2, '0')} ${ansi.reset}`;
-    const prefix = active ? `${ansi.magenta}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
-    rows.push(boxLine(`${prefix} ${pointer} ${active ? `${ansi.bold}${item}${ansi.reset}` : item}`, width, active ? ansi.magenta : ansi.cyan));
+    const prefix = active ? `${ansi.green}◆${ansi.reset}` : `${ansi.dim}◇${ansi.reset}`;
+    rows.push(boxLine(`${prefix} ${pointer} ${active ? `${ansi.bold}${item}${ansi.reset}` : item}`, width, active ? ansi.green : ansi.cyan));
   });
   if (recent.length) {
-    rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-    rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 3).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.magenta));
+    rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+    rows.push(boxLine(`${ansi.dim}Recent:${ansi.reset} ${recent.slice(0, 3).map((item) => item.title || item.slug).join('  ·  ')}`, width, ansi.green));
   }
-  rows.push(`${ansi.magenta}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
-  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm qa · pm export`, width, ansi.magenta));
+  rows.push(`${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`);
+  rows.push(boxLine(`${ansi.amber}Shortcuts:${ansi.reset} pm <file> · pm open · pm go · pm ask "question" · pm qa · pm export`, width, ansi.green));
   rows.push(bottom);
   return { screen: rows.join('\n'), items };
 }
@@ -4642,7 +4883,7 @@ function runPalette(args = {}) {
     }
   };
   process.stdin.on('data', (chunk) => {
-    const keys = String(chunk).match(/\x1b\[[AB]|[\s\S]/g) || [];
+    const keys = String(chunk).match(/\x1b\[[ABCD]|[\s\S]/g) || [];
     for (const key of keys) handleKey(key);
   });
 }
@@ -5005,14 +5246,7 @@ function updateLaunchNavigation({ slug, source, args, text }) {
   for (const block of blocks) {
     const key = sectionKey(block.title);
     nextState.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
-    nextState.sectionInsights[key] = {
-      equations: detectEquationNumbers(block.body),
-      equationSnippets: detectEquationSnippets(block.body),
-      citations: detectCitations(block.body),
-      concepts: detectConcepts(block.body),
-      preview: block.body.replace(/\s+/g, ' ').slice(0, 500),
-      sourceExcerpt: sourceExcerptForPrompt(block.body)
-    };
+    nextState.sectionInsights[key] = buildSectionInsight(block);
   }
   nextState.paperSections = sections;
   nextState.nextChoices = sections.length ? sections : nextState.nextChoices;
