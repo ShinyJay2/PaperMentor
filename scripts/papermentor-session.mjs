@@ -3935,7 +3935,7 @@ function renderTuiScreen(state, selected = 0) {
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
-  const visibleItems = items.length ? items : ['Section menu pending — generate content-adapted choices from the source excerpt'];
+  const visibleItems = items.length ? items : ['Generate content-adapted choices from this excerpt'];
   const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
   if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} item(s) above${ansi.reset}`, width, ansi.cyan));
   entries.forEach((item, offset) => {
@@ -3969,7 +3969,7 @@ function shellQuote(value) {
 
 function sectionMenuPendingChoices(section) {
   return [
-    `Section menu pending — generate choices from ${section} excerpt`,
+    `Generate content-adapted choices from ${section} excerpt`,
     `Ask anything about ${section}`,
     `Chat about this section`
   ];
@@ -4599,7 +4599,7 @@ function applyTuiChoice(state, selected, options = {}) {
     state.selectedAction = '';
     state.lastChoiceKind = 'topic-picker';
     clearPendingPrompt(state);
-  } else if (/^Section menu pending/i.test(choice)) {
+  } else if (/^(?:Section menu pending|Generate content-adapted choices)/i.test(choice)) {
     writeSectionMenuPrompt(state, state.currentSection || 'current section');
     state.currentFocus = `Waiting for content-adapted menu for ${state.currentSection || 'current section'}`;
     state.selectedAction = '';
@@ -4858,7 +4858,7 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
     boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
     ...boxWrappedText(quote, width, ansi.green, ansi.dim),
     boxLine('', width, ansi.green),
-    boxLine(`${ansi.bold}Add source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
+    boxLine(`${ansi.bold}Drop Source:${ansi.reset} PDF · PPT/PPTX · URL`, width, ansi.green),
     boxLine(`${ansi.dim}Then choose topics with ↑/↓, or ask here.${ansi.reset}`, width, ansi.green)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
