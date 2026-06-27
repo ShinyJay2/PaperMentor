@@ -3994,7 +3994,20 @@ function sessionHtmlUrl(slug) {
 
 function terminalHyperlink(label, href) {
   if (!href) return label;
+  if (!process.stdout?.isTTY) return `${label}: ${href}`;
   return '\x1b]8;;' + href + '\x1b\\' + label + '\x1b]8;;\x1b\\';
+}
+
+function displaySessionTitle(value, fallback = 'Untitled reading room') {
+  const cleaned = String(value || '')
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/^\s*#+\s*/g, '')
+    .replace(/^\s*Title:\s*/i, '')
+    .replace(/\bAuthors?:\s*.*$/i, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  if (!cleaned || /^[<>/\\]+$/.test(cleaned)) return fallback;
+  return cleaned;
 }
 
 function roomTopicLabel(state = {}) {
@@ -4004,7 +4017,7 @@ function roomTopicLabel(state = {}) {
 function roomSummaryRows(state = {}, width = 84) {
   return [
     boxLine(`${ansi.bold}Room${ansi.reset}`, width, ansi.green),
-    ...boxWrappedText(`Title: ${state.title || 'No reading room selected'}`, width, ansi.green),
+    ...boxWrappedText(`Title: ${displaySessionTitle(state.title, 'No reading room selected')}`, width, ansi.green),
     ...boxWrappedText(`Topic: ${roomTopicLabel(state)}`, width, ansi.green),
     boxLine(`HTML: ${terminalHyperlink('Open Reading Room ↗', sessionHtmlUrl(state.slug))}`, width, ansi.green)
   ];
@@ -5088,7 +5101,7 @@ function listRecentSessions() {
   }
   console.log('Recent PaperMentor reading rooms\n');
   recent.forEach((item, index) => {
-    console.log(`${String(index + 1).padStart(2, ' ')}. ${item.title || item.slug}`);
+    console.log(`${String(index + 1).padStart(2, ' ')}. ${displaySessionTitle(item.title, item.slug)}`);
     console.log(`    ${cliCommand()} go --session ${item.slug}`);
     console.log(`    ${cliCommand()} open --session ${item.slug}`);
   });
