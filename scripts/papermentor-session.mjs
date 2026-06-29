@@ -4786,7 +4786,7 @@ function generatedBlockCacheEnabled(args = {}) {
 
 function generationOnlyAgentTask(args = {}) {
   if (args.repoContext || args['repo-context'] || process.env.PAPERMENTOR_AGENT_REPO_CONTEXT) return false;
-  return new Set(['start-here', 'section-menu', 'html-block', 'html-block-prefetch']).has(String(args.agentTask || ''));
+  return new Set(['start-here', 'launch-bundle', 'section-menu', 'html-block', 'html-block-prefetch']).has(String(args.agentTask || ''));
 }
 
 function agentWorkdir(args = {}) {
@@ -5102,14 +5102,17 @@ function startHereContextSections(state, maxSections = 6) {
   }).join('\n\n---\n\n');
 }
 
-function generatedStartHerePrompt(state) {
+function generatedStartHerePrompt(state, options = {}) {
   const mode = normalizeSourceMode(state.sourceMode || 'paper');
   const sections = (state.paperSections || []).slice(0, mode === 'slide' ? 14 : 10);
   const sectionMap = sections.length ? sections.map((section, index) => `${index + 1}. ${section}`).join('\n') : '(no section list detected)';
   const context = startHereContextSections(state, mode === 'slide' ? 8 : 6) || '(no extracted source context; use only the title and do not fabricate details)';
+  const outputRule = options.bundle
+    ? 'Write the finished Start Here Markdown body for the JSON field `startHereMarkdown`. Do not include shell commands, prefaces, or code fences inside that field.'
+    : 'Return ONLY the finished Markdown body for the Start Here HTML block. No preface, no code fence, no shell command.';
   return `# PaperMentor Start Here generator
 
-Return ONLY the finished Markdown body for the Start Here HTML block. No preface, no code fence, no shell command.
+${outputRule}
 
 Source title: ${state.title || '(untitled)'}
 Mode: ${sourceModeLabel(mode)}
@@ -5130,14 +5133,89 @@ Quality rules:
 `;
 }
 
+
+function launchBundleSection(state = {}) {
+  const sections = state.paperSections || [];
+  const section = normalizeSourceMode(state.sourceMode || 'paper') === 'slide'
+    ? firstMeaningfulSlideTopic(sections)
+    : sections[0];
+  if (!section) throw new Error('launch bundle requires detected sections/topics');
+  return section;
+}
+
+function generatedLaunchBundlePrompt(state) {
+  const mode = normalizeSourceMode(state.sourceMode || 'paper');
+  const firstSection = launchBundleSection(state);
+  const firstInsight = ensureSectionInsight(state, firstSection) || {};
+  const sectionConcepts = (firstInsight.concepts || []).slice(0, 10).map((item) => `- ${item}`).join('\n') || '- none detected';
+  const sectionEquations = (firstInsight.equations || []).slice(0, 10).map((item) => `- Eq. (${item})`).join('\n') || '- none detected';
+  const sectionSnippets = (firstInsight.equationSnippets || []).slice(0, 5).map((item, idx) => `${idx + 1}. ${item}`).join('\n') || 'none detected';
+  const sectionExcerpt = providerPromptExcerpt(firstInsight.sourceExcerpt || firstInsight.preview || '', 2600) || '(no excerpt extracted; use only the title and do not fabricate details)';
+  return `${generatedStartHerePrompt(state, { bundle: true })}
+## Also generate the first section menu
+
+Return ONLY valid JSON with this shape:
+{
+  "startHereMarkdown": "finished Start Here Markdown body",
+  "firstSection": ${JSON.stringify(firstSection)},
+  "sectionChoices": ["4-8 content-specific action strings ending with Ask anything about ${firstSection}"]
+}
+
+The Start Here quality rules above still apply. For sectionChoices, use only the selected first-section evidence below and make the actions content-adapted, not generic.
+
+First section/topic: ${firstSection}
+Concepts:
+${sectionConcepts}
+Equations:
+${sectionEquations}
+Equation/text snippets:
+${sectionSnippets}
+
+First-section excerpt:
+\`\`\`text
+${sectionExcerpt}
+\`\`\`
+
+Section choice rules:
+- Actions must be specific to this excerpt, not generic labels.
+- Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
+- Last item must be exactly: Ask anything about ${firstSection}
+`;
+}
+
+function parseLaunchBundleResponse(text, expectedSection) {
+  const cleaned = stripMarkdownFence(text).trim();
+  const parsed = JSON.parse(cleaned);
+  if (typeof parsed.startHereMarkdown !== 'string') throw new Error('launch bundle missing startHereMarkdown');
+  if (String(parsed.firstSection || '').trim() !== expectedSection) throw new Error(`launch bundle firstSection mismatch: expected ${expectedSection}`);
+  if (!Array.isArray(parsed.sectionChoices)) throw new Error('launch bundle missing sectionChoices array');
+  const body = cleanGeneratedMarkdown(parsed.startHereMarkdown);
+  if (markdownPlainText(body).length < 200) throw new Error('launch bundle Start Here is too short');
+  return { body, sectionChoices: parsed.sectionChoices.map(String) };
+}
+
+function installBundledSectionChoices(state, section, choices = []) {
+  const cleaned = sanitizeSectionActions(choices, section, { ensureAsk: true }).slice(0, 8);
+  if (!section) throw new Error('launch bundle cannot install choices without a section');
+  if (!cleaned.length || cleaned.every((choice) => /^ask anything about\b/i.test(choice))) throw new Error('launch bundle returned no usable section choices');
+  state.sectionActions = state.sectionActions || {};
+  state.sectionActions[sectionKey(section)] = cleaned;
+  state.launchBundledSection = section;
+  state.prefetchNotice = `First section choices are ready: ${section}`;
+  state.updatedAt = now();
+  writeJson(statePath(state.slug), state);
+  return state;
+}
+
 function maybeAutoFillStartHere(slug, args = {}) {
   if (!agentAutomationAvailable(args) || args['no-agent'] || args.manual) return readStateForSlug(slug);
   const state = prepareStartHerePrompt(readStateForSlug(slug));
-  const response = runAgentCompletion(generatedStartHerePrompt(state), { ...args, agentTask: 'start-here' });
-  const body = cleanGeneratedMarkdown(response);
-  if (markdownPlainText(body).length < 200) throw new Error('agent returned an empty or too-short Start Here block');
-  const updated = replaceStartHereBody(slug, body);
-  updated.tuiNotice = 'Start Here is ready in HTML.';
+  const bundledSection = launchBundleSection(state);
+  const bundleResponse = runAgentCompletion(generatedLaunchBundlePrompt(state), { ...args, agentTask: 'launch-bundle' });
+  const bundle = parseLaunchBundleResponse(bundleResponse, bundledSection);
+  let updated = replaceStartHereBody(slug, bundle.body);
+  updated = installBundledSectionChoices(updated, bundledSection, bundle.sectionChoices);
+  updated.tuiNotice = `Start Here is ready in HTML. First section choices are ready for ${bundledSection}.`;
   updated.updatedAt = now();
   writeJson(statePath(slug), updated);
   return updated;
