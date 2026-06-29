@@ -4759,6 +4759,30 @@ function captureAgentPrompt(prompt, args = {}) {
   }
 }
 
+
+function stablePromptHash(value) {
+  return createHash('sha256').update(String(value || '')).digest('hex').slice(0, 16);
+}
+
+function generatedBlockCacheKey(state, action, type, insight = {}) {
+  return stablePromptHash(JSON.stringify({
+    v: 1,
+    mode: normalizeSourceMode(state?.sourceMode || 'paper'),
+    title: state?.title || '',
+    section: state?.currentSection || state?.currentLocation || '',
+    action,
+    type,
+    excerpt: providerPromptExcerpt(insight.sourceExcerpt || insight.preview || '', 3600),
+    equations: (insight.equations || []).slice(0, 10),
+    snippets: (insight.equationSnippets || []).slice(0, 5),
+    concepts: (insight.concepts || []).slice(0, 12)
+  }));
+}
+
+function generatedBlockCacheEnabled(args = {}) {
+  return !args.refresh && !args['no-cache'] && !process.env.PAPERMENTOR_DISABLE_BLOCK_CACHE;
+}
+
 function runAgentCompletion(prompt, args = {}) {
   captureAgentPrompt(prompt, args);
   if (process.env.PAPERMENTOR_AGENT_MOCK_FILE) return readAgentFile(process.env.PAPERMENTOR_AGENT_MOCK_FILE);
@@ -4926,8 +4950,12 @@ function cleanGeneratedMarkdown(value) {
 
 function appendGeneratedActionBlock(state, action, args = {}) {
   const type = actionType(action, state);
-  const response = runAgentCompletion(generatedBlockPrompt(state, action), { ...args, agentTask: 'html-block' });
-  const body = cleanGeneratedMarkdown(response);
+  const insight = ensureSectionInsight(state, state.currentSection || '') || {};
+  const cacheKey = generatedBlockCacheKey(state, action, type, insight);
+  const cached = generatedBlockCacheEnabled(args) ? state.generatedBlockCache?.[cacheKey] : null;
+  const body = cached?.body && markdownPlainText(cached.body).length >= 120
+    ? cached.body
+    : cleanGeneratedMarkdown(runAgentCompletion(generatedBlockPrompt(state, action), { ...args, agentTask: 'html-block' }));
   if (markdownPlainText(body).length < 120) throw new Error('agent returned an empty or too-short explanation block');
   addCard({
     session: state.slug,
@@ -4938,10 +4966,20 @@ function appendGeneratedActionBlock(state, action, args = {}) {
     quiet: true
   });
   const updated = readStateForSlug(state.slug) || state;
+  if (!cached) {
+    updated.generatedBlockCache = updated.generatedBlockCache || {};
+    updated.generatedBlockCache[cacheKey] = {
+      type,
+      title: action,
+      location: state.currentSection || state.currentLocation,
+      body,
+      createdAt: now()
+    };
+  }
   updated.currentFocus = `Added block: ${action}`;
   updated.selectedAction = action;
   updated.lastChoiceKind = 'action';
-  updated.tuiNotice = `Added to HTML: ${action}`;
+  updated.tuiNotice = cached ? `Added cached block to HTML: ${action}` : `Added to HTML: ${action}`;
   updated.updatedAt = now();
   writeJson(statePath(updated.slug), updated);
   renderHtml(updated.slug);
@@ -4973,17 +5011,50 @@ function replaceStartHereBody(slug, body) {
   return readStateForSlug(slug) || state;
 }
 
+
+function startHereContextSections(state, maxSections = 6) {
+  const sections = (state?.paperSections || []).slice(0, maxSections);
+  return sections.map((section, index) => {
+    const insight = ensureSectionInsight(state, section) || {};
+    const excerpt = providerPromptExcerpt(insight.sourceExcerpt || insight.preview || '', 1000);
+    const equations = (insight.equations || []).slice(0, 5).map((n) => `Eq. (${n})`).join(', ') || 'none detected';
+    const concepts = (insight.concepts || []).slice(0, 8).join(', ') || 'none detected';
+    return `## ${index + 1}. ${section}\nConcepts: ${concepts}\nEquations: ${equations}\nExcerpt:\n${excerpt || '(no excerpt extracted)'}`;
+  }).join('\n\n---\n\n');
+}
+
+function generatedStartHerePrompt(state) {
+  const mode = normalizeSourceMode(state.sourceMode || 'paper');
+  const sections = (state.paperSections || []).slice(0, mode === 'slide' ? 14 : 10);
+  const sectionMap = sections.length ? sections.map((section, index) => `${index + 1}. ${section}`).join('\n') : '(no section list detected)';
+  const context = startHereContextSections(state, mode === 'slide' ? 8 : 6) || '(no extracted source context; use only the title and do not fabricate details)';
+  return `# PaperMentor Start Here generator
+
+Return ONLY the finished Markdown body for the Start Here HTML block. No preface, no code fence, no shell command.
+
+Source title: ${state.title || '(untitled)'}
+Mode: ${sourceModeLabel(mode)}
+Detected sections/topics:
+${sectionMap}
+
+Selected source context:
+\`\`\`text
+${context}
+\`\`\`
+
+Quality rules:
+- Write a real teaching introduction, not a scaffold and not a generic summary.
+- Orient the reader to what this source is trying to teach, what the difficult objects are, and how to enter the first meaningful section/topic.
+- Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
+- For Preliminary, do not write one long prose wall. Separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
+- Do not force a fixed table, schema, or repeated labels. Keep the structure natural to the source.
+`;
+}
+
 function maybeAutoFillStartHere(slug, args = {}) {
   if (!agentAutomationAvailable(args) || args['no-agent'] || args.manual) return readStateForSlug(slug);
   const state = prepareStartHerePrompt(readStateForSlug(slug));
-  const prompt = readAgentFile(promptPath(slug));
-  const response = runAgentCompletion(`${prompt}
-
-## Automation wrapper
-
-Do not run shell commands. Return ONLY the finished Markdown body for the Start Here HTML block.
-Do not include a preface, code fence, command, or "here is" sentence.
-`, { ...args, agentTask: 'start-here' });
+  const response = runAgentCompletion(generatedStartHerePrompt(state), { ...args, agentTask: 'start-here' });
   const body = cleanGeneratedMarkdown(response);
   if (markdownPlainText(body).length < 200) throw new Error('agent returned an empty or too-short Start Here block');
   const updated = replaceStartHereBody(slug, body);

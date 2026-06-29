@@ -54,6 +54,13 @@ try {
     ...commonCapture,
     PAPERMENTOR_AGENT_MOCK: block
   });
+  // Re-selecting the same section action should reuse the cached generated block
+  // rather than spending another live-provider call. Use an intentionally invalid
+  // provider to prove the cache path does not call Codex/Claude.
+  run(['run', '--session', 'perf-prompt-source', '--index', '1', '--generate'], {
+    ...commonCapture,
+    PAPERMENTOR_AGENT: 'bogus'
+  });
 
   const metrics = readMetrics();
   const byLabel = Object.fromEntries(metrics.map((item) => [item.label, item]));
@@ -67,6 +74,7 @@ try {
     if (!byLabel[label]) failures.push(`missing captured prompt for ${label}`);
     else if (byLabel[label].bytes > maxBytes) failures.push(`${label} prompt too large: ${byLabel[label].bytes} > ${maxBytes}`);
   }
+  if (metrics.length !== 3) failures.push(`expected exactly 3 provider prompts after cached repeat, saw ${metrics.length}`);
   const summary = {
     schema: 'papermentor.prompt-perf.v1',
     limits,
