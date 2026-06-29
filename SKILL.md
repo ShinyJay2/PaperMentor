@@ -1,22 +1,11 @@
 ---
 name: papermentor
-description: Interactive research-paper and slide understanding tutor AI Agent Skill. Use when users need to understand a paper or slides deeply, trace definitions/lemmas/theorems/equations/assumptions, explain mathematical symbols and derivations in LaTeX, handle mid-reading interruptions, resolve conceptual confusion with recursive why, support Korean/English explanations, plan conceptual visualizations, reconstruct missing slide narration, or extract a final insight. Do not use for paper summarization, reviewer simulation, quiz generation, or blog export.
+description: Interactive research-paper and slide understanding tutor. Use for deep paper/slide understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, missing slide narration, interruption handling, recursive why, Korean/English tutoring, conceptual visualization planning, and final insight extraction. Do not use for generic summaries, blog export, reviewer simulation, or quiz generation.
 ---
 
 # PaperMentor
 
-Use PaperMentor to debug understanding of papers and slides. Do not summarize first. Locate the user's current reading position, identify the missing dependency, and rebuild the explanation so the user can reconstruct the source.
-
-## Core rule
-
-The user understands a source only when they can reconstruct:
-
-- the problem;
-- the core intuition;
-- every major equation;
-- every derivation transition;
-- the dependency chain between definitions, lemmas, theorems, methods, and claims;
-- the final one-sentence insight.
+Debug the user's understanding of a research paper or slide. Do not provide a high-level summary unless it is part of a source map. Keep the reading location explicit and always repair the missing dependency that caused confusion.
 
 ## Source modes
 
@@ -28,24 +17,23 @@ PaperMentor supports two source modes:
 Only support concrete reading artifacts: `paper` and `slide`. Do not invent additional modes or attach unrelated local diagrams as evidence for a source.
 If a selected slide is protected or text extraction fails, keep `slide` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
 
-## Workflow
+## Default response loop
 
-1. Build a paper map: problem, objects, assumptions, main claims, methods, equations, the actual representative method figure, proofs, experiments.
-2. Build prerequisite ladders for missing background.
-3. Explain equations atomically before interpreting them.
-4. Trace derivations one transition at a time.
-5. Trace dependencies backward and forward.
-6. Resolve interruptions by pausing, repairing the missing dependency, reconnecting, and resuming.
-7. Use recursive why when the user says they still do not understand.
-8. Extract the final insight only after dependencies and math are clear.
+1. State the current paper location: section, paragraph, theorem, equation, proof line, or method step.
+2. Show the relevant equation or claim before explaining it.
+3. Explain notation atomically.
+4. Trace dependencies backward before using a result.
+5. Walk derivations one transition at a time.
+6. Ask for the next reading location only when the paper text is missing or ambiguous.
+7. End with a checkpoint: what the user should now be able to reconstruct.
 
 
 
 ### HTML-first reading room rule
 
-On source start, render `index.html` before giving any substantive explanation in the CLI. The user-facing command surface is the `pm` main menu: `pm`, `pm <file-or-url>`, `pm open`, `pm go`, `pm ask "..."`, `pm qa`, and `pm export`. Advanced `papermentor ...` commands are internal/agent surfaces. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the main menu, HTML path, detected sections/slides, choices, and a place for user questions.
+On source start, render `index.html` before giving any substantive explanation in the CLI. The user-facing command surface is the `pm` launcher: `pm` opens the PaperMentor welcome/upload screen with mascot, daily learning quote, and a Claude/Codex-style input box; `pm <file-or-url>` starts a source directly; `pm open`, `pm go`, `pm ask "..."`, `pm qa`, and `pm export` operate on the active reading room. Advanced `papermentor ...` commands are internal/agent surfaces. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the launcher, HTML path, detected sections/slides, choices, and a place for user questions.
 
-The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`papermentor tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions are **classified by the model on entry — not by word-matching or scoring in the script.** On selecting a section, read its title and content, infer its role (a weak position prior — Introduction → Related Work → Method → Experiments → Conclusion, with subsections sharing their parent's role — is only a tiebreak; trust the content over the position), then replace the generic menu with a tailored one via `papermentor section --index <n> --choices "…"`. Match actions to the role (Introduction → promise/core concepts; Related Work → the specific families/citations it actually discusses; Method → its real equations, propositions, assumptions, derivations, pipeline; Experiments → what each result proves; Conclusion → final insight/limitations) and always include `Ask anything about <section>`. Follow `prompts/section-navigator.md`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. Use `papermentor qa --session <slug>` / `pm qa` after adding blocks to score teaching quality and catch shallow summaries, missing proof lines, weak dependency chains, and unresolved figure scaffolds. When an action is chosen, the helper writes a pending HTML-block prompt (`pending-prompt.md`) with inferred card type, local equations/concepts/citations, and the right template so the next answer can be appended with `card` instead of being dumped into the terminal.
+The CLI interaction is a polished, Claude-like branching section/slide navigator. Prefer the arrow-key TUI (`papermentor tui --session <slug>`) when a TTY is available; fall back to the numbered navigator only in non-interactive environments. `pm go` must start from the detected paper sections or slide topics, not from a stale last-selected section. First detect the source mode and its table of contents, sections, or slides, then analyze local text before presenting actions. Section actions are **classified by the model on entry — not by word-matching or scoring in the script.** On selecting a section, read its title and content, infer its role (a weak position prior — Introduction → Related Work → Method → Experiments → Conclusion, with subsections sharing their parent's role — is only a tiebreak; trust the content over the position), then replace the pending menu with a tailored one via `papermentor section --index <n> --choices "…"`. Match actions to the role (Introduction → promise/core concepts; Related Work → the specific families/citations it actually discusses; Method → its real equations, propositions, assumptions, derivations, pipeline; Experiments → what each result proves; Conclusion → final insight/limitations) and always include `Ask anything about <section>`. Follow `prompts/section-navigator.md`. The chosen explanation is written to HTML as a new block, never as a long CLI answer. Use `papermentor qa --session <slug>` / `pm qa` after adding blocks to score teaching quality and catch shallow summaries, missing proof lines, weak dependency chains, and unresolved figure scaffolds. When an action is chosen, hide internal prompt plumbing from normal users: if Codex/Claude automation is available, generate the tailored menu or HTML block automatically and append it to the reading room; otherwise keep the prompt/state files as internal agent handoff artifacts and show only a short user-friendly continuation notice. Do not expose `pending-prompt.md` as a normal user step.
 
 ### Representative figure rule
 
@@ -62,6 +50,12 @@ Use a short semantic caption, then **open the cropped figure image and describe 
 - `Equations / claims it supports`: map the figure’s elements to the numbered equations and claims in the body.
 
 Never substitute generic reading advice such as “follow the arrows”, “read the boxes in order”, or “look left to right before reading the math”. Telling the reader to move their eyes is not an explanation; describing each drawn element and the math inside it is.
+
+### Visualization and conceptual diagram rule
+
+Use visualization only as a support tool for conceptual confusion. Trigger a conceptual diagram when the user's confusion is relational, sequential, spatial, or dependency-based — not when it is merely definitional. Strong triggers include “전체 흐름이 안 보여”, “diagram으로 보여줘”, “어떻게 이어지는지 모르겠어”, “pipeline으로 설명해줘”, “Eq. (1)이 Eq. (6)이랑 어떻게 연결돼?”, “dependency가 헷갈려”, or equivalent English requests for a diagram, flow, graph, relationship, dependency, or big picture.
+
+Offer diagram actions as suggestions before generating them. Do not auto-insert diagrams for every section. Use deterministic mono-tone SVG, not Mermaid. Never label a generated diagram as a paper figure. Each generated diagram must say: `Conceptual diagram generated by PaperMentor. Not a figure from the paper.` Every diagram block must include question, concept, visual encoding, what to observe, conclusion, and limitation.
 
 ### Report typography rule
 
@@ -88,7 +82,7 @@ When starting a source:
 1. Create or update one session folder at `.papermentor/sessions/<source-slug>/`.
 2. Keep exactly one rendered HTML block document per source: `index.html`. Do not create one HTML file per equation or section.
 3. Store live data in `state.json`, `cards.json`, `turns.jsonl`, and `notes.md`.
-4. Prefer `papermentor launch <url-or-file> --open` for a new source. It should download URL sources, infer title/authors, detect sections/slides, create the first HTML block, generate crop previews, and print the TUI command. Use lower-level `start`, `analyze`, `extract-figure`, and `card` only when the user needs manual control.
+4. Use the installed `papermentor` CLI when available to create sessions, add cards, regenerate the block document, and print the CLI console.
 5. Start by rendering a compact `How to use this reading room` HTML block, then the `Start Here` HTML block, including a one-sentence source model, actual representative method/system/algorithm figure crop when present, and detailed preliminary ladder. When using the helper, prefer one start call with `--body-file`, `--figure-file`, and `--sections` so the first visible browser render already contains useful source content. If `papermentor launch` creates `.papermentor/sessions/<slug>/pending-prompt.md` or `state.json.pendingBlockType === "start-here"`, that is not a completed launch: immediately read the pending prompt, write the real Start Here body, optionally regroup slide topics with `papermentor sections --mode slide --sections "..."` when the topic list is too fragmented, then append it with `papermentor card --type start-here --body-file <file>`. Do not stop after launch with only the reading guide visible unless the user explicitly asked to inspect the prompt. For papers with representative figures, open the cropped figure image, read every box/arrow/line/shape and every equation printed inside it, and replace any placeholder/scaffold with a real element-by-element reading via `extract-figure --body-file` or `card --type start-here --figure-file <crop> --body-file <reading>`. When `state.json` has `figureReadingPending` or `startHerePending`, that replacement is still outstanding — do it before moving on to sections. Do not render a separate figure-section heading in the body, and do not show extraction/provenance text such as “Exact crop of …”. Use `extract-figure` for real PDF/PPT/image crops: PDFs render with Poppler `pdftoppm`, PPT/PPTX slides convert via LibreOffice `soffice`, and crop rectangles use `--auto figure1` or `--crop x,y,width,height`. Then show detected paper sections/slides in the CLI navigator. Keep blockers, diagnostic prompts, and next actions in the CLI/state; the HTML document should render only the title sheet plus explanation blocks.
 
 Use this Reading Path unless the user explicitly asks for a different route:
@@ -114,80 +108,32 @@ Status marks:
 
 ### Preliminary ladder rule
 
-The preliminary ladder is a teaching prompt, not a rigid form: do not impose tables, field labels, tiers, or a fixed number of parts. Write it like a patient tutor answering "what do I need to know before I can read this paper?" — list every prerequisite for this exact source in dependency order, from the right starting point for the source's likely reader up through its notation and key equations; teach each one briefly, grounded in a concrete numeric example with real numbers (2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] -> 0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimator where `90,110,95,105` average to `100`); separate the needed knowledge into short concept blocks grouped by meaning so the reader does not get one long prose wall; and connect each block back to the exact symbol, figure, equation, or claim it unlocks. Do not stop at broad labels ("linear algebra", "self-supervised learning") without decomposing them into the source's actual primitives, and do not output only model names ("I-JEPA", "ViT-H") without the prerequisites that make them meaningful. Stop when the reader can reconstruct the paper's main claim or equation in their own words. Follow `prompts/prerequisite-analyzer.md`.
+The preliminary ladder is a prompt, not a fixed form: do not impose required parts, mandatory section headers, field tables, or tiers. Write it like a patient tutor answering "what do I need to know before I can read this paper?" — list every prerequisite for this exact source in dependency order, from the most primitive idea (e.g. what a bit is) up through its notation and key equations; teach each one briefly, grounded in a concrete numeric example with real numbers (2 bits = `00 01 10 11`; a vector `[1.2,3.5,-0.7]`; MSE `[0.1,-0.1] -> 0.02`; inner product `[1,2]·[3,4]=11`; an unbiased estimator where `90,110,95,105` average to `100`); and connect each back to the exact symbol, figure, equation, or claim it unlocks. Do not stop at broad labels ("linear algebra", "self-supervised learning") without decomposing them into the source's actual primitives, and do not output only model names ("I-JEPA", "ViT-H") without the prerequisites that make them meaningful. Stop when the reader can reconstruct the paper's main claim or equation in their own words. Follow `prompts/prerequisite-analyzer.md`.
 
-## Mathematical policy
+## Strict policies
 
-- Display every non-trivial equation in LaTeX before explanation.
-- Never use ASCII math as a replacement for LaTeX.
-- Explain every symbol, subscript, superscript, operator, domain, codomain, expectation, norm, index set, and constant.
-- State assumptions before using them.
-- Distinguish definition, theorem, lemma, empirical claim, and intuition.
+- Use LaTeX display math for non-trivial math.
+- Never replace math with ASCII approximations.
+- Do not skip derivation transitions.
+- Do not hide assumptions.
+- Do not treat examples as proofs.
+- If responding in Korean, preserve equations, symbols, notation, and standard English technical terms exactly. Keep common research terms in English when that is the natural academic usage: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms.
 
-## Derivation policy
+## Select a mode
 
-Never jump from one equation to the next. For every transition, state:
+- Paper scan: use when the user starts a paper.
+- Prerequisite ladder: use when background is missing.
+- Equation card: use for one equation.
+- Derivation trace: use for equation-to-equation movement.
+- Dependency trace: use for theorem/method/proof structure.
+- Proof walkthrough: use for proof text.
+- Method dissection: use for algorithm/model sections.
+- Confusion repair: use when the user interrupts.
+- Recursive why: use when the first answer is not enough.
+- Final insight: use after the paper is understood.
+- Visualization / conceptual diagram card: use only to support relational, sequential, spatial, or dependency-based confusion.
 
-- what changed;
-- what operation was applied;
-- what property, theorem, or definition was used;
-- what was substituted;
-- what cancelled;
-- which assumption was invoked;
-- why it is valid.
-
-## Dependency policy
-
-For every definition, lemma, theorem, algorithm, equation, and major claim, produce:
-
-- backward dependencies;
-- forward dependencies;
-- missing dependency check;
-- recommended explanation order.
-
-## Confusion policy
-
-When the user interrupts:
-
-1. pause the current location;
-2. answer the question;
-3. identify the missing dependency;
-4. give a minimal example;
-5. reconnect to the original equation or sentence;
-6. resume from the exact location.
-
-## Visualization and conceptual diagram policy
-
-Use visualization only as a support tool for conceptual confusion. Trigger a conceptual diagram when the user's confusion is relational, sequential, spatial, or dependency-based — not when it is merely definitional. Strong triggers include requests like “전체 흐름이 안 보여”, “diagram으로 보여줘”, “어떻게 이어지는지 모르겠어”, “pipeline으로 설명해줘”, “Eq. (1)이 Eq. (6)이랑 어떻게 연결돼?”, “dependency가 헷갈려”, or equivalent English requests for a diagram, flow, graph, relationship, dependency, or big picture.
-
-Offer diagram actions as suggestions before generating them. Do not auto-insert diagrams for every section. Trigger candidates:
-
-- Introduction: problem → limitation → idea flow when multiple core concepts appear.
-- Related Work: mono-tone related-work landscape when many citations or method families appear.
-- Method/Algorithm: method pipeline or training-time flow when inputs, outputs, objectives, algorithms, or iterative steps appear.
-- Equation-heavy sections: equation dependency map when two or more equations connect.
-- Definition/proof-heavy sections: prerequisite graph or proof dependency graph.
-- Experiments: evidence-flow diagram when metrics, figures, tables, and claims need alignment.
-
-Use deterministic mono-tone SVG for generated diagrams. Do not use Mermaid. Never label a generated diagram as a paper figure. Each generated diagram must say: `Conceptual diagram generated by PaperMentor. Not a figure from the paper.` Every visualization must include:
-
-- question;
-- concept;
-- visual encoding;
-- what to observe;
-- conclusion;
-- limitation.
-
-## Language policy
-
-Support Korean and English. If the user asks in Korean, explain in Korean while preserving equations and notation in LaTeX. Use natural Korean prose, but keep widely used technical terms in English when that is the standard reading in research contexts: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms. Avoid awkward literal translations of common research vocabulary; prefer `training objective` or `objective function` depending on the paper wording.
-
-## Resources
-
-- Use `commands.md` for command-like UX.
-- Use `examples.md` for request/response patterns.
-- Use repository `templates/` for output structure.
-- Use repository `prompts/` for specialized tutor modes.
+See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, repository `examples/`, and `tests/` checklist resources copied by the installer.
 
 
 ### Local rendering assets

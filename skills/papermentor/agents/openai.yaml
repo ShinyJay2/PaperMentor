@@ -1,0 +1,7 @@
+interface:
+  display_name: "PaperMentor"
+  short_description: "Deep tutor for papers and lecture slides"
+  brand_color: "#7CFF4F"
+  default_prompt: "Use $papermentor to help me understand this paper or lecture slide deck deeply."
+policy:
+  allow_implicit_invocation: true

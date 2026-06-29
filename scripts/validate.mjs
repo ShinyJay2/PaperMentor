@@ -667,6 +667,26 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     const spacedFailureHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'spaced-source-failure', 'index.html'), 'utf8');
     if (!spacedFailureHtml.includes('class="paper-figure"') || spacedFailureHtml.includes('node scripts/papermentor-session.mjs')) failures.push('launch extraction fallback should render a figure and never show development script paths for sources with spaces');
 
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Agent Automation Smoke', '--source', 'paper.pdf', '--slug', 'agent-automation-smoke', '--sections', '1. Introduction|2. Method', '--body-file', mapPath, '--figure-file', figurePath], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'agent-automation-smoke', '--index', '2'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'agent-automation-smoke', '--index', '1', '--generate'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT_MOCK: JSON.stringify(['Explain the drifting field term by term', 'Trace the training objective primitive steps', 'Ask anything about 2. Method']) }
+    });
+    let agentState = readJson(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'state.json'), {});
+    if (agentState.pendingBlockPrompt || !agentState.nextChoices?.some((choice) => choice.includes('drifting field'))) failures.push('agent automation should replace the internal section-menu handoff with model-authored choices');
+    const generatedBody = '## Term-by-term microscope\n\nThe selected method block explains the drifting field by naming the source sample, the target direction, and the update that connects them. It spells out each symbol before interpreting the objective, then checks that the reader can reconstruct why the field moves generated samples toward the data distribution. This text is intentionally long enough to prove the generated block path appends real teaching content rather than a placeholder.';
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'agent-automation-smoke', '--index', '1', '--generate'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT_MOCK: generatedBody }
+    });
+    agentState = readJson(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'state.json'), {});
+    const agentHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'index.html'), 'utf8');
+    const agentCards = readJson(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'cards.json'), { cards: [] });
+    if (agentState.pendingBlockPrompt || !agentHtml.includes('Term-by-term microscope') || !agentCards.cards?.some((card) => card.title === 'Explain the drifting field term by term')) failures.push('agent automation should append selected explanation blocks to HTML without exposing prompt files');
+
     const serverScript = join(temp, 'serve-once.cjs');
     const portFile = join(temp, 'server-port.txt');
     writeFileSync(serverScript, `const http=require('http');const fs=require('fs');const file=process.argv[2];const portFile=process.argv[3];const server=http.createServer((req,res)=>{res.setHeader('content-type','text/plain');res.end(fs.readFileSync(file));});server.listen(0,'127.0.0.1',()=>fs.writeFileSync(portFile,String(server.address().port)));`);
@@ -688,7 +708,7 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
-    if (navState.currentSection !== '3. Drifting Models for Generation' || !navState.nextChoices?.some((choice) => choice.includes('Create section-specific choices')) || navState.pendingBlockType !== 'section-menu') failures.push('section command should request a model-authored section menu instead of showing generic fallback actions');
+    if (navState.currentSection !== '3. Drifting Models for Generation' || !navState.nextChoices?.some((choice) => choice.includes('Show what I can learn here')) || navState.pendingBlockType !== 'section-menu') failures.push('section command should request a model-authored section menu instead of showing generic fallback actions');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'generative-modeling-via-drifting', '--mode', 'equations', '--items', 'Explain Eq. (1) pushforward symbol by symbol|Explain Eq. (6) training objective symbol by symbol'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.currentMode !== 'equations' || navState.detectedItems?.length !== 2 || !navState.nextChoices?.[0]?.includes('Eq. (1)')) failures.push('mode command should store dynamic section-local equation choices');

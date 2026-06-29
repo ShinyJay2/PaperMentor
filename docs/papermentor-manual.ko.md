@@ -226,7 +226,7 @@ PaperMentor는 소스마다 하나의 session folder를 만든다.
 
 - `index.html`: 사용자가 보는 최종 reading room
 - `cards.json`: HTML 블록 데이터
-- `state.json`: 현재 위치, 선택지, pending prompt 상태
+- `state.json`: 현재 위치, 선택지, 자동 생성/agent handoff 상태
 - `turns.jsonl`: 대화 로그
 - `notes.md`: 사람이 읽기 쉬운 note snapshot
 - `assets/`: figure crop, fonts, MathJax, generated diagram assets
@@ -242,9 +242,9 @@ Paper mode는 연구 논문을 읽기 위한 기본 모드다.
 시작하면 PaperMentor는 다음을 만든다.
 
 1. `How to use this reading room` 블록
-2. `Start Here` 블록 또는 Start Here 작성용 pending prompt
+2. `Start Here` 블록. Codex/Claude 자동화가 가능하면 바로 채워지고, 아니면 agent가 이어서 완성할 내부 handoff 상태
 3. source section navigator
-4. representative figure 후보 selection prompt, 필요한 경우
+4. representative figure 후보 선택 상태, 필요한 경우
 
 Paper mode의 주요 action:
 
@@ -484,7 +484,7 @@ PaperMentor를 수정할 때 지켜야 할 원칙:
 2. script는 구조 수집, 파일 처리, rendering, session state에 집중한다.
 3. hard-coded keyword matching으로 topic/figure/proof 의미를 결정하지 않는다.
 4. HTML block은 사용자가 바로 읽을 수 있는 teaching output이어야 한다.
-5. CLI는 긴 설명을 뿌리는 곳이 아니라 navigation과 pending prompt를 보여주는 곳이다.
+5. CLI는 긴 설명을 뿌리는 곳이 아니라 navigation, 자동 생성 진행 상태, HTML 링크를 보여주는 곳이다. 내부 prompt 파일은 일반 사용자 단계로 노출하지 않는다.
 6. 설치/패키징 파일 목록은 `papermentor.manifest.json`에서 먼저 수정한다.
 7. 수정 후 반드시 `npm test`, `npm run manifest:check`, `npm run pack:check`를 실행한다.
 

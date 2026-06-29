@@ -137,6 +137,15 @@ function writeJson(path, data) {
   writeFileSync(path, `${JSON.stringify(data, null, 2)}\n`);
 }
 
+function readAgentFile(path) {
+  if (!path) return '';
+  try {
+    return readFileSync(resolve(path), 'utf8');
+  } catch {
+    return '';
+  }
+}
+
 function loadRecentSessions() {
   const raw = readJson(recentPath(), { sessions: [] });
   const sessions = Array.isArray(raw) ? raw : raw.sessions || [];
@@ -3773,7 +3782,7 @@ function printConsole(state, cards = readJson(cardsPath(state.slug), { cards: []
   console.log(`│  ${title.padEnd(width - 3)}│`);
   console.log(`│  View  ${trim(state.renderedView, width - 10).padEnd(width - 8)}│`);
   if (state.currentSection) console.log(`│  Focus ${trim(state.currentSection, width - 10).padEnd(width - 8)}│`);
-  if (state.pendingBlockPrompt) console.log(`│  Prompt ${trim(state.pendingBlockPrompt, width - 11).padEnd(width - 9)}│`);
+  if (state.pendingBlockPrompt) console.log(`│  Next  ${trim(userFriendlyPendingNotice(state), width - 10).padEnd(width - 8)}│`);
   console.log(`╰${line(width)}╯`);
   console.log('\nOpen the HTML first. Use the CLI for navigation, section choices, and questions.');
   if (state.figureQualityWarning) {
@@ -4010,6 +4019,12 @@ function displaySessionTitle(value, fallback = 'Untitled reading room') {
   return cleaned;
 }
 
+function userFriendlyPendingNotice(state = {}) {
+  if (!state.pendingBlockType) return '';
+  if (state.pendingBlockType === 'section-menu') return 'PaperMentor is reading this section and preparing useful explanation choices.';
+  return 'PaperMentor is preparing an HTML explanation block. The next generated block will be added to the reading room.';
+}
+
 function roomTopicLabel(state = {}) {
   return state.currentSection || state.currentLocation || `choose a ${sourceModeNoun(state.sourceMode || 'paper')} topic`;
 }
@@ -4067,7 +4082,12 @@ function renderTuiScreen(state, selected = 0) {
     `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
     boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
   ];
-  const visibleItems = items.length ? items : ['Create section-specific choices'];
+  if (state.tuiNotice) rows.push(...boxWrappedText(state.tuiNotice, width, ansi.green, ansi.amber));
+  else {
+    const pendingNotice = userFriendlyPendingNotice(state);
+    if (pendingNotice) rows.push(...boxWrappedText(pendingNotice, width, ansi.green, ansi.dim));
+  }
+  const visibleItems = items.length ? items : ['Show what I can learn here'];
   const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
   if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} item(s) above${ansi.reset}`, width, ansi.cyan));
   entries.forEach((item, offset) => {
@@ -4115,7 +4135,7 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false 
   for (const choice of choices) {
     let text = String(choice || '').trim();
     const oldPending = text.match(/^Generate content-adapted choices(?: from (.+?) excerpt)?$/i);
-    if (oldPending) text = `Create section-specific choices${oldPending[1] ? ` for ${oldPending[1]}` : ''}`;
+    if (oldPending) text = `Show what I can learn here${oldPending[1] ? `: ${oldPending[1]}` : ''}`;
     if (!text || /^chat about (?:this )?(?:section|slide)\b/i.test(text)) continue;
     const key = text.toLowerCase().replace(/\s+/g, ' ');
     if (seen.has(key)) continue;
@@ -4128,7 +4148,7 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false 
 
 function sectionMenuPendingChoices(section) {
   return sanitizeSectionActions([
-    `Create section-specific choices for ${section}`,
+    `Show what I can learn here: ${section}`,
     `Ask anything about ${section}`
   ], section, { ensureAsk: true });
 }
@@ -4191,6 +4211,7 @@ ${command}
   state.pendingBlockType = 'section-menu';
   state.pendingBlockTitle = `Generate section menu — ${section}`;
   state.sectionMenuPending = { section, key, prompt: state.pendingBlockPrompt, updatedAt: now() };
+  return prompt;
 }
 
 function actionTypeFromMode(currentMode, sourceMode = 'paper') {
@@ -4688,14 +4709,215 @@ function writePendingActionPrompt(state, action) {
   return prompt;
 }
 
+function requestedAgentProvider(args = {}) {
+  const raw = String(args.agent || process.env.PAPERMENTOR_AGENT || 'auto').trim().toLowerCase();
+  if (['0', 'false', 'off', 'none', 'manual', 'no'].includes(raw)) return '';
+  if (raw && raw !== 'auto') return raw;
+  if (commandPath('codex')) return 'codex';
+  if (commandPath('claude')) return 'claude';
+  return '';
+}
+
+function agentAutomationAvailable(args = {}) {
+  if (process.env.PAPERMENTOR_AGENT_MOCK_FILE || process.env.PAPERMENTOR_AGENT_MOCK) return true;
+  return Boolean(requestedAgentProvider(args));
+}
+
+function shouldAutoGenerateInLaunch(args = {}) {
+  if (args['no-agent'] || args.manual) return false;
+  if (args.auto || args.generate || args.agent || process.env.PAPERMENTOR_AGENT_MOCK || process.env.PAPERMENTOR_AGENT_MOCK_FILE) return agentAutomationAvailable(args);
+  return Boolean(process.stdin.isTTY && process.stdout.isTTY && agentAutomationAvailable(args));
+}
+
+function stripMarkdownFence(value) {
+  const text = String(value || '').trim();
+  const fenced = text.match(/^```(?:json|markdown|md)?\s*([\s\S]*?)\s*```$/i);
+  return fenced ? fenced[1].trim() : text;
+}
+
+function runAgentCompletion(prompt, args = {}) {
+  if (process.env.PAPERMENTOR_AGENT_MOCK_FILE) return readAgentFile(process.env.PAPERMENTOR_AGENT_MOCK_FILE);
+  if (process.env.PAPERMENTOR_AGENT_MOCK) return process.env.PAPERMENTOR_AGENT_MOCK;
+  const provider = requestedAgentProvider(args);
+  if (!provider) throw new Error('No Codex or Claude agent CLI found. Install Codex/Claude Code, or set PAPERMENTOR_AGENT=off for manual mode.');
+  const timeout = Math.max(30000, Number(args.timeout || process.env.PAPERMENTOR_AGENT_TIMEOUT_MS || 240000));
+  if (provider === 'codex') {
+    const codex = commandPath('codex');
+    if (!codex) throw new Error('Codex CLI not found on PATH');
+    mkdirSync(papermentorDir(), { recursive: true });
+    const out = join(mkdtempSync(join(papermentorDir(), 'agent-')), 'last-message.md');
+    const output = execFileSync(codex, [
+      'exec',
+      '--cd', root,
+      '--sandbox', 'danger-full-access',
+      '--color', 'never',
+      '--output-last-message', out,
+      '-'
+    ], { input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    return readAgentFile(out) || output;
+  }
+  if (provider === 'claude') {
+    const claude = commandPath('claude');
+    if (!claude) throw new Error('Claude CLI not found on PATH');
+    return execFileSync(claude, [
+      '--print',
+      '--add-dir', root,
+      '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'),
+      '-'
+    ], { input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+  }
+  throw new Error(`unsupported PaperMentor agent provider: ${provider}`);
+}
+
+function parseGeneratedChoices(text) {
+  const cleaned = stripMarkdownFence(text)
+    .replace(/^Here(?:'s| is)[\s\S]*?:\s*/i, '')
+    .trim();
+  try {
+    const parsed = JSON.parse(cleaned);
+    if (Array.isArray(parsed)) return parsed.map(String);
+    if (Array.isArray(parsed.choices)) return parsed.choices.map(String);
+  } catch {}
+  return cleaned
+    .split(/\r?\n/)
+    .map((line) => line.replace(/^\s*(?:[-*•]|\d+[.)])\s*/, '').trim())
+    .filter(Boolean)
+    .filter((line) => !/^```/.test(line))
+    .slice(0, 12);
+}
+
+function generatedSectionMenuPrompt(state, section) {
+  const prompt = writeSectionMenuPrompt(state, section);
+  return `${prompt}
+
+## Automation wrapper
+
+Do not run shell commands. Return ONLY a JSON array of 4-8 menu action strings.
+The last string must be exactly "Ask anything about ${section}".
+Do not include explanations, markdown, code fences, or generic fallback labels.
+`;
+}
+
+function installGeneratedSectionMenu(state, section, args = {}) {
+  const prompt = generatedSectionMenuPrompt(state, section);
+  const response = runAgentCompletion(prompt, args);
+  const choices = sanitizeSectionActions(parseGeneratedChoices(response), section, { ensureAsk: true }).slice(0, 8);
+  if (!choices.length || choices.every((choice) => /^ask anything about\b/i.test(choice))) {
+    throw new Error('agent did not return usable section choices');
+  }
+  const key = sectionKey(section);
+  state.sectionActions = state.sectionActions || {};
+  state.sectionActions[key] = choices;
+  state.currentSection = section;
+  state.currentMode = '';
+  state.currentLocation = section;
+  state.currentFocus = `Section choices ready: ${section}`;
+  state.selectedAction = '';
+  state.lastChoiceKind = 'section-menu';
+  state.nextChoices = choices;
+  delete state.sectionMenuPending;
+  clearPendingPrompt(state);
+  state.updatedAt = now();
+  writeJson(statePath(state.slug), state);
+  renderHtml(state.slug);
+  return state;
+}
+
+function generatedBlockPrompt(state, action) {
+  const prompt = writePendingActionPrompt(state, action);
+  return `${prompt}
+
+## Automation wrapper
+
+Do not run shell commands. Return ONLY the Markdown body for the HTML block.
+Do not include a preface, code fence, command, or "here is" sentence.
+The body must be production-quality teaching content and must satisfy the stage-specific quality bar.
+`;
+}
+
+function cleanGeneratedMarkdown(value) {
+  return stripMarkdownFence(value)
+    .replace(/^Here(?:'s| is)\s+(?:the\s+)?(?:Markdown\s+)?(?:body|block|explanation)[:.\s-]*/i, '')
+    .trim();
+}
+
+function appendGeneratedActionBlock(state, action, args = {}) {
+  const type = actionType(action, state);
+  const response = runAgentCompletion(generatedBlockPrompt(state, action), args);
+  const body = cleanGeneratedMarkdown(response);
+  if (markdownPlainText(body).length < 120) throw new Error('agent returned an empty or too-short explanation block');
+  addCard({
+    session: state.slug,
+    type,
+    title: action,
+    location: state.currentSection || state.currentLocation,
+    body,
+    quiet: true
+  });
+  const updated = readStateForSlug(state.slug) || state;
+  updated.currentFocus = `Added block: ${action}`;
+  updated.selectedAction = action;
+  updated.lastChoiceKind = 'action';
+  updated.tuiNotice = `Added to HTML: ${action}`;
+  updated.updatedAt = now();
+  writeJson(statePath(updated.slug), updated);
+  renderHtml(updated.slug);
+  return updated;
+}
+
+function replaceStartHereBody(slug, body) {
+  const state = readStateForSlug(slug);
+  if (!state) throw new Error(`session not found: ${slug}`);
+  const cards = readJson(cardsPath(slug), { schema: 'papermentor.cards.v1', cards: [] });
+  const index = (cards.cards || []).findIndex((card) => card.type === 'start-here');
+  if (index >= 0) {
+    cards.cards[index] = {
+      ...cards.cards[index],
+      body,
+      title: cards.cards[index].title || 'Start Here',
+      location: cards.cards[index].location || 'Start Here'
+    };
+    writeJson(cardsPath(slug), cards);
+    state.startHerePending = false;
+    state.figureReadingPending = false;
+    clearPendingPrompt(state);
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    renderHtml(slug);
+  } else {
+    addCard({ session: slug, type: 'start-here', title: 'Start Here', location: 'Start Here', body, quiet: true, noPath: true });
+  }
+  return readStateForSlug(slug) || state;
+}
+
+function maybeAutoFillStartHere(slug, args = {}) {
+  if (!agentAutomationAvailable(args) || args['no-agent'] || args.manual) return readStateForSlug(slug);
+  const state = prepareStartHerePrompt(readStateForSlug(slug));
+  const prompt = readAgentFile(promptPath(slug));
+  const response = runAgentCompletion(`${prompt}
+
+## Automation wrapper
+
+Do not run shell commands. Return ONLY the finished Markdown body for the Start Here HTML block.
+Do not include a preface, code fence, command, or "here is" sentence.
+`, args);
+  const body = cleanGeneratedMarkdown(response);
+  if (markdownPlainText(body).length < 200) throw new Error('agent returned an empty or too-short Start Here block');
+  const updated = replaceStartHereBody(slug, body);
+  updated.tuiNotice = 'Start Here is ready in HTML.';
+  updated.updatedAt = now();
+  writeJson(statePath(slug), updated);
+  return updated;
+}
+
 function renderRunnerConsole(state, action) {
   const width = 82;
   const content = [
-    `${ansi.bold}${ansi.green}✦ PaperMentor runner${ansi.reset} ${ansi.dim}choice → block prompt${ansi.reset}`,
+    `${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset} ${ansi.dim}choice → HTML block${ansi.reset}`,
     `${ansi.dim}Action:${ansi.reset} ${trim(action, 62)}`,
-    `${ansi.dim}Block type:${ansi.reset} ${state.pendingBlockType}  ${ansi.dim}Prompt:${ansi.reset} ${state.pendingBlockPrompt}`,
+    `${ansi.dim}Block type:${ansi.reset} ${state.pendingBlockType}`,
     `${ansi.dim}HTML:${ansi.reset} ${state.renderedView}`,
-    `${ansi.amber}Next:${ansi.reset} use the pending prompt to write the block body, then append it with the card command.`
+    `${ansi.amber}Next:${ansi.reset} continue in Codex/Claude; PaperMentor will add the explanation to HTML.`
   ];
   return [
     `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`,
@@ -4710,9 +4932,10 @@ function runChoice(args) {
   let state = readJson(statePath(slug), null);
   if (!state) throw new Error(`session not found: ${slug}`);
   const index = Number(args.index || args.choice || 1) - 1;
-  state = applyTuiChoice(state, Math.max(0, index));
+  const autoAgent = Boolean(args.auto || args.generate || args.agent);
+  state = applyTuiChoice(state, Math.max(0, index), { ...args, autoAgent });
   const action = state.lastChoiceKind === 'action' ? state.selectedAction : '';
-  if (action) {
+  if (action && !autoAgent) {
     writePendingActionPrompt(state, action);
     state.updatedAt = now();
     writeJson(statePath(slug), state);
@@ -4745,6 +4968,9 @@ function applyTuiChoice(state, selected, options = {}) {
       clearPendingPrompt(state);
       state.nextChoices = actions;
     } else {
+      if (options.autoAgent && agentAutomationAvailable(options)) {
+        return installGeneratedSectionMenu(state, choice, options);
+      }
       state.nextChoices = sectionMenuPendingChoices(choice);
       writeSectionMenuPrompt(state, choice);
     }
@@ -4755,8 +4981,12 @@ function applyTuiChoice(state, selected, options = {}) {
     state.selectedAction = '';
     state.lastChoiceKind = 'topic-picker';
     clearPendingPrompt(state);
-  } else if (/^(?:Section menu pending|Generate content-adapted choices|Create section-specific choices)/i.test(choice)) {
-    writeSectionMenuPrompt(state, state.currentSection || 'current section');
+  } else if (/^(?:Section menu pending|Generate content-adapted choices|Create section-specific choices|Show what I can learn here)/i.test(choice)) {
+    const section = state.currentSection || 'current section';
+    if (options.autoAgent && agentAutomationAvailable(options)) {
+      return installGeneratedSectionMenu(state, section, options);
+    }
+    writeSectionMenuPrompt(state, section);
     state.currentFocus = `Waiting for content-adapted menu for ${state.currentSection || 'current section'}`;
     state.selectedAction = '';
     state.lastChoiceKind = 'section-menu';
@@ -4778,6 +5008,9 @@ function applyTuiChoice(state, selected, options = {}) {
     }[selectedType];
     if (nextMode) state.currentMode = nextMode;
     state.lastChoiceKind = 'action';
+    if (options.autoAgent && agentAutomationAvailable(options)) {
+      return appendGeneratedActionBlock(state, choice, options);
+    }
     writePendingActionPrompt(state, choice);
   }
   state.updatedAt = now();
@@ -4832,11 +5065,24 @@ function runTui(args) {
       draw();
     } else if (key === '\r' || key === '\n') {
       const selectedChoice = items[selected] || '';
-      state = applyTuiChoice(state, selected, { tui: true });
+      const willGenerate = agentAutomationAvailable(args) && !/^Change topic \/ section list$/i.test(selectedChoice);
+      if (willGenerate) {
+        state.tuiNotice = (isChoosingTopic(state) || /Show what I can learn here|Create section-specific choices/i.test(selectedChoice))
+          ? 'Reading the selected section and preparing choices…'
+          : 'Writing the selected explanation block into HTML…';
+        draw();
+      }
+      try {
+        state = applyTuiChoice(state, selected, { ...args, tui: true, autoAgent: true });
+      } catch (error) {
+        state.tuiNotice = `Could not auto-generate: ${error.message}. The assistant can continue from this room.`;
+        state.updatedAt = now();
+        writeJson(statePath(state.slug), state);
+      }
       const updatedItems = tuiMenuItems(state);
       if (state.lastChoiceKind === 'section-menu') {
         const sameIndex = updatedItems.findIndex((item) => item === selectedChoice);
-        const pendingIndex = updatedItems.findIndex((item) => /Create section-specific choices/i.test(item));
+        const pendingIndex = updatedItems.findIndex((item) => /Show what I can learn here|Create section-specific choices/i.test(item));
         selected = Math.max(0, sameIndex >= 0 ? sameIndex : pendingIndex >= 0 ? pendingIndex : Math.min(selected, updatedItems.length - 1));
       } else {
         selected = 0;
@@ -4890,7 +5136,7 @@ function defaultPaletteItems(slug, summary = null) {
   const hasSession = Boolean(slug);
   const state = summary?.state || {};
   const items = [
-    hasSession ? (state.pendingBlockPrompt ? 'Continue pending HTML block' : 'Continue current reading room') : 'New reading room from file / URL',
+    hasSession ? (state.pendingBlockPrompt ? 'Continue prepared explanation' : 'Continue current reading room') : 'New reading room from file / URL',
     hasSession ? 'Open current HTML' : 'Show recent reading rooms',
     hasSession ? 'Ask about current topic' : 'Paste or pass a source path',
     hasSession ? 'Run content quality check' : 'Doctor / check setup',
@@ -5105,6 +5351,37 @@ function listRecentSessions() {
     console.log(`    ${cliCommand()} go --session ${item.slug}`);
     console.log(`    ${cliCommand()} open --session ${item.slug}`);
   });
+}
+
+function looksLikeDevelopmentSession(state = {}) {
+  const text = `${state.slug || ''} ${state.title || ''}`.toLowerCase();
+  return /\b(test|smoke|fixture|sample|debug|tmp|temp)\b/.test(text)
+    || /(?:^|-)tui-generate-test/.test(text)
+    || /asset-link-smoke|repfig-prompt-smoke|launch-smoke/.test(text);
+}
+
+function cleanSessions(args = {}) {
+  const sessions = allSessionSlugs().map((slug) => readStateForSlug(slug)).filter(Boolean);
+  const removeDev = Boolean(args['test-sessions'] || args.tests || args.dev);
+  const removeAll = Boolean(args.all);
+  const dryRun = Boolean(args['dry-run'] || args.dry);
+  const targets = sessions.filter((state) => removeAll || (removeDev && looksLikeDevelopmentSession(state)));
+  if (removeAll && !args.yes && !args.force) {
+    throw new Error('clean --all is destructive; rerun with --yes');
+  }
+  for (const state of targets) {
+    if (!dryRun) rmSync(safeSessionPath(state.slug), { recursive: true, force: true });
+  }
+  const remaining = loadRecentSessions().filter((item) => !targets.some((target) => target.slug === item.slug) && existsSync(statePath(item.slug)));
+  if (!removeDev && !removeAll) {
+    if (!dryRun) writeJson(recentPath(), { schema: 'papermentor.recent.v1', sessions: remaining });
+    console.log(`${dryRun ? 'Would clean' : 'Cleaned'} recent list: ${remaining.length} valid room(s).`);
+    console.log('Tip: use `pm clean --test-sessions` to remove obvious development/test rooms.');
+    return;
+  }
+  if (!dryRun) writeJson(recentPath(), { schema: 'papermentor.recent.v1', sessions: remaining });
+  console.log(`${dryRun ? 'Would remove' : 'Removed'} ${targets.length} room(s).`);
+  targets.slice(0, 20).forEach((state) => console.log(`- ${state.slug} (${displaySessionTitle(state.title, state.slug)})`));
 }
 
 function requireSessionSlug(args = {}, verb = 'command') {
@@ -5701,15 +5978,20 @@ function launchSession(args) {
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
     maybeWriteCropPreview({ slug, source, args, canExtractVisual: canExtractVisualForPreview });
+    let autoError = '';
+    try {
+      if (shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
+    } catch (error) {
+      autoError = error.message;
+    }
     renderHtml(slug);
     if (args.open) openSessionHtml(slug);
     const finalState = readJson(statePath(slug), pendingState);
     printConsole(finalState);
     console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
-- Start Here prompt: .papermentor/sessions/${slug}/pending-prompt.md
 - TUI:  ${cliCommand()} tui --session ${slug}
-${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- Next: write the Start Here body from the pending prompt, then append it with ${cliCommand()} card --session ${slug} --type start-here --title 'Start Here' --body-file <file>`);
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: continue in Codex/Claude to finish Start Here automatically.${autoError ? `\n- Automation note: ${autoError}` : ''}` : '- Start Here: ready'}`);
     return slug;
   }
   const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
@@ -5731,15 +6013,24 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}- 
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
   }
+  let autoError = '';
+  try {
+    if (startHereScaffolded && shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
+  } catch (error) {
+    autoError = error.message;
+  }
   maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure: null });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
   const finalState = readJson(statePath(slug), state);
   printConsole(finalState);
-  console.log(`\nLaunch complete:
+console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
-${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: read the source and replace the Start Here scaffold with real content — the one-sentence model, the figure reading (every box, arrow, line, and in-figure equation), and a beginner-facing preliminary ladder that teaches each prerequisite from zero with concrete numeric examples (see prompts/prerequisite-analyzer.md).` : ''}`);
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}` : ''}`);
+  if (finalState.startHerePending) console.log('- Next: continue in Codex/Claude to finish Start Here automatically.');
+  else console.log('- Start Here: ready');
+  if (autoError) console.log(`- Automation note: ${autoError}`);
   if (finalState.representativeFigurePrompt) {
     console.log(`- Representative figure selection prompt: ${finalState.representativeFigurePrompt}`);
   }
@@ -5759,6 +6050,7 @@ User commands:
   pm qa                      score current HTML blocks for teaching quality
   pm export                  export the latest/current room as PDF
   pm recent                  list recent reading rooms
+  pm clean                   clean stale recent entries
   pm doctor                  check local PDF/PPT extraction tools
 
 Also available as: papermentor
@@ -5794,6 +6086,7 @@ Usage:
   papermentor resume --session <slug> [--repaired <text>]
   papermentor render --session <slug>
   papermentor export --session <slug> [--format zip|pdf] [--output report.zip|report.pdf] [--overwrite]
+  papermentor clean [--test-sessions|--all --yes|--dry-run]
   papermentor state --session <slug>
   papermentor status --session <slug>
   papermentor doctor [--json]
@@ -5819,6 +6112,8 @@ try {
     goLatestSession(args);
   } else if (command === 'recent' || command === 'rooms') {
     listRecentSessions();
+  } else if (command === 'clean') {
+    cleanSessions(args);
   } else if (command === 'ask') {
     askCurrentSession({ ...args, text: args.text || args.question || args._.slice(1).join(' ') });
   } else if (command === 'new') {

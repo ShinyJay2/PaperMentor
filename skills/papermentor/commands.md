@@ -40,7 +40,7 @@ User-facing surface:
 - `pm <file-or-url>` starts a reading room.
 - `pm open` opens the latest/current HTML.
 - `pm go` resumes the arrow-key reading room.
-- `pm ask "..."` creates a pending HTML answer prompt for the current topic.
+- `pm ask "..."` asks about the current topic and appends the answer to the reading room when agent automation is available.
 - `pm qa` scores generated HTML blocks for teaching quality and flags shallow/missing structure.
 - `pm export` exports the latest/current room.
 
@@ -594,9 +594,9 @@ Required behavior:
 - map the number to the latest `state.json.nextChoices`;
 - preserve current location unless the choice moves it;
 - if the choice selects a section/slide, show its dynamic actions;
-- if the choice selects an action, write `.papermentor/sessions/<slug>/pending-prompt.md` with the exact block-generation prompt, inferred card type, selected section, equations, concepts, citations, and template path;
+- if the choice selects an action, generate and append the HTML block automatically when Codex/Claude automation is available; otherwise create the internal block-generation handoff with inferred card type, selected section, equations, concepts, citations, and template path;
 - regenerate the same `index.html` without adding placeholder explanation blocks;
-- print a polished Reading Console.
+- print a polished Reading Console without exposing internal prompt-file paths to normal users.
 
 Example:
 

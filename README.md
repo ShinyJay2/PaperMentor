@@ -160,7 +160,7 @@ Open the PaperMentor launcher any time. It shows the mascot, a short learning qu
 pm
 ```
 
-After a source is loaded, continue with the section/slide navigator:
+After a source is loaded, continue with the section/slide navigator. Inside Codex or Claude Code, section-specific choices and explanation blocks are generated automatically; the local `pm` command only manages the reading room, TUI, and HTML file:
 
 ```bash
 pm open
@@ -169,7 +169,7 @@ pm ask "What does this equation mean?"
 pm export
 ```
 
-Advanced/internal commands are still available through `papermentor help --advanced`.
+Advanced/internal commands are still available through `papermentor help --advanced`. Normal users should not need to read or run internal prompt files.
 
 ```text
 .papermentor/sessions/<paper>/
@@ -192,6 +192,28 @@ Want to inspect the figure crop before committing it to the report?
 papermentor preview-crops --session <paper-slug> --source paper.pdf --page 1
 ```
 
+
+### Agent automation
+
+PaperMentor is designed as a marketplace-ready Codex/Claude skill with a local helper CLI. The CLI does not require users to understand prompt files:
+
+- `PAPERMENTOR_AGENT=auto` (default) uses Codex first, then Claude, when an interactive TUI needs tailored choices or a new HTML block.
+- `PAPERMENTOR_AGENT=codex` or `PAPERMENTOR_AGENT=claude` forces a provider.
+- `PAPERMENTOR_AGENT=off` keeps manual/agent-handoff mode for debugging.
+
+This keeps the normal loop simple: drop a source → choose a section/slide → choose what to explain → read the updated HTML.
+
+### Room cleanup
+
+Use these when testing many sources locally:
+
+```bash
+pm recent
+pm clean                    # remove stale recent entries
+pm clean --test-sessions    # remove obvious smoke/test rooms
+pm clean --all --yes        # remove all local PaperMentor rooms
+```
+
 ---
 
 
@@ -210,7 +232,7 @@ PaperMentor is intentionally optimized for concrete reading artifacts: papers an
 
 ## HTML-first reading room
 
-The session helper keeps one `index.html` open, starts with a compact usage block, and appends a new explanation block after each chosen reading action. The TUI writes a `pending-prompt.md` runner prompt for the selected action, and `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests. To share or download a finished reading room, export either a one-file PDF or a portable HTML zip bundle:
+The session helper keeps one `index.html` open, starts with a compact usage block, and appends a new explanation block after each chosen reading action. In Codex/Claude Code, PaperMentor hides the internal handoff: choosing a section generates content-adapted actions, and choosing an action writes the explanation block into HTML. `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests. To share or download a finished reading room, export either a one-file PDF or a portable HTML zip bundle:
 
 ```bash
 papermentor export --session <paper-slug> --format pdf --output papermentor-report.pdf --overwrite
