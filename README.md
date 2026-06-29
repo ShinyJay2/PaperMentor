@@ -2,86 +2,131 @@
 
 # PaperMentor
 
-### Drop a paper, slides, or URL. Understand the hard part in 30 minutes.
+### Stop summarizing papers. Start debugging understanding.
 
-Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, slide narration, and conceptual confusion until you can reconstruct the source yourself.
+Drop a **paper, lecture deck, or technical URL**. PaperMentor opens a local HTML reading room, then helps you reconstruct the hard part: equations, derivations, proofs, figures, slide narration, dependencies, and final insight.
 
-<img src="assets/papermentor-demo.svg" alt="PaperMentor converts a paper excerpt into a paper map, equation card, derivation trace, and final insight" width="920" />
+<img src="assets/papermentor-hero.svg" alt="PaperMentor HTML-first reading room for papers, slides, and URLs" width="960" />
 
 [![Install](https://img.shields.io/badge/Install-one%20line-0ea5e9)](#install)
 [![Codex](https://img.shields.io/badge/Codex-Skill-black)](skills/papermentor/SKILL.md)
 [![Claude Code](https://img.shields.io/badge/Claude%20Code-Skill-6b4fbb)](https://code.claude.com/docs/en/skills)
-[![Math](https://img.shields.io/badge/Math-rendered%20LaTeX-8b5cf6)](#what-the-output-looks-like)
+[![Papers](https://img.shields.io/badge/Papers%20%2B%20Slides%20%2B%20URLs-supported-22c55e)](#what-it-reads)
+[![Math](https://img.shields.io/badge/LaTeX-local%20HTML-8b5cf6)](#what-the-output-looks-like)
 [![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 **Do not summarize papers. Debug understanding.**
+
+**If PaperMentor saves you one painful paper-reading session, star the repo so other researchers can find it.**
 
 </div>
 
 ---
 
-## Why PaperMentor exists
+## The promise
 
-Most reading tools compress the source. PaperMentor does the opposite: it slows down at the exact line, equation, slide, or definition where understanding breaks.
+Most AI reading tools compress a source into a summary. PaperMentor does the opposite: it slows down exactly where understanding breaks.
 
-A useful session should leave you able to reconstruct:
+PaperMentor should leave you able to say:
 
-- the problem and core intuition,
-- every major equation or notation-heavy slide,
-- every derivation transition,
-- the dependency chain between definitions, assumptions, lemmas, methods, examples, visuals, and claims,
-- and the final insight in one sentence.
+- what the source is trying to prove, teach, or build,
+- what every important symbol means,
+- how one equation line turns into the next,
+- which definitions, assumptions, lemmas, figures, or examples a claim depends on,
+- what a lecturer probably said between dense slides,
+- and the final insight in your own words.
 
 ---
 
-## See it work
+## Start in one command
 
-PaperMentor follows one repeatable loop:
+```bash
+pm <file-or-url>
+pm
+```
 
-<table>
-<tr>
-<td width="25%" valign="top">
+The first command opens a reading room directly. The second opens the launcher where you can drop a source or continue the latest room.
 
-### 1. Upload
-Paste the paper, PDF text, or a target section.
+## 90-second demo
 
-`Use $papermentor to scan this paper.`
+```bash
+# 1. Install for Codex
+curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash
 
-</td>
-<td width="25%" valign="top">
+# 2. Open the launcher
+pm
 
-### 2. Map
-Find the problem, notation, assumptions, claims, and equations.
+# 3. Drop a source
+# - arXiv PDF
+# - local PDF/PPT/PPTX lecture slides
+# - technical blog/tutorial URL
+```
 
-`Build the paper map.`
+Or launch directly:
 
-</td>
-<td width="25%" valign="top">
+```bash
+pm https://arxiv.org/pdf/2602.04770
+pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+pm ./lecture-slides.pdf
+```
 
-### 3. Debug
-Pick the blocker: equation, derivation, proof, method, or dependency.
+PaperMentor creates:
 
-`Explain Equation (7) atomically.`
+```text
+.papermentor/sessions/<source>/index.html
+```
 
-</td>
-<td width="25%" valign="top">
+Open that HTML file and keep it next to the terminal. Each selected action appends one polished explanation block to the same reading room.
 
-### 4. Reconstruct
-Resume from the paused line and extract the final insight.
+See also:
 
-`Extract the final insight.`
+<img src="assets/papermentor-demo.svg" alt="PaperMentor demo flow from source to reading-room blocks" width="820" />
 
-</td>
-</tr>
-</table>
+- Demo script: [`docs/demo-script.md`](docs/demo-script.md)
+- Sample report: [`demo/report/index.html`](demo/report/index.html)
+- Sample outputs: [`demo/outputs`](demo/outputs)
 
-Interrupt anytime: `Pause. Why did the sign flip here?` PaperMentor answers the missing concept, reconnects it to the original line, and continues from the exact location.
+---
+
+## What it reads
+
+| Source | What PaperMentor detects | What you get |
+| --- | --- | --- |
+| Research papers | title, authors, sections, equations, proofs, method figures | Start Here, preliminaries, equation cards, derivation/proof walkthroughs, dependency traces, final insight |
+| Lecture slides | topic ranges, build slides, equations, diagrams, missing narration | topic timeline, slide-range explanations, visual reading, missing lecture narration |
+| URLs | article title, headings, code/math/examples, claims | article map, section choices, claim/example/math explanations, caveats |
+
+It is intentionally optimized for concrete learning artifacts, not generic web summaries.
+
+---
+
+## What makes it different
+
+### 1. HTML-first reading room
+
+PaperMentor writes a local report as you learn. It is not a chat transcript. Useful answers become clean blocks in `index.html`; tool chatter stays out.
+
+### 2. Content-adapted choices
+
+The menu is generated from the selected section/slide/URL heading. Method sections expose equations and algorithms. Proof sections focus on line transitions. Slide topics expose missing narration, diagrams, and build-slide flow.
+
+### 3. Line-transition microscope
+
+For proofs and derivations, the goal is not a table of labels. The goal is to explain the primitive operation between lines: substitution, expansion, expectation rewrite, inequality use, limit movement, algebraic rearrangement, or whatever operation the source actually uses.
+
+### 4. Real figures when possible
+
+PaperMentor tries to attach the actual representative method/system figure from the source, then explains how to read it. Conceptual diagrams are clearly labeled as diagrams, not source figures.
+
+### 5. Korean/English tutoring
+
+Ask in Korean, get Korean explanations while preserving notation and standard research terms such as `objective`, `gradient`, `expectation`, `policy`, and `loss` when that is the natural academic usage.
 
 ---
 
 ## Install
 
-PaperMentor installs the same skill into Codex and/or Claude Code from one manifest-backed installer. It requires Node.js 18+ and git on PATH for one-line remote installs.
+PaperMentor installs the same skill into Codex and/or Claude Code from one manifest-backed installer. Requirements: Node.js 18+ and git on PATH.
 
 Codex only:
 
@@ -108,15 +153,13 @@ iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.p
 .\install.ps1 codex     # or: .\install.ps1 claude / .\install.ps1 all
 ```
 
-Local/pinned install:
+Pinned/local install:
 
 ```bash
 git clone https://github.com/ShinyJay2/PaperMentor.git
 cd PaperMentor
 ./install.sh codex       # or: ./install.sh claude / ./install.sh all
 ```
-
-For stricter supply-chain control, clone a tagged release or pinned commit, inspect it, then run the local installer instead of piping from `main`.
 
 Install locations:
 
@@ -127,279 +170,144 @@ CLI aliases:  ~/.local/bin/papermentor and ~/.local/bin/pm
 Windows CLI:  ~/.papermentor/bin/papermentor.cmd and ~/.papermentor/bin/pm.cmd
 ```
 
-Useful installer options:
-
-```bash
-./install.sh all --no-cli
-./install.sh codex --bin-dir ~/.local/bin
-CODEX_HOME=/custom/codex CLAUDE_HOME=/custom/claude ./install.sh all
-```
-
-Under the hood, `install.sh` / `install.ps1` clone or update `~/.papermentor/repo` when needed, then delegate to `node scripts/install.mjs`. The Node installer reads `papermentor.manifest.json`, copies only runtime skill files, and writes the `pm` / `papermentor` CLI wrappers.
-
 Korean user manual:
 
 - PDF: [`docs/PaperMentor_사용설명서_KO.pdf`](docs/PaperMentor_사용설명서_KO.pdf)
-- Markdown source: [`docs/papermentor-manual.ko.md`](docs/papermentor-manual.ko.md)
+- Markdown: [`docs/papermentor-manual.ko.md`](docs/papermentor-manual.ko.md)
 
 ---
 
-## Start in one command
+## Use it
 
-After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL, webpage URL, or local file:
+### Agent automation
 
-```bash
-pm https://arxiv.org/pdf/2602.04770
-pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
-```
+Inside Codex or Claude Code, PaperMentor uses the active agent to generate section-specific choices and append polished HTML blocks. The local CLI manages the reading room, topic navigation, opening/exporting HTML, and local setup checks.
 
-PaperMentor downloads the source when needed, extracts the title and authors, detects sections/headings, creates `index.html`, attaches the representative method/system figure for paper/slide sources when it can, and writes a crop preview for quick recropping.
-
-Open the PaperMentor launcher any time. It shows the mascot, a short learning quote, and a Claude/Codex-style input box where you can paste a paper URL, webpage URL, local PDF, slide PDF, PPT, or PPTX:
+### Terminal-first
 
 ```bash
-pm
+pm                              # launcher
+pm ./paper.pdf                  # auto-detect paper
+pm ./slides.pptx --mode slide   # force slide mode
+pm https://example.com/post     # URL mode
+pm open                         # open latest reading room
+pm go                           # continue latest room
+pm ask "Why does this equation become an expectation?"
+pm export                       # export latest room
 ```
 
-After a source is loaded, continue with the section/slide/URL-heading navigator. Inside Codex or Claude Code, section-specific choices and explanation blocks are generated automatically; the local `pm` command only manages the reading room, TUI, and HTML file:
+### Inside Codex or Claude Code
 
-```bash
-pm open
-pm go
-pm ask "What does this equation mean?"
-pm export
-```
-
-Advanced/internal commands are still available through `papermentor help --advanced`. Normal users should not need to read or run internal prompt files.
+Ask naturally:
 
 ```text
-.papermentor/sessions/<paper>/
-  index.html          # the reading room
-  crop-preview.html   # visual recrop candidates and commands
-  state.json          # current section/action state
+Use PaperMentor on this paper and start from the theorem proof.
 ```
 
-Local files work the same way:
+```text
+이 강의 슬라이드 PaperMentor로 열고, Bellman equation 들어가기 전에 필요한 개념부터 설명해줘.
+```
+
+```text
+Use PaperMentor on this Lilian Weng URL and explain the Chinchilla section.
+```
+
+---
+
+### Try the sample paper
+
+Use the included sample before trying a real paper:
 
 ```bash
-pm ./paper.pdf
-pm ./paper.pdf --mode paper
-pm ./slides.pptx --mode slide
-pm https://example.com/tutorial --mode url
+pm demo/sample-paper.md
 ```
 
-Want to inspect the figure crop before committing it to the report?
+Or ask inside Codex/Claude:
+
+```text
+Use PaperMentor on demo/sample-paper.md. Explain the population risk equation, trace why empirical risk is introduced, and finish with the final insight.
+```
+
+### Useful advanced command
+
+If a paper figure crop looks wrong, inspect candidates without editing the report manually:
 
 ```bash
 papermentor preview-crops --session <paper-slug> --source paper.pdf --page 1
 ```
 
-
-### Agent automation
-
-PaperMentor is designed as a marketplace-ready Codex/Claude skill with a local helper CLI. The CLI does not require users to understand prompt files:
-
-- `PAPERMENTOR_AGENT=auto` (default) uses Codex first, then Claude, when an interactive TUI needs tailored choices or a new HTML block.
-- `PAPERMENTOR_AGENT=codex` or `PAPERMENTOR_AGENT=claude` forces a provider.
-- `PAPERMENTOR_AGENT=off` keeps manual/agent-handoff mode for debugging.
-
-This keeps the normal loop simple: drop a source → choose a section/slide/URL heading → choose what to explain → read the updated HTML.
-
-### Room cleanup
-
-Use these when testing many sources locally:
-
-```bash
-pm recent
-pm clean                    # remove stale recent entries
-pm clean --test-sessions    # remove obvious smoke/test rooms
-pm clean --all --yes        # remove all local PaperMentor rooms
-```
-
----
-
-
-## Source modes
-
-PaperMentor has three source modes. By default it detects the mode from the uploaded material:
-
-| Mode | Use it for | First thing rendered | CLI menus become |
-| --- | --- | --- | --- |
-| `paper` | arXiv papers, conference papers, technical reports | one-sentence paper model, representative method figure, preliminaries | detected sections → equations, derivations, dependencies, figures, ask/chat |
-| `slide` | PPT/PDF slides and lecture slides | slides map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
-| `url` | web articles, blogs, tutorials, notes, interactive essays | article thesis, heading map, preliminaries | URL headings → claims, examples, code/math, diagrams, caveats, ask/chat |
-
-PaperMentor is intentionally optimized for concrete reading artifacts: papers, slides, and URLs.
-
----
-
-## HTML-first reading room
-
-The session helper keeps one `index.html` open, starts with a compact usage block, and appends a new explanation block after each chosen reading action. In Codex/Claude Code, PaperMentor hides the internal handoff: choosing a section generates content-adapted actions, and choosing an action writes the explanation block into HTML. `extract-figure` can attach real PDF/PPT/image crops for method figures instead of diagrams. Reports bundle fonts and MathJax locally, so the reading room works without CDN font/math requests. To share or download a finished reading room, export either a one-file PDF or a portable HTML zip bundle:
-
-```bash
-papermentor export --session <paper-slug> --format pdf --output papermentor-report.pdf --overwrite
-papermentor export --session <paper-slug> --format zip --output papermentor-report.zip --overwrite
-```
-
-Use PDF for a single shareable file. Use ZIP when you want the interactive local HTML bundle; unzip it anywhere and open `index.html`. It is a report bundle, not a blog export.
-
-
-PaperMentor is guided but interruptible. For each source, it renders the HTML reading room first. The CLI is only a navigator for section choices, mode choices, and user questions; explanations are appended to one local HTML document:
-
-```text
-.papermentor/sessions/<paper-slug>/
-  index.html      # rendered paper blocks, appended one section at a time
-  state.json      # current location, Reading Path, choices
-  cards.json      # promoted study blocks
-  turns.jsonl     # raw-ish conversation history
-  notes.md        # portable Markdown notes
-```
-
-The browser view is intentionally minimal: a quiet paper title sheet followed by rendered explanation blocks. The first block is `How to use this reading room`, explaining the HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The next block is `Start Here`: one sentence about what the source teaches or claims, the actual representative method/system figure when present, and detailed preliminaries needed before section-level reading. No left panel, no product header, no app chrome, and no “likely blockers” lists in HTML. Blockers and next actions stay in the terminal. The terminal runs as an arrow-key navigator:
-
-```text
-╭──────────────────────────── PaperMentor Live ─────────────────────────────╮
-│ View: .papermentor/sessions/<paper>/index.html                             │
-│ Focus: 3. Drifting Models for Generation                                    │
-├─────────────────────────────────────────────────────────────────────────────┤
-│ Section actions (↑/↓ select · Enter choose · / ask anything · q quit)       │
-│  01  Give a compact method overview for this section                        │
-│  02  Explain Eq. (1) pushforward symbol by symbol                           │
-│  03  Trace Eq. (4) → Eq. (6) fixed-point objective                          │
-│  04  Explain why stopgrad is used and what would break without it           │
-│  05  Build the dependency chain for the method section                      │
-│  06  Ask anything about 3. Drifting Models for Generation                   │
-╰─────────────────────────────────────────────────────────────────────────────╯
-```
-
-The action list is not hard-coded. PaperMentor inspects the selected section first: Introduction menus come from motivation and core concepts, Related Work menus can follow citations and compare method families, Method menus expose equations/propositions/algorithms, and Experiment menus focus on metrics, figures, and supported claims.
-
-When confusion is structural rather than definitional, PaperMentor can offer a visual repair action:
-
-```text
-Visual repair suggested
-  Draw method pipeline
-  Map equation dependencies
-  Build concept prerequisite graph
-```
-
-Those diagrams are deterministic mono-tone SVG blocks generated by PaperMentor. They are clearly labeled as conceptual diagrams, never as figures from the paper.
-
-Open `index.html` for rendered LaTeX. Answer with a number or interrupt naturally. Use semantic equation block titles such as `Training objective — Eq. (6)` so the block is readable and still traceable to the paper.
-
-Paper-related interruptions are not dumped into the report as chat logs. PaperMentor logs turns in `turns.jsonl`, then automatically promotes useful understanding repairs into polished blocks with a visible **User question**, missing dependency, answer, paper reconnection, and resume point. Meta/tooling chatter stays out of HTML unless you explicitly say `save this` or `add this to report`; `don't save this` keeps it out.
-
-Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies only runtime assets into the skill, and each generated session hardlinks bundled fonts/MathJax when the filesystem supports it, falling back to copies when needed. The report typography and LaTeX rendering work offline without remote font or MathJax CSS.
-
-Remote paper/slide/URL downloads require HTTPS by default because local native tools parse the downloaded file. For trusted local test servers only, pass `--allow-insecure-http`.
-
----
-
-## Try the sample paper
-
-Use the included sample to see the full interaction shape before trying a real paper:
-
-```text
-Use $papermentor on demo/sample-paper.md. Start with a paper map, then explain the population risk equation atomically, trace why empirical risk is introduced, and finish with the final insight.
-```
-
-Reference outputs live in [`demo/outputs`](demo/outputs): paper map, equation card, derivation trace, and final insight.
-
----
-
-## Command intents
-
-One-line starts:
-
-```bash
-papermentor start --title "My source" --source source.pdf
-papermentor analyze --session my-source --paper-text-file source.txt
-papermentor tui --session my-source
-```
-
-- `scan` — produce the source map before details, including the exact cropped/screenshot representative method/system/algorithm figure when present, with explanation underneath. Never substitute Mermaid or a redrawn schematic for the paper figure.
-- `prerequisites` — build a bottom-up ladder from primitive vocabulary and notation to the exact paragraph/equation; do not stop at broad topic labels.
-- `equation` — explain every symbol and operator after showing the equation.
-- `derivation` — trace each transition without skipped algebra.
-- `dependency` — reveal what a claim depends on and what depends on it.
-- `interrupt` — pause, repair confusion, reconnect, and resume.
-- `final-insight` — compress the full reconstruction into the takeaway.
-
-Full command contract: [`skills/papermentor/commands.md`](skills/papermentor/commands.md).
-
 ---
 
 ## What the output looks like
 
-### Rendered equation explanation
+### Start Here
 
-PaperMentor shows the equation before explaining it:
+A compact orientation block with the source thesis, reading path, and only the prerequisites needed for this source.
+
+### Equation card
+
+PaperMentor shows the equation first:
 
 $$
 \mathcal{R}(f)=\mathbb{E}_{(x,y)\sim\mathcal{D}}\left[\ell(f(x),y)\right]
 $$
 
+Then it explains each symbol and operator:
+
 - $\mathcal{R}(f)$ — risk functional evaluated at predictor $f$.
 - $(x,y)\sim\mathcal{D}$ — an input-label pair sampled from distribution $\mathcal{D}$.
-- $\mathbb{E}_{(x,y)\sim\mathcal{D}}$ — expectation over that sampling process.
-- $\ell(f(x),y)$ — loss comparing prediction $f(x)$ with target $y$.
+- $\mathbb{E}$ — average over repeated draws from that distribution.
+- $\ell(f(x),y)$ — penalty for predicting $f(x)$ when the true label is $y$.
+
+### Proof / derivation walkthrough
+
+Instead of “this follows by algebra,” PaperMentor spells out the transition:
+
+```text
+Line A: E_tau[p_theta(tau) R(tau)]
+Line B: E_tau[nabla log p_theta(tau) R(tau)]
+
+What happened:
+1. Differentiate the trajectory probability.
+2. Insert the identity ∇p = p∇log p.
+3. Recognize the remaining p-weighted sum as an expectation.
+4. The environment transition terms vanish from the gradient because they do not depend on theta.
+```
+
+### Slide narration
+
+For lecture slides, PaperMentor explains what the instructor likely meant between bullet points, diagrams, and equations, especially when build slides gradually reveal a concept.
 
 ### Trace a derivation
 
-Start:
-
-$$
-\|a-b\|_2^2=(a-b)^\top(a-b)
-$$
-
-Next:
-
-$$
-\|a-b\|_2^2=a^\top a-2a^\top b+b^\top b
-$$
-
-Transition:
-
-- **Operation:** expand the quadratic product.
-- **Property:** bilinearity and $a^\top b=b^\top a$ for real vectors.
-- **Assumption:** $a,b\in\mathbb{R}^d$.
-- **Why valid:** real inner products are scalar and symmetric.
+PaperMentor should explain every non-trivial move rather than saying “by algebra.” For example, it identifies the operation, the property used, the assumption that makes it legal, and the exact term movement.
 
 ### Map a dependency chain
 
-- **Backward dependencies:** Definition 1 → Assumption A2 → Lemma 1 → Theorem 3
-- **Forward dependencies:** Theorem 3 → Equation (12) → experiment interpretation
-- **Missing dependency check:** convexity of $\ell$ is used but not stated
-- **Recommended explanation order:** Definition 1, Assumption A2, Lemma 1, Theorem 3
+A dependency block connects definitions, assumptions, lemmas, equations, algorithms, figures, and claims in the order needed to reconstruct the argument. It also calls out missing dependencies when the source relies on something unstated.
 
 ### Plan a visualization
 
-Every visualization plan includes a **question**, **concept**, **visual encoding**, **what to observe**, **conclusion**, and **limitation**.
+Visualization support is for relational, sequential, spatial, or dependency-based confusion. Every visualization plan includes a **question**, **concept**, **visual encoding**, **what to observe**, **conclusion**, and **limitation**. Generated diagrams are conceptual aids, not source figures.
 
-| Field | Example |
-| --- | --- |
-| Question | Why do random projections approximately preserve distances? |
-| Concept | Johnson-Lindenstrauss intuition |
-| Visual encoding | Points, projection line, before/after distance bars |
-| What to observe | Most relative distances remain similar with controlled distortion |
-| Conclusion | Random projection trades exact geometry for compact representation |
-| Limitation | The sketch is intuition, not the concentration proof |
+### Prerequisite ladder
+
+When background is missing, PaperMentor starts from **primitive vocabulary**, adds concrete examples, gives a diagnostic check, and only then climbs to the paper's notation or slide equation.
 
 ---
 
 ## Project anatomy
 
 ```text
-papermentor.manifest.json  single source of truth for install/package files
-scripts/install.mjs         manifest-backed Codex/Claude installer
-prompts/                    specialized tutor modes
-skills/papermentor/         installable Skill entrypoint
+papermentor.manifest.json  install/package manifest
+scripts/install.mjs         Codex/Claude installer
+scripts/papermentor-session.mjs  local reading-room CLI
+prompts/                    specialized tutor prompts
 templates/                  output structures
+skills/papermentor/         installable skill entrypoint
 examples/                   concrete behavior examples
-demo/                       sample paper and reference outputs
-tests/                      human review checklists
-assets/                     runtime fonts/MathJax plus lightweight README SVGs
+demo/                       sample source and rendered demo report
+assets/                     local fonts, MathJax, README SVGs
 ```
 
 Validation:
@@ -408,49 +316,42 @@ Validation:
 npm test
 npm run manifest:check
 npm run pack:check
-```
-
-The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, sample-demo artifacts, and install-smoke coverage for both Codex and Claude Code.
-
-### Marketplace readiness
-
-Before submitting PaperMentor to a Codex or Claude marketplace, run the single marketplace gate:
-
-```bash
 npm run marketplace:check
 ```
-
-It verifies manifest/package sync, prompt budget limits, core validation, dry-run package contents, narrow-width TUI snapshots, and a mock launch smoke test. The package intentionally includes only runtime skill assets, docs, examples, prompts, templates, local fonts, local MathJax, and helper scripts. It excludes local sessions, OMX state, screenshots, PDFs, PPT/PPTX files, and other private development artifacts.
-
-Marketplace release notes and manual review items live in [`docs/marketplace-checklist.md`](docs/marketplace-checklist.md).
 
 ---
 
 ## Product boundaries
 
-PaperMentor focuses on understanding work: equations, derivations, dependencies, interruptions, recursive why, visual support, and final insight extraction.
+PaperMentor focuses on understanding work: equations, derivations, proofs, method sections, figures, dependencies, lecture-slide narration, recursive why, and final insight extraction.
 
-Deliberately out of scope: blog export, reviewer simulation, and quiz generation.
+Deliberately out of scope: generic blog export, reviewer simulation, quiz generation, and pretending every figure crop or proof explanation is automatically perfect without user review.
 
-Planned extensions: local PDF section locator helpers, citation graph helpers, notebook visualization snippets, and persistent reading sessions.
+## Roadmap
+
+- More robust figure selection across messy PDFs and slide exports.
+- Better proof-mode evaluation on proof-heavy papers.
+- Marketplace submission packaging for Codex and Claude Code.
+- More public demo rooms across ML, economics, math, and systems papers.
 
 ---
 
-## Contributing
+## How to help
 
-High-value contributions make papers easier to reconstruct, not just easier to summarize. Start with [`CONTRIBUTING.md`](CONTRIBUTING.md), then add or improve one of:
+If you want PaperMentor to become the default way researchers read hard technical material:
 
-- equation cards for difficult notation,
-- derivation traces with no skipped transitions,
-- dependency traces across definitions and claims,
-- confusion-repair examples,
-- visualization plans for geometry, distributions, optimization, or experiments.
+1. Star the repo.
+2. Share one screenshot of a block that helped you understand a paper.
+3. Open an issue with a paper/slide/URL that confused the tool.
+4. Contribute a prompt, template, or example that makes explanations more reconstructable.
+
+High-value contributions make papers easier to reconstruct, not just easier to summarize.
 
 ---
 
 <div align="center">
 
-Stop skimming papers blind. Start debugging understanding.
+**Stop skimming papers blind. Debug understanding.**
 
 MIT License © PaperMentor contributors
 

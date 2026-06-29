@@ -65,6 +65,10 @@ function sourceModeNoun(mode) {
   return { paper: 'paper', slide: 'slide', url: 'web article' }[normalizeSourceMode(mode)] || 'paper';
 }
 
+const paperMentorRepoOwner = 'ShinyJay2';
+const paperMentorRepoName = 'PaperMentor';
+const paperMentorRepoSlug = `${paperMentorRepoOwner}/${paperMentorRepoName}`;
+
 // Heading for the navigator's first-level list. Slides aren't "sections", so slide
 // mode lists "Slides" rather than "<label> sections".
 function sectionListHeading(mode) {
@@ -3903,6 +3907,44 @@ function formatInline(value) {
   return s.replace(restore, (_m, idx) => stash[Number(idx)]);
 }
 
+function starPaperMentorRepository({ quiet = false } = {}) {
+  const gh = spawnSync('gh', ['api', '--method', 'PUT', `/user/starred/${paperMentorRepoSlug}`], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  if (gh.status === 0) {
+    if (!quiet) console.log(`Starred ${paperMentorRepoSlug}. Thank you.`);
+    return { ok: true, message: `Starred ${paperMentorRepoSlug}. Thank you.` };
+  }
+
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token) {
+    const curl = spawnSync('curl', [
+      '-fsS', '-X', 'PUT',
+      '-H', `Authorization: Bearer ${token}`,
+      '-H', 'Accept: application/vnd.github+json',
+      '-H', 'X-GitHub-Api-Version: 2022-11-28',
+      `https://api.github.com/user/starred/${paperMentorRepoSlug}`
+    ], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    if (curl.status === 0) {
+      if (!quiet) console.log(`Starred ${paperMentorRepoSlug}. Thank you.`);
+      return { ok: true, message: `Starred ${paperMentorRepoSlug}. Thank you.` };
+    }
+    const detail = (curl.stderr || curl.stdout || '').trim();
+    const message = `Could not star ${paperMentorRepoSlug}: ${detail || 'GitHub token request failed.'}`;
+    if (!quiet) console.log(message);
+    return { ok: false, message };
+  }
+
+  const detail = (gh.stderr || gh.stdout || '').trim();
+  const message = gh.error?.code === 'ENOENT'
+    ? 'GitHub CLI is not installed. Install gh or set GITHUB_TOKEN/GH_TOKEN with permission to star repositories.'
+    : `GitHub CLI is not authenticated or could not star the repo. Run gh auth login, then press Y again.${detail ? ` (${detail})` : ''}`;
+  if (!quiet) console.log(message);
+  return { ok: false, message };
+}
+
+function starCtaLine(width = 84) {
+  return boxLine(`${ansi.dim}Like this? Press ${ansi.bold}Y${ansi.reset}${ansi.dim} to star ${paperMentorRepoSlug} from this CLI.${ansi.reset}`, width, ansi.green);
+}
+
 function line(width = 74) { return '─'.repeat(width); }
 function trim(value, width = 62) {
   const s = String(value || '');
@@ -4254,6 +4296,8 @@ function renderTuiScreen(state, selected = 0) {
     rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
   if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} below${ansi.reset}`, width, ansi.cyan));
+  rows.push(boxRule(width, ansi.green));
+  rows.push(starCtaLine(width));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -5599,6 +5643,10 @@ function runTui(args) {
     } else if (key === '\u001b[B') {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
+    } else if (key === 'y' || key === 'Y') {
+      const result = starPaperMentorRepository({ quiet: true });
+      state.tuiNotice = result.message;
+      draw();
     } else if (key === '\r' || key === '\n') {
       const selectedChoice = items[selected] || '';
       const willGenerate = agentAutomationAvailable(args) && !/^Change topic \/ section list$/i.test(selectedChoice);
@@ -5713,6 +5761,8 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
     rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
   if (start + entries.length < items.length) rows.push(boxLine(`${ansi.dim}… ${items.length - start - entries.length} below${ansi.reset}`, width, ansi.cyan));
+  rows.push(boxRule(width, ansi.green));
+  rows.push(starCtaLine(width));
   rows.push(bottom);
   return { screen: rows.join('\n'), items };
 }
@@ -5772,6 +5822,8 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
     ...boxWrappedText('Type or paste a source below, then press Enter.', width, ansi.green, ansi.dim)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
+  rows.push(boxRule(width, ansi.green));
+  rows.push(starCtaLine(width));
   rows.push(bottom);
   return `${rows.join('\n')}${includePrompt ? `\n\n${ansi.green}›${ansi.reset} ${prompt}` : ''}`;
 }
@@ -5786,6 +5838,12 @@ function runWelcome(args = {}) {
   const launchQuote = learningQuote();
   const launchInput = (value) => {
     const source = String(value || '').trim();
+    if (/^y$/i.test(source)) {
+      const result = starPaperMentorRepository({ quiet: true });
+      status = result.message;
+      askLine();
+      return;
+    }
     if (!source) {
       status = 'Paste a source, or ask after a reading room exists.';
       askLine();
@@ -5866,6 +5924,10 @@ function runPalette(args = {}) {
     } else if (key === '\u001b[B') {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
+    } else if (key === 'y' || key === 'Y') {
+      cleanup();
+      starPaperMentorRepository();
+      process.exit(0);
     } else if (key === '\r' || key === '\n') {
       cleanup();
       executePaletteItem(items[selected], slug);
@@ -6596,6 +6658,7 @@ User commands:
   pm ask "question"          ask about the current topic
   pm qa                      score current HTML blocks for teaching quality
   pm export                  export the latest/current room as PDF
+  pm star                    star the GitHub repo using gh/GITHUB_TOKEN
   pm recent                  list recent reading rooms
   pm clean                   clean stale recent entries
   pm doctor                  check local setup / PDF-PPT extraction tools
@@ -6659,6 +6722,8 @@ try {
     goLatestSession(args);
   } else if (command === 'recent' || command === 'rooms') {
     listRecentSessions();
+  } else if (command === 'star' || command === 'github-star') {
+    starPaperMentorRepository();
   } else if (command === 'clean') {
     cleanSessions(args);
   } else if (command === 'ask') {

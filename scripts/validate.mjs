@@ -262,14 +262,14 @@ for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Kor
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);
 }
 
-for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'prompts/visualization-planner.md', 'tests/visualization_checklist.md']) {
+for (const rel of ['SKILL.md', 'README.md', 'skills/papermentor/commands.md', 'prompts/visualization-planner.md', 'templates/visualization_card.md']) {
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
   for (const phrase of ['question', 'concept', 'visual encoding', 'what to observe', 'conclusion', 'limitation']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing visualization contract phrase: ${phrase}`);
   }
 }
 
-for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md', 'tests/figure_explanation_checklist.md']) {
+for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md', 'skills/papermentor/commands.md', 'prompts/paper-scanner.md', 'templates/paper_map.md']) {
   const text = readFileSync(join(root, rel), 'utf8').toLowerCase();
   for (const phrase of ['exact', 'crop', 'figure', 'method', 'algorithm', 'what to observe', 'mermaid']) {
     if (!text.includes(phrase)) failures.push(`${rel} missing figure explanation phrase: ${phrase}`);
