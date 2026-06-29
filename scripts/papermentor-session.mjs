@@ -4783,6 +4783,17 @@ function generatedBlockCacheEnabled(args = {}) {
   return !args.refresh && !args['no-cache'] && !process.env.PAPERMENTOR_DISABLE_BLOCK_CACHE;
 }
 
+
+function generationOnlyAgentTask(args = {}) {
+  if (args.repoContext || args['repo-context'] || process.env.PAPERMENTOR_AGENT_REPO_CONTEXT) return false;
+  return new Set(['start-here', 'section-menu', 'html-block', 'html-block-prefetch']).has(String(args.agentTask || ''));
+}
+
+function agentWorkdir(args = {}) {
+  mkdirSync(papermentorDir(), { recursive: true });
+  return generationOnlyAgentTask(args) ? mkdtempSync(join(papermentorDir(), 'agent-work-')) : root;
+}
+
 function runAgentCompletion(prompt, args = {}) {
   captureAgentPrompt(prompt, args);
   if (process.env.PAPERMENTOR_AGENT_MOCK_FILE) return readAgentFile(process.env.PAPERMENTOR_AGENT_MOCK_FILE);
@@ -4793,13 +4804,14 @@ function runAgentCompletion(prompt, args = {}) {
   if (provider === 'codex') {
     const codex = commandPath('codex');
     if (!codex) throw new Error('Codex CLI not found on PATH');
-    mkdirSync(papermentorDir(), { recursive: true });
-    const out = join(mkdtempSync(join(papermentorDir(), 'agent-')), 'last-message.md');
+    const workdir = agentWorkdir(args);
+    const outputDir = generationOnlyAgentTask(args) ? workdir : mkdtempSync(join(papermentorDir(), 'agent-'));
+    const out = join(outputDir, 'last-message.md');
     const output = execFileSync(codex, [
       'exec',
-      '--cd', root,
+      '--cd', workdir,
       '--skip-git-repo-check',
-      '--sandbox', 'danger-full-access',
+      '--sandbox', generationOnlyAgentTask(args) ? 'read-only' : 'danger-full-access',
       '--color', 'never',
       '--output-last-message', out,
       '-'
@@ -4809,12 +4821,11 @@ function runAgentCompletion(prompt, args = {}) {
   if (provider === 'claude') {
     const claude = commandPath('claude');
     if (!claude) throw new Error('Claude CLI not found on PATH');
-    return execFileSync(claude, [
-      '--print',
-      '--add-dir', root,
-      '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'),
-      '-'
-    ], { input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    const workdir = agentWorkdir(args);
+    const argv = generationOnlyAgentTask(args)
+      ? ['--print', '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'), '-']
+      : ['--print', '--add-dir', root, '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'), '-'];
+    return execFileSync(claude, argv, { cwd: workdir, input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
   }
   throw new Error(`unsupported PaperMentor agent provider: ${provider}`);
 }
