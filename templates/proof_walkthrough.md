@@ -68,3 +68,8 @@ Use a small numeric or symbolic example if the proof object is abstract.
 Explain why the final line proves every part of the claim.
 
 ## Reconstruction checkpoint
+
+
+## Term purpose audit
+
+For every non-trivial term in the proof lines, explain what role it plays in the proof or claim: what it controls, cancels, bounds, averages, conditions on, weights, or carries forward.

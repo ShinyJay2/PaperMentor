@@ -257,6 +257,10 @@ for (const phrase of ['primitive vocabulary', 'concrete example', 'diagnostic ch
   if (!publicDocs.toLowerCase().includes(phrase)) failures.push(`public ladder docs missing phrase: ${phrase}`);
 }
 
+for (const phrase of ['term-purpose', 'functional role']) {
+  if (!publicDocs.toLowerCase().includes(phrase)) failures.push(`public math-term docs missing phrase: ${phrase}`);
+}
+
 const skill = readFileSync(join(root, 'skills/papermentor/SKILL.md'), 'utf8');
 for (const phrase of ['LaTeX', 'derivation', 'dependency', 'recursive why', 'Korean', 'visualization', 'conceptual diagram', 'mono-tone SVG', 'Reading Path', 'index.html', 'Satoshi', 'Pretendard', 'Report structure', 'HTML-first']) {
   if (!skill.toLowerCase().includes(phrase.toLowerCase())) failures.push(`skill missing policy phrase: ${phrase}`);

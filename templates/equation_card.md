@@ -19,6 +19,10 @@ State whether this is a definition, objective, estimator, update, bound, theorem
 
 Explain expectations, norms, maps, inverses, conditioning, index sets, bit-widths, dimensions, constants, and scaling factors.
 
+## Term-by-term purpose reading
+
+For each meaningful term/factor, explain what it does in the equation's role: what it compares, penalizes, rewards, normalizes, weights, constrains, reconstructs, predicts, marginalizes, or propagates; why it is included; and what would change if it were removed or scaled. Do not stop at symbol definitions.
+
 ## Assumptions / what is held fixed
 
 ## Plain-language reading

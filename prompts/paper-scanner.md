@@ -10,7 +10,7 @@ Output for the first HTML block:
 5. Assumptions.
 6. Definitions.
 7. Lemmas/theorems/claims.
-8. Major equations.
+8. Major equations, with term-level roles for each important term: what each term measures, penalizes, rewards, constrains, normalizes, weights, or propagates in the paper's argument.
 9. Representative method figure: extract the actual representative method/system/algorithm/architecture figure image (excluding experiment/result plots unless no method figure exists), then read it element by element — every box, arrow, line, shape, and every equation/symbol printed inside the figure — and explain it under the image with the fixed schema below.
 10. Method pipeline.
 11. Proof dependencies.

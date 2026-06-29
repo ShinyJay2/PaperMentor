@@ -4511,8 +4511,9 @@ function promptTemplateForType(type) {
 function stageQualityRules(type) {
   const shared = [
     '- Do not write a generic summary. Every substantive sentence must be anchored to the selected source excerpt, an equation, an algorithm line, a theorem/proof line, a slide object, or a named source object.',
-    '- Respect the selected range boundary. If you use earlier/later source context, label it as context or preview; do not present equations, symbols, or claims as visible in the selected range unless they are actually in the selected excerpt.',
+    '- Respect the selected range boundary. If you use earlier/later source context, label it as context or preview; do not present equations, symbols, or claims as visible in the selected excerpt unless they are actually in the selected excerpt.',
     '- Start from the reader\'s likely blocker: name the role of the object before expanding details.',
+    '- For every non-trivial equation in paper, slide, or URL mode, include a term-purpose reading: after defining symbols, explain what each meaningful term/factor does in the objective, claim, algorithm, or slide/article argument (compare, penalize, reward, normalize, weight, constrain, reconstruct, predict, marginalize, propagate, or bound), why it is included, and what would change if removed or scaled.',
     '- Prefer one precise toy numeric example over broad analogy when an abstract object would otherwise remain vague.',
     '- End with a reconstruction checkpoint: what the reader should now be able to restate or derive.'
   ];
@@ -4524,17 +4525,20 @@ function stageQualityRules(type) {
     method: [
       '- Make the method executable in the reader\'s head: input, output, state variables, one pass through the algorithm, and what is stored or learned.',
       '- Tie every method step to the equation, algorithm line, or claim that justifies it.',
+      '- For every objective/loss/update equation, explain each term\'s behavioral job, not just symbol meanings.',
       '- Separate training-time, inference-time, preprocessing, and stored global parameters when the paper distinguishes them.'
     ],
     equation: [
       '- Show the equation before any prose, then explain its role: definition, objective, estimator, bound, update, or theorem statement.',
       '- Define every symbol including domains, randomness, conditioning, indices, constants, norms, expectations, and maps.',
+      '- Add a term-by-term purpose map: for each meaningful term/factor, say what it measures or does and why the equation needs it.',
       '- Explain what would be wrong if the reader interpreted the equation as a different object.'
     ],
     derivation: [
       '- Trace only one transition at a time. If the paper skips algebra, insert reconstructed intermediate lines and label them as reconstructed.',
       '- For every equality/inequality, name the operation and the dependency: substitution, definition, norm identity, expectation law, theorem, or assumption.',
-      '- State exactly what changed from the previous line to the next line; do not hide it under "therefore".'
+      '- State exactly what changed from the previous line to the next line; do not hide it under "therefore".',
+      '- When a term is introduced, removed, regrouped, or transformed, explain its purpose in the equation\'s role, not only the algebraic movement.'
     ],
     dependency: [
       '- Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims; do not collapse them into one prose chain.',
@@ -4547,6 +4551,7 @@ function stageQualityRules(type) {
       '- If a displayed transition compresses multiple operations, insert reconstructed intermediate lines and break it down until each micro-step is one primitive local transformation.',
       '- Define the proof notation first, especially random variables, conditioning events, indicators, denominators, distributions, and what is fixed versus averaged over.',
       '- Audit term movement at the right level for the selected proof. Do not use a predefined operation menu; infer the operation from the previous line, next line, and surrounding proof text.',
+      '- For every non-trivial proof term, explain what role it plays in closing the claim: controls, cancels, bounds, averages, conditions on, weights, or carries forward.',
       '- Include the variance/bound part when the theorem has both unbiasedness/expectation and error/distortion claims; do not stop after the first claim.',
       '- Add a proof coverage / compression audit: say whether every proof line is covered, or name exactly which repeated algebra is compressed and why that is safe.',
       '- Close by explaining why the final line is sufficient for the theorem statement.'
@@ -4608,6 +4613,10 @@ function evaluateCardQuality(card) {
   addQualityCheck(result, includesAny(body, [/checkpoint/i, /reconstruct/i, /resume point/i, /what.*now.*able/i]), 8, 'missing reconstruction/resume checkpoint');
   addQualityCheck(result, includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/]), 8, 'missing LaTeX/math anchor where paper teaching usually needs notation');
   addQualityCheck(result, includesAny(body, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /line\s+\d+/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
+  const mathHeavyType = ['equation', 'derivation', 'proof', 'method', 'slide-explanation', 'slide-transition', 'missing-narration'].includes(type);
+  if (mathHeavyType && includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/])) {
+    addQualityCheck(result, includesAny(body, [/term(?:-by-term)? (?:purpose|role|map|audit)|functional role|why (?:it|this term) is included|penaliz|reward|normaliz|weight|constrain|reconstruct|predict|marginaliz|propagat|what would change/i]), 10, 'math block should explain each important term\'s functional purpose, not only define symbols');
+  }
 
   const typeChecks = {
     'start-here': [
@@ -4622,17 +4631,20 @@ function evaluateCardQuality(card) {
     method: [
       [/Input|output|contract/i, 8, 'method block should state input/output contract'],
       [/Algorithm|step|walk-through|pipeline/i, 10, 'method block should walk algorithm steps'],
-      [/training|inference|preprocessing|online|stored/i, 8, 'method block should separate runtime phases or stored objects']
+      [/training|inference|preprocessing|online|stored/i, 8, 'method block should separate runtime phases or stored objects'],
+      [/term(?:-by-term)? purpose|functional role|loss term|objective term|penaliz|reward|normaliz|weight|constrain|reconstruct|predict/i, 10, 'method block should explain objective/update term purposes']
     ],
     equation: [
       [/Equation first|Equation role|Role/i, 8, 'equation block should state equation role'],
       [/Symbol|operator|constant|domain|codomain|random|fixed/i, 10, 'equation block should define symbols/operators/domains/randomness'],
+      [/term(?:-by-term)? purpose|functional role|what .* term .* does|penaliz|reward|normaliz|weight|constrain|reconstruct|predict/i, 12, 'equation block should explain term-level functional purpose'],
       [/wrong reading|common confusion|misconception/i, 8, 'equation block should name a likely wrong interpretation']
     ],
     derivation: [
       [/Previous equation/i, 8, 'derivation should show previous equation'],
       [/Next equation/i, 8, 'derivation should show next equation'],
-      [/Operation|Dependency|Assumption|Why valid|What changed/i, 12, 'derivation should justify each transition']
+      [/Operation|Dependency|Assumption|Why valid|What changed/i, 12, 'derivation should justify each transition'],
+      [/term(?:-by-term)? purpose|functional role|what .* term .* does|penaliz|reward|normaliz|weight|constrain|reconstruct|predict/i, 10, 'derivation should explain functional purpose of changed terms']
     ],
     dependency: [
       [/Backward dependencies/i, 8, 'dependency block should include backward dependencies'],
@@ -4644,6 +4656,7 @@ function evaluateCardQuality(card) {
       [/Line transition microscope|Transition\s+\d+\s*(?:→|->|to)\s*\d+|Previous line[\s\S]+Next line/i, 14, 'proof block should explain transitions between adjacent proof lines'],
       [/Notation and objects|Symbol|random variable|conditioning event|indicator|denominator|distribution|fixed|averaged/i, 10, 'proof block should define proof notation and what is fixed versus random'],
       [/operation audit|term-by-term|term movement|what changed|previous line[\s\S]+next line/i, 12, 'proof block should audit the actual term-level operation used in each proof transition'],
+      [/term(?:-by-term)? purpose|functional role|what .* term .* does|controls|cancels|bounds|averages|conditions on|weights|carries forward/i, 10, 'proof block should explain proof-term functional purpose'],
       [/conditioning|expectation|variance|bound|inequality|distortion/i, 12, 'proof block should audit expectation/conditioning and bounds when present'],
       [/Proof coverage|Coverage audit|Completeness audit|compression audit|compressed|omitted|every proof line|full formal proof/i, 10, 'proof block should state whether it covers every proof line or compresses/omits repeated algebra']
     ],
@@ -5175,6 +5188,7 @@ Output rules:
 - Respect the selected range. If you use earlier/later context, label it as context/preview.
 - Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
 - Show and explain non-trivial equations in LaTeX when they appear or when explicitly labeled as context.
+- Do not stop at symbol definitions. For each important term/factor, explain its functional purpose. For example, a term like $\|\hat{o}_t-o_t\|_2^2$ should be described as penalizing the gap between reconstructed/predicted observation and actual observation to improve reconstruction fidelity, not merely as an L2 norm.
 `;
 }
 

@@ -9,6 +9,7 @@ Output:
 - algorithm steps in execution order;
 - training versus inference / preprocessing versus online use;
 - equations supporting each step;
+- term-by-term purpose reading for every objective/loss/update equation: what each loss term, norm, expectation, probability, regularizer, constraint, weight, or state variable contributes to the method behavior;
 - assumptions required;
 - failure modes;
 - method-level final insight.

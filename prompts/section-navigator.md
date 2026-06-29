@@ -16,7 +16,7 @@ Offer 4–8 actions that fit *this* section, then always end with `Ask anything 
 
 - **Introduction** → the promise/mechanism, the core concepts it names, what gap it claims. (templates/method_dissection.md or a concept explanation)
 - **Related Work** → contrast with the specific families/citations it actually discusses; follow a citation. (templates/dependency_trace.md)
-- **Method / Approach / Model** → a compact overview, each real equation it contains explained symbol-by-symbol, its propositions/assumptions, the dependency chain, a method pipeline. (templates/equation_card.md, templates/derivation_trace.md, templates/method_dissection.md, templates/dependency_trace.md)
+- **Method / Approach / Model** → a compact overview, each real equation it contains explained symbol-by-symbol and term-by-term by functional role, its propositions/assumptions, the dependency chain, a method pipeline. (templates/equation_card.md, templates/derivation_trace.md, templates/method_dissection.md, templates/dependency_trace.md)
 - **Experiments / Results / Ablations** → what each result is meant to prove, the main metric, honest ablation reading. (templates/method_dissection.md)
 - **Discussion / Conclusion** → the final insight, limitations and open questions. (templates/final_insight.md)
 - **URL article / tutorial heading** → explain the actual claim, example, code/math, diagram, assumption, caveat, or practical takeaway in that heading. Do not force paper-only labels when the source is a blog post or tutorial.
