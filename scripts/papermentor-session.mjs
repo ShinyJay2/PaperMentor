@@ -3942,7 +3942,7 @@ function starPaperMentorRepository({ quiet = false } = {}) {
 }
 
 function starCtaLine(width = 84) {
-  return boxLine(`${ansi.dim}Like this? Press ${ansi.bold}Y${ansi.reset}${ansi.dim} to star ${paperMentorRepoSlug} from this CLI.${ansi.reset}`, width, ansi.green);
+  return boxLine(`${ansi.dim}Like this? Press ${ansi.bold}Y${ansi.reset}${ansi.dim} to star PaperMentor.${ansi.reset}`, width, ansi.green);
 }
 
 function line(width = 74) { return '─'.repeat(width); }
