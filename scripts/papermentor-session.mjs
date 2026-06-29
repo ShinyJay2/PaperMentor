@@ -5503,15 +5503,13 @@ function defaultPaletteItems(slug, summary = null) {
   const hasSession = Boolean(slug);
   const state = summary?.state || {};
   const items = [
-    hasSession ? (state.pendingBlockPrompt ? 'Continue prepared explanation' : 'Continue current reading room') : 'New reading room from file / URL',
+    hasSession ? 'Continue current reading room' : 'New reading room from file / URL',
     hasSession ? 'Open current HTML' : 'Show recent reading rooms',
     hasSession ? 'Ask about current topic' : 'Paste or pass a source path',
-    hasSession ? 'Run content quality check' : 'Doctor / check setup',
-    hasSession && state.figureQualityWarning ? 'Review / recrop representative figure' : '',
-    hasSession ? 'Regenerate Start Here prompt' : 'Advanced help',
     hasSession ? 'Export PDF report' : '',
+    hasSession && state.figureQualityWarning ? 'Review / recrop representative figure' : '',
     'New reading room from file / URL',
-    'Doctor / check setup',
+    'Check local setup',
     'Advanced help'
   ];
   return items.filter(Boolean);
@@ -5552,14 +5550,14 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
 
 
 function executePaletteItem(item, slug) {
-  if (/continue/i.test(item)) return runTui({ session: slug });
+  if (/continue/i.test(item)) return goLatestSession({ session: slug });
   if (/open current html/i.test(item)) return openLatestSession({ session: slug });
   if (/ask/i.test(item)) return askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
   if (/quality check/i.test(item)) return runQualityQa({ session: slug });
   if (/recrop|crop/i.test(item)) return previewCrops({ session: slug, overwrite: true });
   if (/regenerate start/i.test(item)) return regenerateStartHere({ session: slug });
   if (/export pdf/i.test(item)) return exportSession({ session: slug, format: 'pdf', overwrite: true });
-  if (/doctor/i.test(item)) return runDoctor({});
+  if (/check local setup|doctor/i.test(item)) return runDoctor({});
   if (/advanced help/i.test(item)) return usage({ advanced: true });
   if (/recent/i.test(item)) return listRecentSessions();
   console.log(`Start a new room with:\n\n  ${cliCommand()} <file-or-url>\n`);
@@ -6429,7 +6427,7 @@ User commands:
   pm export                  export the latest/current room as PDF
   pm recent                  list recent reading rooms
   pm clean                   clean stale recent entries
-  pm doctor                  check local PDF/PPT extraction tools
+  pm doctor                  check local setup / PDF-PPT extraction tools
 
 Also available as: papermentor
 
