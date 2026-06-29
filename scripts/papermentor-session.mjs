@@ -29,13 +29,22 @@ const sourceModePathItems = {
     ['flow', 'Connect slide flow'],
     ['confusion', 'Resolve confusion'],
     ['final', 'Extract final insight']
+  ],
+  url: [
+    ['map', 'Map the URL article'],
+    ['ideas', 'Explain key ideas'],
+    ['evidence', 'Trace arguments and evidence'],
+    ['terms', 'Decode terms, diagrams, or calculations'],
+    ['confusion', 'Resolve confusion'],
+    ['final', 'Extract final insight']
   ]
 };
 
 function normalizeSourceMode(value, fallback = 'paper') {
   const raw = String(value || '').toLowerCase().trim().replace(/_/g, '-');
-  if (['paper', 'research-paper', 'article', 'pdf-paper'].includes(raw)) return 'paper';
+  if (['paper', 'research-paper', 'pdf-paper'].includes(raw)) return 'paper';
   if (['slide', 'slides', 'ppt', 'pptx', 'presentation'].includes(raw)) return 'slide';
+  if (['url', 'web', 'webpage', 'web-page', 'website', 'blog', 'post', 'html', 'article'].includes(raw)) return 'url';
   if (raw === 'auto' || raw === '') return fallback;
   return fallback;
 }
@@ -45,21 +54,24 @@ function explicitSourceMode(value, fallback = 'paper') {
   if (!raw || raw === 'auto') return fallback;
   const mode = normalizeSourceMode(raw, '');
   if (mode) return mode;
-  throw new Error(`unsupported source mode: ${value}; use --mode paper or --mode slide`);
+  throw new Error(`unsupported source mode: ${value}; use --mode paper, --mode slide, or --mode url`);
 }
 
 function sourceModeLabel(mode) {
-  return { paper: 'Paper', slide: 'Slides' }[normalizeSourceMode(mode)] || 'Paper';
+  return { paper: 'Paper', slide: 'Slides', url: 'URL' }[normalizeSourceMode(mode)] || 'Paper';
 }
 
 function sourceModeNoun(mode) {
-  return { paper: 'paper', slide: 'slide' }[normalizeSourceMode(mode)] || 'paper';
+  return { paper: 'paper', slide: 'slide', url: 'web article' }[normalizeSourceMode(mode)] || 'paper';
 }
 
 // Heading for the navigator's first-level list. Slides aren't "sections", so slide
 // mode lists "Slides" rather than "<label> sections".
 function sectionListHeading(mode) {
-  return normalizeSourceMode(mode) === 'slide' ? 'Slides' : `${sourceModeLabel(mode)} sections`;
+  const normalized = normalizeSourceMode(mode);
+  if (normalized === 'slide') return 'Slides';
+  if (normalized === 'url') return 'URL sections';
+  return `${sourceModeLabel(mode)} sections`;
 }
 
 function readingPathForMode(mode) {
@@ -193,6 +205,8 @@ function latestSessionSlug() {
 function argsModeFromSource(source) {
   const value = String(source || '').toLowerCase();
   if (/\.(pptx?|key)(\?|#|$)/.test(value) || /slide|presentation/.test(value)) return 'slide';
+  if (/\.(html?|xhtml)(\?|#|$)/.test(value)) return 'url';
+  if (/^https?:\/\//i.test(value) && !/\.(pdf|tex|txt|md|pptx?|key)(\?|#|$)/i.test(value) && !/arxiv\.org\/(?:abs|pdf)\//i.test(value) && !/docs\.google\.com\/(?:presentation|document)\/d\//i.test(value) && !/drive\.google\.com\/(?:file\/d\/|open\b|uc\b)/i.test(value)) return 'url';
   return 'paper';
 }
 
@@ -393,6 +407,86 @@ function safeMarkdownHref(value) {
   return url ? url.href : '';
 }
 
+function decodeHtmlEntities(value) {
+  const named = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ndash: '–', mdash: '—', hellip: '…', middot: '·', rsquo: '’', lsquo: '‘', rdquo: '”', ldquo: '“'
+  };
+  return String(value || '')
+    .replace(/&#(x[0-9a-f]+|\d+);/gi, (_, code) => {
+      const number = String(code).toLowerCase().startsWith('x') ? parseInt(String(code).slice(1), 16) : parseInt(String(code), 10);
+      return Number.isFinite(number) ? String.fromCodePoint(number) : '';
+    })
+    .replace(/&([a-z][a-z0-9]+);/gi, (_, name) => named[String(name).toLowerCase()] ?? `&${name};`);
+}
+
+function stripHtmlTags(value) {
+  return decodeHtmlEntities(String(value || '')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<[^>]+>/g, ' '))
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function htmlMetaContent(html, pattern) {
+  const match = String(html || '').match(pattern);
+  return match ? stripHtmlTags(match[1] || match[2] || '') : '';
+}
+
+function htmlReadableTitle(html) {
+  return cleanTitleCandidate(
+    htmlMetaContent(html, /<meta\b[^>]*(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*content=["']([\s\S]*?)["'][^>]*>/i)
+    || htmlMetaContent(html, /<meta\b[^>]*content=["']([\s\S]*?)["'][^>]*(?:property|name)=["'](?:og:title|twitter:title)["'][^>]*>/i)
+    || htmlMetaContent(html, /<h1\b[^>]*>([\s\S]*?)<\/h1>/i)
+    || htmlMetaContent(html, /<title\b[^>]*>([\s\S]*?)<\/title>/i)
+  );
+}
+
+function readableHtmlFragment(html) {
+  const raw = String(html || '');
+  const candidates = [];
+  const tagRegex = /<(article|main|section|div)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+  for (const match of raw.matchAll(tagRegex)) {
+    const attrs = match[2] || '';
+    if (!/(?:class|id)\s*=\s*["'][^"']*(?:article|content|entry|post|markdown|prose|tt_article)[^"']*["']/i.test(attrs) && !/^article|main$/i.test(match[1])) continue;
+    const fragment = match[3] || '';
+    const length = stripHtmlTags(fragment).length;
+    if (length >= 500) candidates.push({ fragment, length });
+  }
+  candidates.sort((a, b) => b.length - a.length);
+  return candidates[0]?.fragment || '';
+}
+
+function htmlToReadableText(html, source = '') {
+  const raw = String(html || '');
+  const title = htmlReadableTitle(raw) || titleFromSourceName(source) || 'URL article';
+  let body = readableHtmlFragment(raw) || raw
+    .replace(/<head\b[\s\S]*?<\/head>/gi, ' ')
+    .replace(/<script\b[\s\S]*?<\/script>/gi, ' ')
+    .replace(/<style\b[\s\S]*?<\/style>/gi, ' ')
+    .replace(/<noscript\b[\s\S]*?<\/noscript>/gi, ' ')
+    .replace(/<svg\b[\s\S]*?<\/svg>/gi, ' ')
+    .replace(/<iframe\b[\s\S]*?<\/iframe>/gi, ' ')
+    .replace(/<canvas\b[\s\S]*?<\/canvas>/gi, ' ');
+  body = body
+    .replace(/<\s*h1\b[^>]*>([\s\S]*?)<\s*\/\s*h1\s*>/gi, (_, text) => `\n\n# ${stripHtmlTags(text)}\n\n`)
+    .replace(/<\s*h2\b[^>]*>([\s\S]*?)<\s*\/\s*h2\s*>/gi, (_, text) => `\n\n## ${stripHtmlTags(text)}\n\n`)
+    .replace(/<\s*h3\b[^>]*>([\s\S]*?)<\s*\/\s*h3\s*>/gi, (_, text) => `\n\n### ${stripHtmlTags(text)}\n\n`)
+    .replace(/<\s*li\b[^>]*>([\s\S]*?)<\s*\/\s*li\s*>/gi, (_, text) => `\n- ${stripHtmlTags(text)}\n`)
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*\/(p|div|section|article|main|header|footer|blockquote|pre|tr|table)\s*>/gi, '\n\n')
+    .replace(/<[^>]+>/g, ' ');
+  body = decodeHtmlEntities(body)
+    .replace(/\u00a0/g, ' ')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n[ \t]+/g, '\n')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+  if (!body.startsWith('#')) body = `# ${title}\n\n${body}`.trim();
+  return body;
+}
+
 function sourceExtensionFromUrl(value) {
   const clean = String(value || '').split(/[?#]/)[0];
   if (/arxiv\.org\/abs\//i.test(clean) || /arxiv\.org\/pdf\//i.test(clean)) return '.pdf';
@@ -400,7 +494,7 @@ function sourceExtensionFromUrl(value) {
   if (/drive\.google\.com\/(?:file\/d\/|open\b|uc\b)/i.test(clean)) return '.pdf';
   const extension = extname(clean).toLowerCase();
   if (extension) return extension;
-  return '.pdf';
+  return '.html';
 }
 
 function googleDriveDirectUrl(value) {
@@ -470,7 +564,7 @@ function detectSourceExtensionFromBytes(path) {
     if (zipText.includes('ppt/presentation.xml')) return '.pptx';
     if (zipText.includes('word/document.xml')) return '.docx';
   }
-  if (/^(?:<!doctype\s+html|<html\b)/i.test(textHead)) return '.html';
+  if (/(?:<!doctype\s+html|<html\b|<head\b|<meta\b|<body\b)/i.test(textHead)) return '.html';
   return '';
 }
 
@@ -478,17 +572,17 @@ function cachedSourceVariant(path) {
   if (existsSync(path)) return path;
   const extension = extname(path);
   const stem = extension ? path.slice(0, -extension.length) : path;
-  for (const candidateExtension of ['.pdf', '.pptx', '.ppt', '.png', '.jpg', '.jpeg', '.webp', '.gif']) {
+  for (const candidateExtension of ['.pdf', '.pptx', '.ppt', '.html', '.htm', '.txt', '.md', '.png', '.jpg', '.jpeg', '.webp', '.gif']) {
     const candidate = `${stem}${candidateExtension}`;
     if (existsSync(candidate)) return candidate;
   }
   return '';
 }
 
-function finalizeDownloadedSourceFile(path, url) {
+function finalizeDownloadedSourceFile(path, url, expectedMode = 'paper') {
   const detectedExtension = detectSourceExtensionFromBytes(path);
-  if (detectedExtension === '.html') {
-    throw new Error(`downloaded ${url} as HTML, not a paper/slide file; for Google Drive, make sure the file is shared with link access or use a direct PDF/PPTX download`);
+  if (detectedExtension === '.html' && normalizeSourceMode(expectedMode) !== 'url') {
+    throw new Error(`downloaded ${url} as HTML, not a paper/slide file; use --mode url for webpages, or for Google Drive make sure the file is shared with link access / direct PDF/PPTX download`);
   }
   if (!detectedExtension) return path;
   const currentExtension = extname(path).toLowerCase();
@@ -507,11 +601,12 @@ function downloadSourceIfNeeded(source, slugHint = 'source', args = {}) {
   const curl = commandPath('curl');
   if (!curl) throw new Error('launching from a URL requires `curl` on PATH');
   const allowInsecureHttp = Boolean(args['allow-insecure-http']);
+  const requestedMode = explicitSourceMode(args.mode || args['source-mode'] || args.sourceMode, argsModeFromSource(source));
   const url = assertSafeRemoteUrl(normalizePaperUrl(source), { label: 'source URL', allowHttp: allowInsecureHttp });
   mkdirSync(sourceCacheDir(), { recursive: true });
   const out = sourceCacheFile(url, slugHint);
   const cached = cachedSourceVariant(out);
-  if (cached) return finalizeDownloadedSourceFile(cached, url);
+  if (cached) return finalizeDownloadedSourceFile(cached, url, requestedMode);
   const allowedProtocols = allowInsecureHttp ? '=http,https' : '=https';
   try {
     runTool(curl, [
@@ -537,13 +632,14 @@ function downloadSourceIfNeeded(source, slugHint = 'source', args = {}) {
     rmSync(out, { force: true });
     throw error;
   }
-  return finalizeDownloadedSourceFile(out, url);
+  return finalizeDownloadedSourceFile(out, url, requestedMode);
 }
 
 function extractTextFromSourceFile(source, args = {}) {
   const absolute = resolve(source);
   const extension = extname(absolute).toLowerCase();
   if (['.txt', '.md', '.tex'].includes(extension)) return readFileSync(absolute, 'utf8');
+  if (['.html', '.htm', '.xhtml'].includes(extension)) return htmlToReadableText(readFileSync(absolute, 'utf8'), absolute);
   const pdftotext = commandPath('pdftotext');
   if (!pdftotext) {
     if (['.pdf', '.ppt', '.pptx', '.key'].includes(extension)) throw new Error('text extraction requires `pdftotext` (Poppler) on PATH');
@@ -571,6 +667,7 @@ function extractTextFromSourceFile(source, args = {}) {
 
 function cleanMetadataLine(line) {
   return String(line || '')
+    .replace(/^#{1,6}\s+/, '')
     .replace(/\s+/g, ' ')
     .replace(/\b(arXiv:\S+|v\d+|\[[^\]]+\])\b/g, '')
     .trim();
@@ -917,7 +1014,8 @@ function writeSlideStartHerePrompt(state, sections = []) {
 
 function launchStartBody({ sourceMode, text, sections = [] }) {
   const noun = sourceModeNoun(sourceMode);
-  if (normalizeSourceMode(sourceMode) === 'slide') {
+  const normalizedMode = normalizeSourceMode(sourceMode);
+  if (normalizedMode === 'slide') {
     return `## One-sentence orientation
 
 _Not written yet. Replace this with exactly one sentence stating what these slides teach or argue: name the topic, the learner's before/after state, and the central mechanism or timeline._
@@ -935,9 +1033,7 @@ ${preliminaryLadderScaffold(sourceMode)}
 
 _Not written yet. Replace this with exactly one sentence stating what this ${noun} does or claims: name the problem, the object it transforms/predicts/proves, and the main idea. Write it from the source, not from priors._
 
-${representativeFigureExplanation({ sourceMode, text })}
-
-${preliminaryLadderScaffold(sourceMode)}
+${normalizedMode === 'url' ? '' : `${representativeFigureExplanation({ sourceMode, text })}\n\n`}${preliminaryLadderScaffold(sourceMode)}
 `;
 }
 
@@ -951,10 +1047,12 @@ List the prerequisites in order — calibrated to this ${noun}'s actual reader: 
 }
 
 function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
-  const isSlide = normalizeSourceMode(sourceMode) === 'slide';
+  const normalized = normalizeSourceMode(sourceMode);
+  const isSlide = normalized === 'slide';
+  const isUrl = normalized === 'url';
   if (lang === 'ko') {
-    const nounKo = isSlide ? '슬라이드' : '논문';
-    const sectionNounKo = isSlide ? '슬라이드' : '섹션';
+    const nounKo = isSlide ? '슬라이드' : isUrl ? 'URL 글' : '논문';
+    const sectionNounKo = isSlide ? '슬라이드' : isUrl ? '섹션' : '섹션';
     return `PaperMentor는 서로 연결된 두 화면으로 동작합니다: 이 리포트(HTML)와 CLI/TUI. 이 HTML을 열어둔 채 터미널로 돌아가 ${sectionNounKo}·수식·유도·의존성·질문 중 하나를 고르세요. 고른 동작 하나가 이 리포트에 잘 정리된 설명 블록 하나로 덧붙습니다.
 
 **새로고침 동작:** \`state.json\`이 바뀌면 HTML이 자동으로 새로고침을 시도합니다. 브라우저가 로컬 파일 폴링을 막으면, CLI 작업이 끝난 뒤 직접 새로고침하세요. PDF 내보내기는 스냅샷이므로 블록을 추가한 뒤 다시 내보내세요.
@@ -962,7 +1060,7 @@ function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
 **복귀 명령:** \`papermentor tui --session ${slug}\` — 대화형 ${nounKo} 내비게이터.`;
   }
   const noun = sourceModeNoun(sourceMode);
-  const sectionNoun = isSlide ? 'slide' : 'section';
+  const sectionNoun = isSlide ? 'slide' : isUrl ? 'URL section' : 'section';
   return `PaperMentor has two linked surfaces: this report and the CLI/TUI. Keep this HTML open, then return to the terminal and choose a ${sectionNoun}, equation, derivation, dependency, or question. Each chosen action appends one polished explanation block to this same report.
 
 **Refresh behavior:** the HTML tries to auto-refresh when \`state.json\` changes. If your browser blocks local file polling, press reload after the CLI finishes. A PDF export is a snapshot, so re-export it after adding blocks.
@@ -1781,8 +1879,9 @@ function detectSourceMode(text, args = {}, state = {}) {
 }
 
 function cleanHeadingTitle(raw) {
-  return String(raw || '')
+  return decodeHtmlEntities(String(raw || ''))
     .replace(/\s{2,}.+$/g, '')
+    .replace(/\s*#\s*$/g, '')
     .replace(/\s+/g, ' ')
     .trim()
     .slice(0, 120);
@@ -2012,8 +2111,39 @@ function extractSlideBlocks(text, preferredSections = []) {
   return groupConsecutiveSlideBlocks(slideBlocks).slice(0, 80);
 }
 
+function extractWebBlocks(text, preferredSections = []) {
+  const source = String(text || '').replace(/\r/g, '');
+  const headingRegex = /^\s*(#{1,3})\s+(.{2,160})\s*$/gm;
+  const headings = [];
+  for (const match of source.matchAll(headingRegex)) {
+    const title = cleanHeadingTitle(match[2]);
+    if (!title || /^\s*(skip to|menu|navigation|share|subscribe|comments?)\b/i.test(title)) continue;
+    headings.push({ title, level: match[1].length, index: match.index });
+  }
+  const uniqueHeadings = [];
+  const seen = new Set();
+  for (const heading of headings) {
+    const key = sectionKey(heading.title);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    uniqueHeadings.push(heading);
+  }
+  const candidates = uniqueHeadings.length
+    ? uniqueHeadings
+    : preferredSections.map((title) => ({ title, index: source.indexOf(title), level: 2 })).filter((item) => item.index >= 0);
+  if (!candidates.length) {
+    return [{ title: 'Article overview', body: source.trim().slice(0, 32000) }].filter((block) => block.body);
+  }
+  return candidates.slice(0, 80).map((item, index) => {
+    const next = candidates[index + 1]?.index ?? source.length;
+    return { title: item.title, body: source.slice(item.index, next).trim().slice(0, 26000) };
+  }).filter((block) => markdownPlainText(block.body).length > 40 || candidates.length <= 1);
+}
+
 function extractSourceBlocks(text, preferredSections = [], sourceMode = 'paper') {
-  if (normalizeSourceMode(sourceMode) === 'slide') return extractSlideBlocks(text, preferredSections);
+  const normalized = normalizeSourceMode(sourceMode);
+  if (normalized === 'slide') return extractSlideBlocks(text, preferredSections);
+  if (normalized === 'url') return extractWebBlocks(text, preferredSections);
   return extractSectionBlocks(text, preferredSections, sourceMode);
 }
 
@@ -2269,6 +2399,10 @@ function isMeaningfulSlideTopic(section) {
 
 function firstMeaningfulSlideTopic(sections = []) {
   return (sections || []).find(isMeaningfulSlideTopic) || sections?.[0] || '';
+}
+
+function firstMeaningfulUrlSection(sections = [], title = '') {
+  return (sections || []).find((section) => !sameSectionTitle(section, title)) || sections?.[0] || '';
 }
 function analyzePaper(args) {
   const slug = args.session || args.slug;
@@ -2636,12 +2770,14 @@ function addCard(args) {
     const nextKey = args.next || activePathItems.find(([key]) => state.readingPath.find((item) => item.key === key)?.status === 'pending')?.[0];
     if (nextKey) setPathStatus(state, nextKey, 'current');
   }
-  const shouldEnterFirstSlideTopic = type === 'start-here'
+  const shouldEnterFirstTopic = type === 'start-here'
     && !incomingIsScaffold
-    && normalizeSourceMode(state.sourceMode || 'paper') === 'slide'
+    && ['slide', 'url'].includes(normalizeSourceMode(state.sourceMode || 'paper'))
     && (state.paperSections || []).length;
-  if (shouldEnterFirstSlideTopic) {
-    const firstTopic = firstMeaningfulSlideTopic(state.paperSections);
+  if (shouldEnterFirstTopic) {
+    const firstTopic = normalizeSourceMode(state.sourceMode || 'paper') === 'url'
+      ? firstMeaningfulUrlSection(state.paperSections, state.title || '')
+      : firstMeaningfulSlideTopic(state.paperSections);
     state.currentSection = firstTopic;
     state.currentMode = '';
     state.detectedItems = [];
@@ -2649,7 +2785,7 @@ function addCard(args) {
     state.currentFocus = `Section selected: ${firstTopic}`;
     state.selectedAction = '';
     state.lastChoiceKind = 'section';
-    state.nextChoices = state.sectionActions?.[sectionKey(firstTopic)] || slideActionProfile(firstTopic, '');
+    state.nextChoices = state.sectionActions?.[sectionKey(firstTopic)] || (normalizeSourceMode(state.sourceMode || 'paper') === 'slide' ? slideActionProfile(firstTopic, '') : sectionMenuPendingChoices(firstTopic));
   } else {
     state.currentLocation = card.location;
     state.currentFocus = card.title;
@@ -4064,7 +4200,12 @@ function isChoosingTopic(state) {
 }
 
 function currentMenuLabel(state) {
-  if (isChoosingTopic(state)) return `Choose ${normalizeSourceMode(state.sourceMode || 'paper') === 'slide' ? 'a slide topic' : 'a paper section'}`;
+  if (isChoosingTopic(state)) {
+    const mode = normalizeSourceMode(state.sourceMode || 'paper');
+    if (mode === 'slide') return 'Choose a slide topic';
+    if (mode === 'url') return 'Choose a URL section';
+    return 'Choose a paper section';
+  }
   if (state.currentSection && !state.currentMode) return 'Choose what to understand';
   return 'Choose next';
 }
@@ -4267,7 +4408,21 @@ function actionTypeFromMode(currentMode, sourceMode = 'paper') {
     final: 'final-insight',
     'final-insight': 'final-insight'
   };
-  return (normalizeSourceMode(sourceMode) === 'slide' ? slideModeMap : paperModeMap)[normalizedMode] || '';
+  const urlModeMap = {
+    map: 'method',
+    ideas: 'method',
+    evidence: 'dependency',
+    terms: 'equation',
+    equation: 'equation',
+    equations: 'equation',
+    confusion: 'confusion',
+    chat: 'confusion',
+    visualization: 'visualization',
+    final: 'final-insight',
+    'final-insight': 'final-insight'
+  };
+  const normalizedSourceMode = normalizeSourceMode(sourceMode);
+  return (normalizedSourceMode === 'slide' ? slideModeMap : normalizedSourceMode === 'url' ? urlModeMap : paperModeMap)[normalizedMode] || '';
 }
 
 function actionType(action, state = {}) {
@@ -4896,6 +5051,7 @@ ${excerpt}
 
 Quality rules:
 - Actions must be specific to this excerpt, not generic labels.
+- For URL mode, actions should follow the article's actual claims, concepts, examples, code/math, diagrams, assumptions, or practical takeaways.
 - Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
 - Respect the selected range; wider context may be hinted only when the action says it is context.
 - Last item must be exactly: Ask anything about ${section}
@@ -4971,6 +5127,7 @@ ${stageQualityRules(type)}
 
 Output rules:
 - Write production-quality teaching content, not a summary.
+- If the selected action or excerpt is Korean, write the explanation in Korean while preserving technical terms/equations.
 - Respect the selected range. If you use earlier/later context, label it as context/preview.
 - Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
 - Show and explain non-trivial equations in LaTeX when they appear or when explicitly labeled as context.
@@ -5143,6 +5300,8 @@ ${context}
 
 Quality rules:
 - Write a real teaching introduction, not a scaffold and not a generic summary.
+- If the source context is Korean, write the Start Here block in Korean while preserving technical terms/equations.
+- For URL mode, treat the source as a web article/tutorial/post: teach the thesis, key concepts, examples, claims, diagrams/code/math if present, and reading path; do not force paper-only theorem/figure structure.
 - Orient the reader to what this source is trying to teach, what the difficult objects are, and how to enter the first meaningful section/topic.
 - Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
 - For Preliminary, do not write one long prose wall. Separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
@@ -5153,9 +5312,12 @@ Quality rules:
 
 function launchBundleSection(state = {}) {
   const sections = state.paperSections || [];
-  const section = normalizeSourceMode(state.sourceMode || 'paper') === 'slide'
+  const mode = normalizeSourceMode(state.sourceMode || 'paper');
+  const section = mode === 'slide'
     ? firstMeaningfulSlideTopic(sections)
-    : sections[0];
+    : mode === 'url'
+      ? firstMeaningfulUrlSection(sections, state.title || '')
+      : sections[0];
   if (!section) throw new Error('launch bundle requires detected sections/topics');
   return section;
 }
@@ -5195,6 +5357,7 @@ ${sectionExcerpt}
 
 Section choice rules:
 - Actions must be specific to this excerpt, not generic labels.
+- For URL mode, actions should follow the article's actual claims, concepts, examples, code/math, diagrams, assumptions, or practical takeaways.
 - Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
 - Last item must be exactly: Ask anything about ${firstSection}
 `;
@@ -5467,7 +5630,7 @@ function isSourceLike(value) {
   const text = String(value || '');
   if (!text || text.startsWith('-')) return false;
   if (isUrl(text) || existsSync(resolve(text))) return true;
-  return /\.(pdf|pptx?|key|md|txt|png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(text);
+  return /\.(pdf|pptx?|key|md|txt|html?|xhtml|png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(text);
 }
 
 function readStateForSlug(slug) {
@@ -6229,11 +6392,13 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
   const extension = extname(source).toLowerCase();
   const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const sourceIsImage = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
-  const isSlide = normalizeSourceMode(sourceMode) === 'slide';
+  const normalizedMode = normalizeSourceMode(sourceMode);
+  const isSlide = normalizedMode === 'slide';
+  const isUrl = normalizedMode === 'url';
   const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop || args.page || args.slide);
-  const shouldAutoAttachPaperFigure = !isSlide && canExtractVisual && !args['no-figure'] && (explicitStartFigure || sourceIsImage);
+  const shouldAutoAttachPaperFigure = !isSlide && !isUrl && canExtractVisual && !args['no-figure'] && (explicitStartFigure || sourceIsImage);
   const addStartHereOnly = (startBody = body) => addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body: startBody, choices: sections.join('|'), quiet: true, noPath: true });
-  if (isSlide && !explicitStartFigure) {
+  if ((isSlide && !explicitStartFigure) || isUrl) {
     addStartHereOnly(body);
     return { canExtractVisual, attachedVisual: false };
   }
@@ -6338,7 +6503,7 @@ function maybeWriteCropPreview({ slug, source, args, canExtractVisual, represent
 
 function launchSession(args) {
   const input = args.source || args.input || args._[1];
-  if (!input) throw new Error('launch requires a source URL or local file: launch <paper-url-or-file>');
+  if (!input) throw new Error('launch requires a source URL or local file: launch <file-or-url>');
   const sourceSeed = sourceSeedFromInput(input, args);
   const source = downloadSourceIfNeeded(input, sourceSeed, args);
   const { slug } = createLaunchShell({ input, source, args });
@@ -6432,7 +6597,7 @@ User commands:
 Also available as: papermentor
 
 Advanced/internal commands still exist for agents and scripts:
-  papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--slug <slug>]
   papermentor help --advanced
 `);
     return;
@@ -6440,8 +6605,8 @@ Advanced/internal commands still exist for agents and scripts:
   console.log(`PaperMentor advanced/internal commands
 
 Usage:
-  papermentor launch <paper-url-or-file> [--open] [--slug <slug>]
-  papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
+  papermentor launch <file-or-url> [--open] [--slug <slug>]
+  papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide|url] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
   papermentor analyze --session <slug> --paper-text-file source.txt
   papermentor tui --session <slug>
   papermentor run --session <slug> --index <n>

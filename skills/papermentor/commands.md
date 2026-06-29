@@ -102,7 +102,7 @@ Codex decides whether a turn belongs in the polished HTML report. Do not ask aft
 
 ## Source modes
 
-PaperMentor supports two modes: `paper` and `slide`. Omit `--mode` for normal use; the helper detects the mode from the file and extracted text. PaperMentor is optimized for concrete reading artifacts, not general webpages. Never attach unrelated local diagrams as evidence for a source.
+PaperMentor supports three modes: `paper`, `slide`, and `url`. Omit `--mode` for normal use; the helper detects the mode from the file, URL, and extracted text. PaperMentor is optimized for concrete reading artifacts: papers, slides, and web articles/tutorials. Never attach unrelated local diagrams as evidence for a source.
 
 ```bash
 papermentor start --title "Source title" --source source.pdf
@@ -114,6 +114,7 @@ Mode-specific dynamic menus:
 
 - `paper`: section actions expose equations, derivations, dependencies, method figures, experiments, ask/chat.
 - `slide`: slide actions expose missing narration, visual element explanation, slide transitions, equations/notation, ask/chat.
+- `url`: URL heading actions expose the article's actual claims, examples, code/math, diagrams, assumptions, caveats, practical takeaways, ask/chat.
 
 If a slide PDF is protected or not text-extractable, stay in `slide` mode and use screenshots, OCR text, or user-provided slide images as the source evidence.
 
@@ -141,13 +142,13 @@ Purpose: start a polished reading room from one URL or local source file.
 
 Required behavior:
 
-- accept arXiv PDF/abs URLs, local PDFs, PPT/PPTX slides, and text fixtures;
-- download URL sources into `.papermentor/sources/` when needed;
+- accept arXiv PDF/abs URLs, webpage URLs, local PDFs, PPT/PPTX slides, HTML pages, and text fixtures;
+- download URL sources into `.papermentor/sources/` when needed, preserving webpage HTML as URL mode instead of pretending it is a PDF;
 - extract title and authors from the first page when possible;
 - never display local source paths under the report title; show authors instead;
-- detect source mode and section/slide boundaries;
+- detect source mode and section/slide/URL-heading boundaries;
 - create `.papermentor/sessions/<slug>/index.html` immediately;
-- attach the representative method/system figure or representative slide when auto-crop succeeds;
+- attach the representative method/system figure or representative slide when auto-crop succeeds for paper/slide sources;
 - write `.papermentor/sessions/<slug>/crop-preview.html` with full-page and auto-crop candidates so users can recrop visually;
 - print the HTML path, crop-preview path, and TUI command.
 
@@ -155,6 +156,7 @@ Example:
 
 ```bash
 papermentor launch https://arxiv.org/pdf/2602.04770 --open
+papermentor launch https://lilianweng.github.io/posts/2026-06-24-scaling-laws/ --mode url --open
 ```
 
 Manual crop-preview / recrop:

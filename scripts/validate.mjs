@@ -364,7 +364,7 @@ function validateInstalledArtifact() {
     execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
     assertInstalledArtifact(join(codexHome, 'skills', 'papermentor'), 'codex');
     const installedHelp = execFileSync('papermentor', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedHelp.includes('pm <file-or-url>') || !installedHelp.includes('papermentor launch <paper-url-or-file>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor/pm commands, not development node script paths');
+    if (!installedHelp.includes('pm <file-or-url>') || !installedHelp.includes('papermentor launch <file-or-url>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor/pm commands, not development node script paths');
     const installedPalette = execFileSync('pm', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified main-menu commands');
     const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
@@ -384,7 +384,7 @@ function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
-    if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <paper-url-or-file>')) failures.push('start --help should print simplified help plus advanced pointer');
+    if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <file-or-url>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source') || !welcomeOutput.includes('Reading Room') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
@@ -471,6 +471,15 @@ Slide 17: Sampling
     if (!launchHtml.includes('Jane Researcher, John Vector') || launchHtml.includes(launchTextPath)) failures.push('launch report should show authors and hide source paths');
     if (!launchHtml.includes('How to use this reading room') || !launchHtml.includes('One-sentence orientation') || !(launchHtml.indexOf('How to use this reading room') < launchHtml.indexOf('Start Here'))) failures.push('launch should create a reading guide block before Start Here');
     if (!launchHtml.includes('Preliminary') || !launchHtml.includes('List the prerequisites in order') || (launchHtml.match(/class="ladder-heading"/g) || []).length) failures.push('launch Start Here should ship a preliminary-ladder scaffold for the model to fill, not a script-synthesized ladder');
+
+    const webArticlePath = join(temp, 'scaling-laws.html');
+    writeFileSync(webArticlePath, `<!doctype html><html><head><title>Scaling Laws for World Models</title><meta property="og:title" content="Scaling Laws for World Models"></head><body><article><h1>Scaling Laws for World Models</h1><p>This post explains why model scale, data scale, and compute scale interact.</p><h2>Why scaling laws matter</h2><p>Scaling laws connect loss L(N, D) to parameter count N and dataset tokens D, so readers can estimate whether adding compute helps.</p><h2>Emergent bottlenecks</h2><p>The article warns that evaluation, data quality, and architecture can bend the trend.</p><h3>A small calculation</h3><p>If loss drops from 2.0 to 1.6 after doubling compute, the exponent summarizes that slope.</p></article></body></html>`);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', webArticlePath, '--slug', 'url-mode-smoke', '--mode', 'url', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const urlState = readJson(join(temp, '.papermentor', 'sessions', 'url-mode-smoke', 'state.json'), {});
+    const urlHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'url-mode-smoke', 'index.html'), 'utf8');
+    if (urlState.sourceMode !== 'url' || urlState.title !== 'Scaling Laws for World Models') failures.push(`url mode should launch HTML/web sources with URL mode and title, got ${urlState.sourceMode}/${urlState.title}`);
+    if (!urlState.paperSections?.some((section) => section.includes('Why scaling laws matter')) || !urlState.paperSections?.some((section) => section.includes('Emergent bottlenecks'))) failures.push(`url mode should use webpage headings as reading sections, got ${JSON.stringify(urlState.paperSections)}`);
+    if (/Representative figure/.test(urlHtml) || urlState.figureSelectionWarning) failures.push('url mode should not force paper representative-figure scaffolding or warnings');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'launch-smoke', '--type', 'note', '--title', 'Unsafe link smoke', '--body', '[bad](javascript:alert(1)) [file](file:///tmp/x) [ok](https://example.com/path?a=1&b=2)'], { cwd: temp, stdio: 'pipe' });
     const safeLinkHtml = readFileSync(join(launchDir, 'index.html'), 'utf8');
     if (/href="(?:javascript:|file:|data:)/i.test(safeLinkHtml)) failures.push('rendered markdown links should reject unsafe URL schemes');

@@ -2,7 +2,7 @@
 
 # PaperMentor
 
-### Upload a paper or slides. Understand the hard part in 30 minutes.
+### Drop a paper, slides, or URL. Understand the hard part in 30 minutes.
 
 Not a summarizer — an **AI Agent Skill** that debugs equations, derivations, dependencies, slide narration, and conceptual confusion until you can reconstruct the source yourself.
 
@@ -146,21 +146,22 @@ Korean user manual:
 
 ## Start in one command
 
-After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL or local file:
+After cloning the repo or opening the installed skill folder, launch a reading room directly from a paper URL, webpage URL, or local file:
 
 ```bash
 pm https://arxiv.org/pdf/2602.04770
+pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
 ```
 
-PaperMentor downloads the source when needed, extracts the title and authors, detects sections, creates `index.html`, attaches the representative method/system figure when it can, and writes a crop preview for quick recropping.
+PaperMentor downloads the source when needed, extracts the title and authors, detects sections/headings, creates `index.html`, attaches the representative method/system figure for paper/slide sources when it can, and writes a crop preview for quick recropping.
 
-Open the PaperMentor launcher any time. It shows the mascot, a short learning quote, and a Claude/Codex-style input box where you can paste a paper URL, local PDF, slide PDF, PPT, or PPTX:
+Open the PaperMentor launcher any time. It shows the mascot, a short learning quote, and a Claude/Codex-style input box where you can paste a paper URL, webpage URL, local PDF, slide PDF, PPT, or PPTX:
 
 ```bash
 pm
 ```
 
-After a source is loaded, continue with the section/slide navigator. Inside Codex or Claude Code, section-specific choices and explanation blocks are generated automatically; the local `pm` command only manages the reading room, TUI, and HTML file:
+After a source is loaded, continue with the section/slide/URL-heading navigator. Inside Codex or Claude Code, section-specific choices and explanation blocks are generated automatically; the local `pm` command only manages the reading room, TUI, and HTML file:
 
 ```bash
 pm open
@@ -184,6 +185,7 @@ Local files work the same way:
 pm ./paper.pdf
 pm ./paper.pdf --mode paper
 pm ./slides.pptx --mode slide
+pm https://example.com/tutorial --mode url
 ```
 
 Want to inspect the figure crop before committing it to the report?
@@ -201,7 +203,7 @@ PaperMentor is designed as a marketplace-ready Codex/Claude skill with a local h
 - `PAPERMENTOR_AGENT=codex` or `PAPERMENTOR_AGENT=claude` forces a provider.
 - `PAPERMENTOR_AGENT=off` keeps manual/agent-handoff mode for debugging.
 
-This keeps the normal loop simple: drop a source → choose a section/slide → choose what to explain → read the updated HTML.
+This keeps the normal loop simple: drop a source → choose a section/slide/URL heading → choose what to explain → read the updated HTML.
 
 ### Room cleanup
 
@@ -219,14 +221,15 @@ pm clean --all --yes        # remove all local PaperMentor rooms
 
 ## Source modes
 
-PaperMentor has two source modes. By default it detects the mode from the uploaded material:
+PaperMentor has three source modes. By default it detects the mode from the uploaded material:
 
 | Mode | Use it for | First thing rendered | CLI menus become |
 | --- | --- | --- | --- |
 | `paper` | arXiv papers, conference papers, technical reports | one-sentence paper model, representative method figure, preliminaries | detected sections → equations, derivations, dependencies, figures, ask/chat |
 | `slide` | PPT/PDF slides and lecture slides | slides map and visual reading contract | slides → missing narration, visual labels, transitions, equations, ask/chat |
+| `url` | web articles, blogs, tutorials, notes, interactive essays | article thesis, heading map, preliminaries | URL headings → claims, examples, code/math, diagrams, caveats, ask/chat |
 
-PaperMentor is intentionally optimized for concrete reading artifacts: papers and slides.
+PaperMentor is intentionally optimized for concrete reading artifacts: papers, slides, and URLs.
 
 ---
 
@@ -289,7 +292,7 @@ Paper-related interruptions are not dumped into the report as chat logs. PaperMe
 
 Reports use bundled local fonts: **Satoshi** for English and **Pretendard** for Korean. The installer copies only runtime assets into the skill, and each generated session hardlinks bundled fonts/MathJax when the filesystem supports it, falling back to copies when needed. The report typography and LaTeX rendering work offline without remote font or MathJax CSS.
 
-Remote paper/slide downloads require HTTPS by default because local native tools parse the downloaded file. For trusted local test servers only, pass `--allow-insecure-http`.
+Remote paper/slide/URL downloads require HTTPS by default because local native tools parse the downloaded file. For trusted local test servers only, pass `--allow-insecure-http`.
 
 ---
 

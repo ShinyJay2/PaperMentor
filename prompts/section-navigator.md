@@ -6,7 +6,7 @@ Never use placeholder actions such as `Map <section>`, `Decode key equations`, `
 
 ## How to classify a section
 
-Read the section's **title and its actual content**, then decide what kind of section it is and what a reader would most want to do here. Use a **weak position prior** only as a tiebreak: most papers run Introduction → Related Work → Method → Experiments → Conclusion, and subsections (e.g. `3.1`, `3.2`) usually share their parent section's role (`3`). Trust the content over the position — a creatively named section ("Drifting Models for Generation", "Designing the Drifting Field") is still the method; related work can sit at the end; a paper may have two method sections or none.
+Read the section/URL heading's **title and its actual content**, then decide what kind of unit it is and what a reader would most want to do here. Use a **weak position prior** only as a tiebreak: most papers run Introduction → Related Work → Method → Experiments → Conclusion, and subsections (e.g. `3.1`, `3.2`) usually share their parent section's role (`3`). Web articles may instead be thesis → example → caveat → practical takeaway. Trust the content over the position — a creatively named section ("Drifting Models for Generation", "Designing the Drifting Field") is still the method; related work can sit at the end; a paper may have two method sections or none; a URL heading may be a tutorial step, claim, warning, code/math example, or implication.
 
 Do not pattern-match on title keywords or count tokens. Just understand the section.
 
@@ -19,6 +19,7 @@ Offer 4–8 actions that fit *this* section, then always end with `Ask anything 
 - **Method / Approach / Model** → a compact overview, each real equation it contains explained symbol-by-symbol, its propositions/assumptions, the dependency chain, a method pipeline. (templates/equation_card.md, templates/derivation_trace.md, templates/method_dissection.md, templates/dependency_trace.md)
 - **Experiments / Results / Ablations** → what each result is meant to prove, the main metric, honest ablation reading. (templates/method_dissection.md)
 - **Discussion / Conclusion** → the final insight, limitations and open questions. (templates/final_insight.md)
+- **URL article / tutorial heading** → explain the actual claim, example, code/math, diagram, assumption, caveat, or practical takeaway in that heading. Do not force paper-only labels when the source is a blog post or tutorial.
 
 Name equations by what they actually are (e.g. "Explain Eq. (10): attraction − repulsion", "Explain Eq. (6): the stop-gradient objective"), pulled from reading the equation, not from a fixed label table.
 

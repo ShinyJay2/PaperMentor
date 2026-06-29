@@ -288,7 +288,23 @@ Slide mode의 Start Here는 paper 대표그림 레이아웃이 아니라 topic t
 
 ---
 
-## 9. 대표 그림 선택 방식
+## 9. URL mode 사용 흐름
+
+URL mode는 웹 글, 블로그, 튜토리얼, 노트, 인터랙티브 에세이를 읽기 위한 모드다.
+
+```bash
+pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+pm https://jaehoonstudy.tistory.com/66
+pm https://www.k-a.in/AttnRes.html
+```
+
+PaperMentor는 URL을 다운로드하고 HTML의 제목/heading/본문을 읽어서 하나의 reading room을 만든다. 처음에는 `Start Here`에 글의 핵심 주장, 읽는 순서, 필요한 배경지식이 들어가고, `pm go`에서는 웹 글의 heading 단위로 선택지가 나온다.
+
+URL mode에서 생성되는 블록은 논문 형식을 억지로 강요하지 않는다. 실제 글에 있는 claim, 예시, 코드, 수식, 그림, caveat, 실전 takeaway를 기준으로 설명한다. 한국어 URL이거나 사용자가 한국어로 물어보면 설명도 한국어로 작성하되, 수식과 표준 technical term은 유지한다.
+
+---
+
+## 10. 대표 그림 선택 방식
 
 PaperMentor는 대표 그림을 script score로 고르지 않는다.
 
@@ -349,7 +365,7 @@ pm doctor                  # 로컬 도구 확인
 고급/내부 명령:
 
 ```bash
-papermentor launch <source> [--mode paper|slide] [--slug <slug>]
+papermentor launch <source> [--mode paper|slide|url] [--slug <slug>]
 papermentor tui --session <slug>
 papermentor run --session <slug> --index <n>
 papermentor card --session <slug> --type equation --title <title> --body-file answer.md
@@ -434,6 +450,7 @@ PaperMentor는 기본적으로 HTTPS source만 다운로드한다. 테스트용 
 
 ```bash
 pm http://127.0.0.1:8000/paper.pdf --allow-insecure-http
+pm http://127.0.0.1:8000/article.html --mode url --allow-insecure-http
 ```
 
 ### HTML은 보이는데 수식이 안 렌더링됨
