@@ -673,7 +673,7 @@ function cleanMetadataLine(line) {
   return String(line || '')
     .replace(/^#{1,6}\s+/, '')
     .replace(/\s+/g, ' ')
-    .replace(/\b(arXiv:\S+|v\d+|\[[^\]]+\])\b/g, '')
+    .replace(/(?:arXiv:\S+|v\d+|\[[^\]]+\])/gi, '')
     .trim();
 }
 
@@ -702,6 +702,8 @@ function isBadMetadataTitle(value) {
   const title = String(value || '').trim();
   if (!title) return true;
   if (isSlideBoilerplateLine(title)) return true;
+  if (/\b(?:provided\s+proper\s+attribution|grants?\s+permission|permission\s+to\s+reproduce|solely\s+for\s+use|journalistic\s+or|license|licensed\s+under|creative\s+commons|arxiv|doi:)\b/i.test(title)) return true;
+  if (/^(?:\[?[a-z]{2}\.[a-z]{2}\]?\s*)?\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4}\b/i.test(title)) return true;
   if (/^(?:lecture|lec\.?)\s*\d{1,3}$/i.test(title)) return false;
   if (/^[a-z][a-z.'-]+\s+[a-z][a-z.'-]+$/.test(title)) return true;
   return false;
@@ -779,8 +781,9 @@ function looksLikeAuthorLine(line) {
   const value = String(line || '').trim();
   if (!value || /@|http|www\.|abstract|figure|fig\.|keywords?/i.test(value)) return false;
   if (/\b(university|institute|department|laborator(?:y|ies)|research\s+(?:lab|labs|center|centre|institute|group)|meta ai|fair|mila|mcgill)\b/i.test(value)) return false;
-  const withoutMarks = value.replace(/\d|[*†‡§,]/g, ' ').replace(/\s+/g, ' ').trim();
+  const withoutMarks = value.replace(/\d|[*∗†‡§,]/g, ' ').replace(/\s+/g, ' ').trim();
   const tokens = withoutMarks.split(/\s+/).filter(Boolean);
+  if (/\b(?:is|are|the|a|an|of|and|or|to|in|on|for|with|without|via|using|from|by|all|need|needs)\b/i.test(withoutMarks)) return false;
   if (tokens.length === 2 && tokens.every((token) => /^[A-Z][A-Za-z.'-]+$/.test(token))) return true;
   return tokens.length >= 4
     && tokens.length <= 24
@@ -806,7 +809,7 @@ function inferMetadataFromText(text, args = {}) {
   let title = args.title || '';
   let titleIndex = -1;
   if (!title) {
-    titleIndex = lines.findIndex((line) => line.length >= 8 && line.length <= 140 && !/@/.test(line) && !looksLikeAuthorLine(line));
+    titleIndex = lines.findIndex((line) => line.length >= 8 && line.length <= 140 && !/@/.test(line) && !isBadMetadataTitle(line) && !looksLikeAuthorLine(line));
     title = titleIndex >= 0 ? lines[titleIndex] : '';
     if (titleIndex >= 0 && looksLikeTitleContinuation(lines[titleIndex + 1])) {
       title = `${title} ${lines[titleIndex + 1]}`.replace(/\s+/g, ' ').trim();
@@ -817,6 +820,7 @@ function inferMetadataFromText(text, args = {}) {
   const afterTitle = titleIndex >= 0 ? lines.slice(titleIndex + 1, titleIndex + 7) : lines.slice(1, 7);
   const authors = args.authors || args.author || afterTitle.find((line) => {
     if (/^(abstract|figure|fig\.|introduction|project page|keywords?)/i.test(line)) return false;
+    if (isBadMetadataTitle(line)) return false;
     if (/@|http|www\.|university|institute|department/i.test(line)) return false;
     return looksLikeAuthorLine(line) || line.includes(',');
   }) || '';
@@ -5368,7 +5372,7 @@ Quality rules:
 - For URL mode, treat the source as a web article/tutorial/post: teach the thesis, key concepts, examples, claims, diagrams/code/math if present, and reading path; do not force paper-only theorem/figure structure.
 - Orient the reader to what this source is trying to teach, what the difficult objects are, and how to enter the first meaningful section/topic.
 - Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
-- For Preliminary, do not write one long prose wall. Separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
+- Include a visible \`## Preliminary\` heading. Under it, do not write one long prose wall: separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
 - Do not force a fixed table, schema, or repeated labels. Keep the structure natural to the source.
 `;
 }
