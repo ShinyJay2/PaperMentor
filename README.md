@@ -409,6 +409,18 @@ npm run pack:check
 
 The validator checks required files, skill frontmatter, command coverage, visualization policy consistency, sample-demo artifacts, and install-smoke coverage for both Codex and Claude Code.
 
+### Marketplace readiness
+
+Before submitting PaperMentor to a Codex or Claude marketplace, run the single marketplace gate:
+
+```bash
+npm run marketplace:check
+```
+
+It verifies manifest/package sync, prompt budget limits, core validation, dry-run package contents, narrow-width TUI snapshots, and a mock launch smoke test. The package intentionally includes only runtime skill assets, docs, examples, prompts, templates, local fonts, local MathJax, and helper scripts. It excludes local sessions, OMX state, screenshots, PDFs, PPT/PPTX files, and other private development artifacts.
+
+Marketplace release notes and manual review items live in [`docs/marketplace-checklist.md`](docs/marketplace-checklist.md).
+
 ---
 
 ## Product boundaries

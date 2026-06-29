@@ -13,7 +13,8 @@
     "install:skill": "node scripts/install.mjs",
     "manifest:check": "node scripts/sync-manifest.mjs --check",
     "manifest:write": "node scripts/sync-manifest.mjs --write",
-    "perf:prompts": "node scripts/perf-papermentor-prompts.mjs"
+    "perf:prompts": "node scripts/perf-papermentor-prompts.mjs",
+    "marketplace:check": "node scripts/marketplace-check.mjs"
   },
   "keywords": [
     "ai-agent-skill",
@@ -68,6 +69,7 @@
     "scripts/check-package.mjs",
     "scripts/validate.mjs",
     "scripts/perf-papermentor-prompts.mjs",
+    "scripts/marketplace-check.mjs",
     "skills/**",
     "templates/**",
     "tests/**"

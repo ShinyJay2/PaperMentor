@@ -3891,7 +3891,7 @@ function fitVisible(value, width) {
 function terminalBoxWidth(defaultWidth = 96) {
   const columns = Number(process.stdout?.columns || process.env.COLUMNS || 0);
   if (!columns) return defaultWidth;
-  return Math.max(12, Math.min(defaultWidth, columns - 1));
+  return Math.max(44, Math.min(defaultWidth, columns - 1));
 }
 
 function terminalItemLimit(defaultLimit = 14) {
@@ -3965,6 +3965,20 @@ function menuItemBoxRows(item, { width = 84, index = 0, active = false } = {}) {
   });
 }
 
+
+function boxRule(width = 84, color = ansi.green) {
+  return `${color}├${'─'.repeat(width - 2)}┤${ansi.reset}`;
+}
+
+function boxHeader(title, subtitle = '', width = 84, color = ansi.green) {
+  const text = subtitle ? `${ansi.bold}${ansi.green}${title}${ansi.reset} ${ansi.dim}${subtitle}${ansi.reset}` : `${ansi.bold}${ansi.green}${title}${ansi.reset}`;
+  return boxLine(text, width, color);
+}
+
+function boxPill(label, value) {
+  return `${ansi.dim}${label}${ansi.reset} ${ansi.bold}${value}${ansi.reset}`;
+}
+
 function boxWrappedText(content = '', width = 84, color = ansi.cyan, style = '') {
   const innerWidth = Math.max(1, width - 4);
   return wrapPlainText(stripAnsi(content), innerWidth).map((line) => boxLine(`${style}${line}${style ? ansi.reset : ''}`, width, color));
@@ -4030,10 +4044,13 @@ function roomTopicLabel(state = {}) {
 }
 
 function roomSummaryRows(state = {}, width = 84) {
+  const title = displaySessionTitle(state.title, 'No reading room selected');
+  const topic = roomTopicLabel(state);
+  const mode = sourceModeLabel(state.sourceMode || 'paper');
   return [
-    boxLine(`${ansi.bold}Room${ansi.reset}`, width, ansi.green),
-    ...boxWrappedText(`Title: ${displaySessionTitle(state.title, 'No reading room selected')}`, width, ansi.green),
-    ...boxWrappedText(`Topic: ${roomTopicLabel(state)}`, width, ansi.green),
+    boxLine(`${ansi.bold}Room${ansi.reset}  ${boxPill('Mode', mode)}`, width, ansi.green),
+    ...boxWrappedText(`Title: ${title}`, width, ansi.green),
+    ...boxWrappedText(`Topic: ${topic}`, width, ansi.green),
     boxLine(`HTML: ${terminalHyperlink('Open Reading Room ↗', sessionHtmlUrl(state.slug))}`, width, ansi.green)
   ];
 }
@@ -4047,8 +4064,8 @@ function isChoosingTopic(state) {
 }
 
 function currentMenuLabel(state) {
-  if (isChoosingTopic(state)) return sectionListHeading(state.sourceMode);
-  if (state.currentSection && !state.currentMode) return 'Section actions';
+  if (isChoosingTopic(state)) return `Choose ${normalizeSourceMode(state.sourceMode || 'paper') === 'slide' ? 'a slide topic' : 'a paper section'}`;
+  if (state.currentSection && !state.currentMode) return 'Choose what to understand';
   return 'Choose next';
 }
 
@@ -4076,11 +4093,11 @@ function renderTuiScreen(state, selected = 0) {
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset} ${ansi.dim}reading room${ansi.reset}`, width, ansi.green),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxHeader('✦ PaperMentor', 'Reading room', width, ansi.green),
+    boxRule(width, ansi.green),
     ...roomSummaryRows({ ...state, currentLocation: focus }, width),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}${label}${ansi.reset}`, width, ansi.green)
+    boxRule(width, ansi.green),
+    boxLine(`${ansi.bold}${label}${ansi.reset} ${ansi.dim}${items.length ? `(${Math.min(selected + 1, items.length)}/${items.length})` : ''}${ansi.reset}`, width, ansi.green)
   ];
   if (state.tuiNotice) rows.push(...boxWrappedText(state.tuiNotice, width, ansi.green, ansi.amber));
   else {
@@ -4089,13 +4106,13 @@ function renderTuiScreen(state, selected = 0) {
   }
   const visibleItems = items.length ? items : ['Show what I can learn here'];
   const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
-  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} item(s) above${ansi.reset}`, width, ansi.cyan));
+  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} above${ansi.reset}`, width, ansi.cyan));
   entries.forEach((item, offset) => {
     const index = start + offset;
     const active = index === selected;
     rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
-  if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} item(s) below${ansi.reset}`, width, ansi.cyan));
+  if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} below${ansi.reset}`, width, ansi.cyan));
   rows.push(bottom);
   return rows.join('\n');
 }
@@ -5509,22 +5526,26 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
   const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset} ${ansi.dim}main menu${ansi.reset}`, width, ansi.green),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxHeader('✦ PaperMentor', 'Main menu', width, ansi.green),
+    boxRule(width, ansi.green),
     ...(summary
       ? roomSummaryRows(state, width)
       : [
-          boxLine(`${ansi.bold}Room${ansi.reset}`, width, ansi.green),
-          ...boxWrappedText('Drop Source: PDF · PPT/PPTX · URL', width, ansi.green),
-          ...boxWrappedText('Paste a local path, HTTPS URL, arXiv link, or Google Drive link.', width, ansi.green)
+          boxLine(`${ansi.bold}Drop Source${ansi.reset}`, width, ansi.green),
+          ...boxWrappedText('Paste a PDF, PPT/PPTX, arXiv URL, Google Drive link, or local path.', width, ansi.green),
+          ...boxWrappedText('PaperMentor opens an HTML reading room, then lets you choose topics with arrows.', width, ansi.green, ansi.dim)
         ]),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
-    boxLine(`${ansi.bold}Choose next${ansi.reset}`, width, ansi.green)
+    boxRule(width, ansi.green),
+    boxLine(`${ansi.bold}Choose next${ansi.reset} ${ansi.dim}${items.length ? `(${Math.min(selected + 1, items.length)}/${items.length})` : ''}${ansi.reset}`, width, ansi.green)
   ];
-  items.forEach((item, index) => {
+  const { start, entries } = visibleWindow(items, selected, terminalItemLimit(12));
+  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} above${ansi.reset}`, width, ansi.cyan));
+  entries.forEach((item, offset) => {
+    const index = start + offset;
     const active = index === selected;
     rows.push(...menuItemBoxRows(item, { width, index, active }));
   });
+  if (start + entries.length < items.length) rows.push(boxLine(`${ansi.dim}… ${items.length - start - entries.length} below${ansi.reset}`, width, ansi.cyan));
   rows.push(bottom);
   return { screen: rows.join('\n'), items };
 }
@@ -5570,17 +5591,18 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
   const prompt = input || `${ansi.dim}drop file/url or type a question${ansi.reset}`;
   const rows = [
     top,
-    boxLine(`${ansi.bold}${ansi.green}✦ PaperMentor${ansi.reset}`, width, ansi.green),
+    boxHeader('✦ PaperMentor', 'Drop a source. Learn the hard part.', width, ansi.green),
     ...boxWrappedText(quote, width, ansi.green, ansi.dim),
-    `${ansi.green}├${'─'.repeat(width - 2)}┤${ansi.reset}`,
+    boxRule(width, ansi.green),
     ...boxTwoColumnRows({
       width,
       color: ansi.green,
       leftTitle: 'Drop Source',
-      leftLines: ['PDF · PPT/PPTX · URL', 'paste a path or link'],
+      leftLines: ['PDF · PPT/PPTX · URL', 'local path or link'],
       rightTitle: 'Reading Room',
-      rightLines: ['HTML + arrow-key TUI', 'topics, blocks, questions']
-    })
+      rightLines: ['HTML report', 'arrow-key topics']
+    }),
+    ...boxWrappedText('Type or paste a source below, then press Enter.', width, ansi.green, ansi.dim)
   ];
   if (status) rows.push(boxLine(`${ansi.amber}${status}${ansi.reset}`, width, ansi.green));
   rows.push(bottom);

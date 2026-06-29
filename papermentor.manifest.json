@@ -64,6 +64,7 @@
       "scripts/check-package.mjs",
       "scripts/validate.mjs",
       "scripts/perf-papermentor-prompts.mjs",
+      "scripts/marketplace-check.mjs",
       "skills/**",
       "templates/**",
       "tests/**"
