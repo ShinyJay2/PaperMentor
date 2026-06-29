@@ -5135,9 +5135,15 @@ Output rules:
 }
 
 function cleanGeneratedMarkdown(value) {
-  return stripMarkdownFence(value)
+  let text = stripMarkdownFence(value)
     .replace(/^Here(?:'s| is)\s+(?:the\s+)?(?:Markdown\s+)?(?:body|block|explanation)[:.\s-]*/i, '')
     .trim();
+  const escapedBreaks = (text.match(/\\n/g) || []).length;
+  const realBreaks = (text.match(/\n/g) || []).length;
+  if (escapedBreaks >= 2 && realBreaks <= Math.max(2, escapedBreaks / 3)) {
+    text = text.replace(/\\n/g, '\n');
+  }
+  return text.trim();
 }
 
 function appendGeneratedActionBlock(state, action, args = {}) {
