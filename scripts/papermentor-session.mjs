@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { existsSync, mkdirSync, readFileSync, writeFileSync, appendFileSync, copyFileSync, linkSync, rmSync, mkdtempSync, readdirSync, renameSync, statSync, openSync, readSync, closeSync } from 'node:fs';
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawnSync, spawn } from 'node:child_process';
 import { basename, dirname, extname, join, resolve, sep, relative } from 'node:path';
 import { createHash } from 'node:crypto';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -4896,13 +4896,20 @@ function installGeneratedSectionMenu(state, section, args = {}) {
   state.updatedAt = now();
   writeJson(statePath(state.slug), state);
   renderHtml(state.slug);
+  const prefetchAction = firstPrefetchableAction(choices);
+  if (spawnBackgroundPrefetch(state, prefetchAction, args)) {
+    state.prefetchNotice = `Prefetching likely next block: ${prefetchAction}`;
+    state.updatedAt = now();
+    writeJson(statePath(state.slug), state);
+  }
   return state;
 }
 
-function generatedBlockPrompt(state, action) {
-  // Keep the full internal handoff prompt on disk for recovery/debugging, but send
-  // the provider a compact generation-only prompt to reduce latency and tokens.
-  writePendingActionPrompt(state, action);
+function generatedBlockPrompt(state, action, options = {}) {
+  // Keep the full internal handoff prompt on disk for recovery/debugging during
+  // visible user actions, but do not expose pending prompt state for background
+  // prefetches that only warm the cache.
+  if (options.writePending !== false) writePendingActionPrompt(state, action);
   const type = actionType(action, state);
   const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   const equations = insight.equations?.length ? insight.equations.slice(0, 10).map((n) => `Eq. (${n})`).join(', ') : 'none detected';
@@ -4984,6 +4991,67 @@ function appendGeneratedActionBlock(state, action, args = {}) {
   writeJson(statePath(updated.slug), updated);
   renderHtml(updated.slug);
   return updated;
+}
+
+
+function prefetchGeneratedActionBlock(state, action, args = {}) {
+  if (!action || /^ask anything about\b/i.test(action)) return readStateForSlug(state.slug) || state;
+  const type = actionType(action, state);
+  const insight = ensureSectionInsight(state, state.currentSection || '') || {};
+  const cacheKey = generatedBlockCacheKey(state, action, type, insight);
+  if (state.generatedBlockCache?.[cacheKey]?.body) return state;
+  const response = runAgentCompletion(generatedBlockPrompt(state, action, { writePending: false }), { ...args, agentTask: 'html-block-prefetch' });
+  const body = cleanGeneratedMarkdown(response);
+  if (markdownPlainText(body).length < 120) throw new Error('agent returned an empty or too-short prefetched block');
+  const latest = readStateForSlug(state.slug) || state;
+  latest.generatedBlockCache = latest.generatedBlockCache || {};
+  latest.generatedBlockCache[cacheKey] = {
+    type,
+    title: action,
+    location: state.currentSection || state.currentLocation,
+    body,
+    createdAt: now(),
+    prefetched: true
+  };
+  latest.prefetchNotice = `Prefetched: ${action}`;
+  latest.updatedAt = now();
+  writeJson(statePath(latest.slug), latest);
+  return latest;
+}
+
+function firstPrefetchableAction(choices = []) {
+  return (choices || []).find((choice) => choice && !/^ask anything about\b/i.test(choice) && !/^change topic/i.test(choice)) || '';
+}
+
+function shouldBackgroundPrefetch(args = {}) {
+  return Boolean(args.tui)
+    && !args['no-prefetch']
+    && !process.env.PAPERMENTOR_DISABLE_PREFETCH
+    && agentAutomationAvailable(args);
+}
+
+function spawnBackgroundPrefetch(state, action, args = {}) {
+  if (!shouldBackgroundPrefetch(args) || !action || process.env.PAPERMENTOR_PREFETCH_CHILD) return false;
+  try {
+    const child = spawn(process.execPath, [fileURLToPath(import.meta.url), 'prefetch', '--session', state.slug, '--action', action], {
+      cwd: root,
+      env: { ...process.env, PAPERMENTOR_PREFETCH_CHILD: '1' },
+      detached: true,
+      stdio: 'ignore'
+    });
+    child.unref();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function runPrefetch(args = {}) {
+  const slug = requireSessionSlug(args, 'prefetch');
+  const state = readStateForSlug(slug);
+  const action = args.action || args.title || firstPrefetchableAction(currentMenuItems(state));
+  if (!action) return;
+  prefetchGeneratedActionBlock(state, action, args);
 }
 
 function replaceStartHereBody(slug, body) {
@@ -5860,11 +5928,17 @@ function extractLaunchTexts(source, args = {}) {
   } catch (error) {
     if (!args['allow-empty-text']) throw error;
   }
+  // Auto Start Here now receives a compact section/excerpt bundle from state, so
+  // paying for a second raw pdftotext pass only delays provider start. Keep the
+  // raw pass for manual/scaffolded launches where the fallback Start Here body is
+  // the visible teaching surface.
   let orientationText = text;
-  try {
-    orientationText = extractTextFromSourceFile(source, { ...args, raw: true }) || text;
-  } catch {
-    orientationText = text;
+  if (!shouldAutoGenerateInLaunch(args) && !args.body && !args['body-file']) {
+    try {
+      orientationText = extractTextFromSourceFile(source, { ...args, raw: true }) || text;
+    } catch {
+      orientationText = text;
+    }
   }
   return { text, orientationText };
 }
@@ -6319,6 +6393,8 @@ try {
     runTui(args);
   } else if (command === 'run' || command === 'choose') {
     runChoice(args);
+  } else if (command === 'prefetch') {
+    runPrefetch(args);
   } else if (command === 'section') {
     selectSection(args);
   } else if (command === 'mode') {

@@ -49,14 +49,17 @@ try {
       'Ask anything about 3. Method'
     ])
   });
-  const block = `## Equation microscope\n\nThe selected method objective compares predicted target-patch representations with target-encoder representations. The important object is not a pixel value but a vector $s_{y_j}\\in\\mathbb{R}^d$ for patch $j$. The term $\\|\\hat{s}_{y_j}-s_{y_j}\\|_2^2$ measures the squared coordinate-wise error for that one patch. The inner sum adds errors over patches in one target block $B_i$, and the outer average adds those block losses over $M$ sampled target blocks. This teaches that the predictor learns semantic representation compatibility, not RGB reconstruction. Checkpoint: the reader should be able to identify $B_i$, $j$, $M$, $\\hat{s}_{y_j}$, and $s_{y_j}$ in Eq. (1).`;
-  run(['run', '--session', 'perf-prompt-source', '--index', '1', '--generate'], {
+  const firstAction = 'Explain Eq. (1) as patch-aligned representation prediction';
+  const block = `## Equation microscope
+
+The selected method objective compares predicted target-patch representations with target-encoder representations. The important object is not a pixel value but a vector $s_{y_j}\in\mathbb{R}^d$ for patch $j$. The term $\|\hat{s}_{y_j}-s_{y_j}\|_2^2$ measures the squared coordinate-wise error for that one patch. The inner sum adds errors over patches in one target block $B_i$, and the outer average adds those block losses over $M$ sampled target blocks. This teaches that the predictor learns semantic representation compatibility, not RGB reconstruction. Checkpoint: the reader should be able to identify $B_i$, $j$, $M$, $\hat{s}_{y_j}$, and $s_{y_j}$ in Eq. (1).`;
+  run(['prefetch', '--session', 'perf-prompt-source', '--action', firstAction], {
     ...commonCapture,
     PAPERMENTOR_AGENT_MOCK: block
   });
-  // Re-selecting the same section action should reuse the cached generated block
-  // rather than spending another live-provider call. Use an intentionally invalid
-  // provider to prove the cache path does not call Codex/Claude.
+  // Choosing a prefetched action should append the cached block rather than
+  // spending another live-provider call. Use an intentionally invalid provider
+  // to prove the cache path does not call Codex/Claude.
   run(['run', '--session', 'perf-prompt-source', '--index', '1', '--generate'], {
     ...commonCapture,
     PAPERMENTOR_AGENT: 'bogus'
@@ -68,13 +71,13 @@ try {
   const limits = {
     'start-here': 7000,
     'section-menu': 6200,
-    'html-block': 7000
+    'html-block-prefetch': 7000
   };
   for (const [label, maxBytes] of Object.entries(limits)) {
     if (!byLabel[label]) failures.push(`missing captured prompt for ${label}`);
     else if (byLabel[label].bytes > maxBytes) failures.push(`${label} prompt too large: ${byLabel[label].bytes} > ${maxBytes}`);
   }
-  if (metrics.length !== 3) failures.push(`expected exactly 3 provider prompts after cached repeat, saw ${metrics.length}`);
+  if (metrics.length !== 3) failures.push(`expected exactly 3 provider prompts after prefetched cached action, saw ${metrics.length}`);
   const summary = {
     schema: 'papermentor.prompt-perf.v1',
     limits,
