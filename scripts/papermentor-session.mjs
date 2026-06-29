@@ -4736,7 +4736,31 @@ function stripMarkdownFence(value) {
   return fenced ? fenced[1].trim() : text;
 }
 
+function providerPromptExcerpt(text, max = Number(process.env.PAPERMENTOR_PROVIDER_EXCERPT_CHARS || 3600)) {
+  return sourceExcerptForPrompt(text, Math.max(1200, Number(max) || 3600));
+}
+
+function captureAgentPrompt(prompt, args = {}) {
+  const dir = process.env.PAPERMENTOR_AGENT_CAPTURE_PROMPT_DIR;
+  if (!dir) return;
+  try {
+    mkdirSync(resolve(dir), { recursive: true });
+    const label = String(args.agentTask || 'agent').replace(/[^a-z0-9_.-]+/gi, '-').replace(/^-+|-+$/g, '') || 'agent';
+    const countPath = join(resolve(dir), '.count');
+    const count = Number(readAgentFile(countPath) || 0) + 1;
+    writeFileSync(countPath, String(count));
+    const filename = `${String(count).padStart(2, '0')}-${label}.md`;
+    const outPath = join(resolve(dir), filename);
+    writeFileSync(outPath, prompt);
+    writeFileSync(join(resolve(dir), 'metrics.jsonl'), `${JSON.stringify({ file: filename, label, chars: prompt.length, bytes: Buffer.byteLength(prompt), approxTokens: Math.ceil(prompt.length / 4) })}
+`, { flag: 'a' });
+  } catch {
+    // Capture is diagnostic-only; never fail generation because audit logging failed.
+  }
+}
+
 function runAgentCompletion(prompt, args = {}) {
+  captureAgentPrompt(prompt, args);
   if (process.env.PAPERMENTOR_AGENT_MOCK_FILE) return readAgentFile(process.env.PAPERMENTOR_AGENT_MOCK_FILE);
   if (process.env.PAPERMENTOR_AGENT_MOCK) return process.env.PAPERMENTOR_AGENT_MOCK;
   const provider = requestedAgentProvider(args);
@@ -4789,20 +4813,46 @@ function parseGeneratedChoices(text) {
 }
 
 function generatedSectionMenuPrompt(state, section) {
-  const prompt = writeSectionMenuPrompt(state, section);
-  return `${prompt}
+  // Keep the full internal handoff prompt on disk for recovery/debugging, but send
+  // the provider a compact generation-only prompt to reduce latency and tokens.
+  writeSectionMenuPrompt(state, section);
+  const insight = ensureSectionInsight(state, section) || {};
+  const concepts = (insight.concepts || []).slice(0, 10).map((item) => `- ${item}`).join('\n') || '- none detected';
+  const equations = (insight.equations || []).slice(0, 10).map((item) => `- Eq. (${item})`).join('\n') || '- none detected';
+  const snippets = (insight.equationSnippets || []).slice(0, 5).map((item, idx) => `${idx + 1}. ${item}`).join('\n') || 'none detected';
+  const excerpt = providerPromptExcerpt(insight.sourceExcerpt || insight.preview || '', 3600) || '(no excerpt available; use only the title and do not fabricate details)';
+  return `# PaperMentor section action generator
 
-## Automation wrapper
+Return ONLY a JSON array of 4-8 action strings for the selected section. No markdown, no prose, no shell commands.
 
-Do not run shell commands. Return ONLY a JSON array of 4-8 menu action strings.
-The last string must be exactly "Ask anything about ${section}".
-Do not include explanations, markdown, code fences, or generic fallback labels.
+Selected source: ${state.title || '(untitled)'}
+Mode: ${sourceModeLabel(state.sourceMode)}
+Section/slide: ${section}
+
+Content signals:
+Concepts:
+${concepts}
+Equations:
+${equations}
+Equation/text snippets:
+${snippets}
+
+Selected-range excerpt:
+\`\`\`text
+${excerpt}
+\`\`\`
+
+Quality rules:
+- Actions must be specific to this excerpt, not generic labels.
+- Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
+- Respect the selected range; wider context may be hinted only when the action says it is context.
+- Last item must be exactly: Ask anything about ${section}
 `;
 }
 
 function installGeneratedSectionMenu(state, section, args = {}) {
   const prompt = generatedSectionMenuPrompt(state, section);
-  const response = runAgentCompletion(prompt, args);
+  const response = runAgentCompletion(prompt, { ...args, agentTask: 'section-menu' });
   const choices = sanitizeSectionActions(parseGeneratedChoices(response), section, { ensureAsk: true }).slice(0, 8);
   if (!choices.length || choices.every((choice) => /^ask anything about\b/i.test(choice))) {
     throw new Error('agent did not return usable section choices');
@@ -4826,14 +4876,45 @@ function installGeneratedSectionMenu(state, section, args = {}) {
 }
 
 function generatedBlockPrompt(state, action) {
-  const prompt = writePendingActionPrompt(state, action);
-  return `${prompt}
+  // Keep the full internal handoff prompt on disk for recovery/debugging, but send
+  // the provider a compact generation-only prompt to reduce latency and tokens.
+  writePendingActionPrompt(state, action);
+  const type = actionType(action, state);
+  const insight = ensureSectionInsight(state, state.currentSection || '') || {};
+  const equations = insight.equations?.length ? insight.equations.slice(0, 10).map((n) => `Eq. (${n})`).join(', ') : 'none detected';
+  const equationSnippets = insight.equationSnippets?.length ? insight.equationSnippets.slice(0, 5).map((line) => `- ${line}`).join('\n') : '- none detected';
+  const concepts = insight.concepts?.length ? insight.concepts.slice(0, 12).join(', ') : 'none detected';
+  const sourceExcerpt = providerPromptExcerpt(insight.sourceExcerpt || insight.preview || '', 3600) || 'No extracted preview; do not fabricate details.';
+  return `# PaperMentor HTML block generator
 
-## Automation wrapper
+Return ONLY the Markdown body for the next HTML block. No preface, no code fence, no command.
 
-Do not run shell commands. Return ONLY the Markdown body for the HTML block.
-Do not include a preface, code fence, command, or "here is" sentence.
-The body must be production-quality teaching content and must satisfy the stage-specific quality bar.
+Selected action: ${action}
+Block type: ${type}
+Mode: ${sourceModeLabel(state.sourceMode)}
+Title: ${state.title || '(untitled)'}
+Section/slide: ${state.currentSection || state.currentLocation || 'not selected'}
+
+Local signals:
+- Equations: ${equations}
+- Concepts: ${concepts}
+
+Equation / notation preview from the selected range:
+${equationSnippets}
+
+Selected-range excerpt:
+\`\`\`text
+${sourceExcerpt}
+\`\`\`
+
+Quality bar:
+${stageQualityRules(type)}
+
+Output rules:
+- Write production-quality teaching content, not a summary.
+- Respect the selected range. If you use earlier/later context, label it as context/preview.
+- Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
+- Show and explain non-trivial equations in LaTeX when they appear or when explicitly labeled as context.
 `;
 }
 
@@ -4845,7 +4926,7 @@ function cleanGeneratedMarkdown(value) {
 
 function appendGeneratedActionBlock(state, action, args = {}) {
   const type = actionType(action, state);
-  const response = runAgentCompletion(generatedBlockPrompt(state, action), args);
+  const response = runAgentCompletion(generatedBlockPrompt(state, action), { ...args, agentTask: 'html-block' });
   const body = cleanGeneratedMarkdown(response);
   if (markdownPlainText(body).length < 120) throw new Error('agent returned an empty or too-short explanation block');
   addCard({
@@ -4902,7 +4983,7 @@ function maybeAutoFillStartHere(slug, args = {}) {
 
 Do not run shell commands. Return ONLY the finished Markdown body for the Start Here HTML block.
 Do not include a preface, code fence, command, or "here is" sentence.
-`, args);
+`, { ...args, agentTask: 'start-here' });
   const body = cleanGeneratedMarkdown(response);
   if (markdownPlainText(body).length < 200) throw new Error('agent returned an empty or too-short Start Here block');
   const updated = replaceStartHereBody(slug, body);

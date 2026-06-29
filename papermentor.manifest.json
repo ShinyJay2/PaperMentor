@@ -63,6 +63,7 @@
       "scripts/sync-manifest.mjs",
       "scripts/check-package.mjs",
       "scripts/validate.mjs",
+      "scripts/perf-papermentor-prompts.mjs",
       "skills/**",
       "templates/**",
       "tests/**"
@@ -75,7 +76,7 @@
       ".papermentor/**",
       "image.png",
       "Screenshot*.png",
-      "스크린샷*.png",
+      "\uc2a4\ud06c\ub9b0\uc0f7*.png",
       "assets/social-preview.png",
       "*.pdf",
       "*.ppt",
