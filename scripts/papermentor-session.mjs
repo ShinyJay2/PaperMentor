@@ -4294,7 +4294,8 @@ function promptTemplateForType(type) {
 
 function stageQualityRules(type) {
   const shared = [
-    '- Do not write a generic summary. Every substantive sentence must be anchored to the selected source excerpt, an equation, an algorithm line, a theorem/proof line, or a named paper object.',
+    '- Do not write a generic summary. Every substantive sentence must be anchored to the selected source excerpt, an equation, an algorithm line, a theorem/proof line, a slide object, or a named source object.',
+    '- Respect the selected range boundary. If you use earlier/later source context, label it as context or preview; do not present equations, symbols, or claims as visible in the selected range unless they are actually in the selected excerpt.',
     '- Start from the reader\'s likely blocker: name the role of the object before expanding details.',
     '- Prefer one precise toy numeric example over broad analogy when an abstract object would otherwise remain vague.',
     '- End with a reconstruction checkpoint: what the reader should now be able to restate or derive.'
