@@ -2,7 +2,6 @@
 
 - [ ] Detects papers as `paper`.
 - [ ] Detects PPT/PDF slides as `slide`.
-- [ ] Detects webpage/blog/tutorial HTML as `url`.
-- [ ] Does not expose internal modes such as `auto` or old aliases.
+- [ ] Does not expose modes beyond `paper` and `slide`.
 - [ ] TUI shows the source mode and keeps explanations out of CLI.
 - [ ] HTML receives appended blocks for the chosen mode.
