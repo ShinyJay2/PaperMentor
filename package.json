@@ -1,7 +1,7 @@
 {
   "name": "papermentor-skill",
   "version": "0.1.0",
-  "description": "PaperMentor: an interactive research-paper understanding tutor AI Agent Skill.",
+  "description": "PaperMentor: an AI Agent Skill for debugging papers, slides, technical URLs, equations, proofs, and derivations.",
   "private": false,
   "license": "MIT",
   "type": "module",
@@ -23,11 +23,15 @@
     "latex",
     "math",
     "tutoring",
-    "interactive-dashboard",
     "multilingual",
     "papers",
     "slides",
-    "paper-understanding"
+    "paper-understanding",
+    "research-agent",
+    "technical-reading",
+    "proofs",
+    "derivations",
+    "urls"
   ],
   "repository": {
     "type": "git",
@@ -71,7 +75,6 @@
     "scripts/perf-papermentor-prompts.mjs",
     "scripts/marketplace-check.mjs",
     "skills/**",
-    "templates/**",
-    "tests/**"
+    "templates/**"
   ]
 }

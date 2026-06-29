@@ -134,7 +134,7 @@ The preliminary ladder is a prompt, not a fixed form: do not impose required par
 - Final insight: use after the paper is understood.
 - Visualization / conceptual diagram card: use only to support relational, sequential, spatial, or dependency-based confusion.
 
-See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, repository `examples/`, and `tests/` checklist resources copied by the installer.
+See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, and repository `examples/` copied by the installer.
 
 
 ### Local rendering assets
