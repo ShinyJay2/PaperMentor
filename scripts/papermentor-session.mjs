@@ -5183,15 +5183,43 @@ Section choice rules:
 `;
 }
 
-function parseLaunchBundleResponse(text, expectedSection) {
+
+function extractJsonPayload(text) {
   const cleaned = stripMarkdownFence(text).trim();
-  const parsed = JSON.parse(cleaned);
-  if (typeof parsed.startHereMarkdown !== 'string') throw new Error('launch bundle missing startHereMarkdown');
-  if (String(parsed.firstSection || '').trim() !== expectedSection) throw new Error(`launch bundle firstSection mismatch: expected ${expectedSection}`);
-  if (!Array.isArray(parsed.sectionChoices)) throw new Error('launch bundle missing sectionChoices array');
-  const body = cleanGeneratedMarkdown(parsed.startHereMarkdown);
+  try {
+    return JSON.parse(cleaned);
+  } catch {}
+  const start = cleaned.indexOf('{');
+  const end = cleaned.lastIndexOf('}');
+  if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+  throw new Error('provider response did not contain a JSON object');
+}
+
+function firstStringField(object, keys = []) {
+  for (const key of keys) {
+    if (typeof object?.[key] === 'string' && object[key].trim()) return object[key];
+  }
+  return '';
+}
+
+function firstArrayField(object, keys = []) {
+  for (const key of keys) {
+    if (Array.isArray(object?.[key])) return object[key].map(String);
+  }
+  return [];
+}
+
+function parseLaunchBundleResponse(text, expectedSection) {
+  const parsed = extractJsonPayload(text);
+  const rawBody = firstStringField(parsed, ['startHereMarkdown', 'startHere', 'start_here', 'body', 'markdown']);
+  const rawSection = firstStringField(parsed, ['firstSection', 'first_section', 'section', 'topic']) || expectedSection;
+  const sectionChoices = firstArrayField(parsed, ['sectionChoices', 'section_choices', 'choices', 'actions', 'menu']);
+  if (!rawBody) throw new Error('launch bundle missing Start Here body');
+  if (!sameSectionTitle(rawSection, expectedSection)) throw new Error(`launch bundle firstSection mismatch: expected ${expectedSection}, got ${rawSection}`);
+  if (!sectionChoices.length) throw new Error('launch bundle missing section choices');
+  const body = cleanGeneratedMarkdown(rawBody);
   if (markdownPlainText(body).length < 200) throw new Error('launch bundle Start Here is too short');
-  return { body, sectionChoices: parsed.sectionChoices.map(String) };
+  return { body, sectionChoices };
 }
 
 function installBundledSectionChoices(state, section, choices = []) {
