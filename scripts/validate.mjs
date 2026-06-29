@@ -200,7 +200,7 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
   if (sessionScript.includes(phrase)) failures.push(`session renderer should not rely on remote font CSS: ${phrase}`);
 }
 
-for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http']) {
+for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http', '--skip-git-repo-check']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
 for (const phrase of ['renderWelcomeScreen', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
@@ -686,6 +686,16 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     const agentHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'index.html'), 'utf8');
     const agentCards = readJson(join(temp, '.papermentor', 'sessions', 'agent-automation-smoke', 'cards.json'), { cards: [] });
     if (agentState.pendingBlockPrompt || !agentHtml.includes('Term-by-term microscope') || !agentCards.cards?.some((card) => card.title === 'Explain the drifting field term by term')) failures.push('agent automation should append selected explanation blocks to HTML without exposing prompt files');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Agent Failure Fallback Smoke', '--source', 'paper.pdf', '--slug', 'agent-failure-fallback', '--sections', '1. Method', '--body-file', mapPath], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'agent-failure-fallback', '--index', '1'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'agent-failure-fallback', '--index', '1', '--generate'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT: 'bogus' }
+    });
+    const fallbackState = readJson(join(temp, '.papermentor', 'sessions', 'agent-failure-fallback', 'state.json'), {});
+    if (fallbackState.pendingBlockType !== 'section-menu' || !fallbackState.pendingBlockPrompt || !/Could not auto-generate/.test(fallbackState.tuiNotice || '')) failures.push('agent automation failure should keep an internal handoff and return a friendly non-crashing state');
 
     const serverScript = join(temp, 'serve-once.cjs');
     const portFile = join(temp, 'server-port.txt');

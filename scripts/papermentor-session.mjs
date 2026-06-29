@@ -4749,6 +4749,7 @@ function runAgentCompletion(prompt, args = {}) {
     const output = execFileSync(codex, [
       'exec',
       '--cd', root,
+      '--skip-git-repo-check',
       '--sandbox', 'danger-full-access',
       '--color', 'never',
       '--output-last-message', out,
@@ -4933,7 +4934,18 @@ function runChoice(args) {
   if (!state) throw new Error(`session not found: ${slug}`);
   const index = Number(args.index || args.choice || 1) - 1;
   const autoAgent = Boolean(args.auto || args.generate || args.agent);
-  state = applyTuiChoice(state, Math.max(0, index), { ...args, autoAgent });
+  try {
+    state = applyTuiChoice(state, Math.max(0, index), { ...args, autoAgent });
+  } catch (error) {
+    if (!autoAgent) throw error;
+    state = readJson(statePath(slug), state) || state;
+    state.tuiNotice = `Could not auto-generate: ${error.message}. PaperMentor kept an internal handoff so Codex/Claude can continue from this room.`;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    renderHtml(slug);
+    printConsole(state);
+    return;
+  }
   const action = state.lastChoiceKind === 'action' ? state.selectedAction : '';
   if (action && !autoAgent) {
     writePendingActionPrompt(state, action);
