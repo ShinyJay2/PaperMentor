@@ -30,6 +30,13 @@ If a selected slide is protected or text extraction fails, keep `slide` mode but
 
 
 
+
+### Equation term-purpose rule
+
+For every non-trivial equation in paper, slide, and URL modes, do more than define symbols. After showing the equation, break it into meaningful terms/factors and explain each term's **functional role** in the source's objective, claim, algorithm, or slide argument. A good explanation answers: what does this term compare, reward, penalize, normalize, weight, constrain, reconstruct, predict, marginalize, or propagate; why is it included; what behavior would change if it were removed or made larger; and how it connects to the surrounding text.
+
+Example pattern, not a fixed domain rule: for $\|\hat{o}_t-o_t\|_2^2$, do not stop at "$\hat{o}_t$ is predicted observation and $o_t$ is observed observation." Also say that this term penalizes the distance between reconstructed/predicted observation and actual observation, so minimizing it improves reconstruction fidelity at time $t$. Apply this same term-by-term purpose reading to any operation actually present: losses, norms, expectations, indicators, KL terms, constraints, weights, sums, products, matrix terms, probabilities, gradients, bounds, or slide equations.
+
 ### HTML-first reading room rule
 
 On source start, render `index.html` before giving any substantive explanation in the CLI. The user-facing command surface is the `pm` launcher: `pm` opens the PaperMentor welcome/upload screen with mascot, daily learning quote, and a Claude/Codex-style input box; `pm <file-or-url>` starts a source directly; `pm open`, `pm go`, `pm ask "..."`, `pm qa`, and `pm export` operate on the active reading room. Advanced `papermentor ...` commands are internal/agent surfaces. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the launcher, HTML path, detected sections/slides/URL headings, choices, and a place for user questions.

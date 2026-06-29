@@ -18,7 +18,7 @@ For each selected slide, generate actions such as:
 - Explain this slide as if the lecturer paused here.
 - Reconstruct the missing narration.
 - Explain every label/arrow/visual element.
-- Explain the key equation or notation.
+- Explain the key equation or notation, including term-by-term functional purpose rather than only symbol meanings.
 - Connect this slide to the previous and next slide.
 - Draw a generated conceptual diagram only when the confusion is relational or sequential.
 - Ask anything about this slide.

@@ -28,6 +28,7 @@ What transition is being proved, and why the paper needs it.
 - Dependency used:
 - Assumption invoked:
 - Why valid:
+- Term purpose: what each changed/new/removed term is doing in the objective, claim, or algorithm.
 
 ### Step 2 — `<operation>`
 
@@ -39,6 +40,7 @@ What transition is being proved, and why the paper needs it.
 - Dependency used:
 - Assumption invoked:
 - Why valid:
+- Term purpose: what each changed/new/removed term is doing in the objective, claim, or algorithm.
 
 ## No-jump audit
 

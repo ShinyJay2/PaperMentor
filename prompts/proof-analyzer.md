@@ -7,7 +7,7 @@ Required output:
 2. Proof strategy: the one mechanism that will close each subclaim.
 3. Notation and objects: define every symbol, random variable, conditioning event, index, distribution, denominator, indicator, map, and fixed quantity.
 4. Line transition microscope: for each adjacent pair of proof lines, show the previous line, next line, and the exact operation(s) that transform one into the other.
-5. Term-by-term operation audit: identify the actual operation used in the paper's transition from the symbols and surrounding proof text, without relying on a predefined operation menu.
+5. Term-by-term operation audit: identify the actual operation used in the paper's transition from the symbols and surrounding proof text, without relying on a predefined operation menu. For every non-trivial term, also explain its local purpose in the claim or proof: what it controls, cancels, bounds, averages, conditions on, weights, or carries forward.
 6. Expectation or conditioning audit when probability is involved: what is fixed, what is averaged over, which event restricts support, and what is recognized as an expectation again.
 7. Hidden assumption check.
 8. Minimal example when abstract.

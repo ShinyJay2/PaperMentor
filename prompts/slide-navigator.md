@@ -22,7 +22,7 @@ On entering a slide, the CLI shows a generic menu (reconstruct narration / read 
 papermentor section --session <slug> --index <n> --choices "Reconstruct the narration for this slide|Read the <specific figure>|Decode <the boxed equation>|How this builds on slide <k>|Continue to the next slide|Ask anything about this slide"
 ```
 
-Match the actions to what the slide actually holds — a figure-only slide leads with figure reading; an equation slide leads with the boxed equation; a transition slide leads with narration + the build-on link. Do not word-match titles or score; just read the slide. The chosen action renders an HTML block via the usual runner (use `templates/slide_explanation.md`, `templates/missing_narration.md`, `templates/slide_transition.md`).
+Match the actions to what the slide actually holds — a figure-only slide leads with figure reading; an equation slide leads with the boxed equation and what each term is doing in the slide's argument; a transition slide leads with narration + the build-on link. Do not word-match titles or score; just read the slide. The chosen action renders an HTML block via the usual runner (use `templates/slide_explanation.md`, `templates/missing_narration.md`, `templates/slide_transition.md`).
 
 ## The biggest value: reconstruct the missing narration
 

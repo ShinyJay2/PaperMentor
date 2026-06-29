@@ -27,6 +27,10 @@ Open the cropped image and write the explanation from what is literally drawn in
 - What to observe:
 - Equations / claims it supports:
 
+## Term-purpose preview
+
+When introducing major equations, briefly name what the important terms do in the source: what each term measures, penalizes, rewards, constrains, normalizes, or propagates. Keep the full detailed explanation for section-level equation blocks.
+
 ## Section navigator seed
 
 List the detected paper sections for the CLI navigator only. Do not render this as explanation prose if it is only a menu.
