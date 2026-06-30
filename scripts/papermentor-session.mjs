@@ -4434,6 +4434,25 @@ function printTuiSnapshot(state, selected = 0) {
   console.log(renderTuiScreen(state, selected));
 }
 
+function prepareLaunchNavigator(slug) {
+  const state = readStateForSlug(slug);
+  if (!state) return state;
+  if ((state.paperSections || []).length) {
+    state.topicPickerOpen = true;
+    state.currentMode = '';
+    state.currentFocus = `Choose a ${sourceModeNoun(state.sourceMode)} topic`;
+    state.currentLocation = `${sourceModeLabel(state.sourceMode)} topic navigator`;
+    state.nextChoices = state.paperSections;
+    state.selectedAction = '';
+    state.lastChoiceKind = 'topic-picker';
+    delete state.tuiNotice;
+    delete state.prefetchNotice;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+  }
+  return state;
+}
+
 function enterLaunchTui(slug, args = {}) {
   const state = readStateForSlug(slug);
   const html = `.papermentor/sessions/${slug}/index.html`;
@@ -4499,6 +4518,36 @@ function normalizeTuiKey(key) {
   return applicationCursor[key] || key;
 }
 
+function normalizedKeypressName(str, key = {}) {
+  if (key?.ctrl && key.name === 'c') return 'ctrl-c';
+  if (key?.name === 'return' || key?.name === 'enter') return 'enter';
+  if (key?.name === 'up') return 'up';
+  if (key?.name === 'down') return 'down';
+  if (key?.name === 'left') return 'left';
+  if (key?.name === 'right') return 'right';
+  const normalized = normalizeTuiKey(str);
+  if (normalized === '\u0003') return 'ctrl-c';
+  if (normalized === '\r' || normalized === '\n') return 'enter';
+  if (normalized === '\x1b[A') return 'up';
+  if (normalized === '\x1b[B') return 'down';
+  if (normalized === '\x1b[C') return 'right';
+  if (normalized === '\x1b[D') return 'left';
+  return normalized;
+}
+
+function attachRawKeypress(onKey) {
+  readline.emitKeypressEvents(process.stdin);
+  if (process.stdin.isTTY) process.stdin.setRawMode(true);
+  process.stdin.resume();
+  process.stdin.setEncoding('utf8');
+  const handler = (str, key = {}) => onKey(normalizedKeypressName(str, key), str, key);
+  process.stdin.on('keypress', handler);
+  return () => {
+    process.stdin.removeListener('keypress', handler);
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.pause();
+  };
+}
 
 
 function clearPendingPrompt(state) {
@@ -5155,6 +5204,7 @@ function requestedAgentProvider(args = {}) {
 }
 
 function agentAutomationAvailable(args = {}) {
+  if (args['no-agent'] || args.manual) return false;
   if (process.env.PAPERMENTOR_AGENT_MOCK_FILE || process.env.PAPERMENTOR_AGENT_MOCK) return true;
   return Boolean(requestedAgentProvider(args));
 }
@@ -5760,6 +5810,7 @@ function applyTuiChoice(state, selected, options = {}) {
   const items = options.tui ? tuiMenuItems(state) : currentMenuItems(state);
   const choice = items[selected];
   if (!choice) return state;
+  delete state.tuiNotice;
   if (isChoosingTopic(state)) {
     state.currentSection = choice;
     state.currentMode = '';
@@ -5831,6 +5882,9 @@ function runTui(args) {
   if (!slug) throw new Error('tui requires --session <slug>');
   let state = readJson(statePath(slug), null);
   if (!state) throw new Error(`session not found: ${slug}`);
+  delete state.tuiNotice;
+  delete state.prefetchNotice;
+  writeJson(statePath(slug), state);
   let selected = Math.min(Number(args.cursor || 0), Math.max(0, tuiMenuItems(state).length - 1));
   if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
     console.log(renderTuiScreen(state, selected));
@@ -5842,9 +5896,9 @@ function runTui(args) {
     selected = Math.max(0, Math.min(selected, Math.max(0, items.length - 1)));
     process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}\x1b[J`);
   };
+  let detachKeys = () => {};
   const cleanup = () => {
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.stdin.pause();
+    detachKeys();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
   const exitForMissingSession = () => {
@@ -5854,27 +5908,23 @@ function runTui(args) {
   };
 
   process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
   draw();
-  const handleKey = (rawKey) => {
-    const key = normalizeTuiKey(rawKey);
+  const handleKey = (key, raw = '') => {
     const items = tuiMenuItems(state);
-    if (key === '\u0003') {
+    if (key === 'ctrl-c') {
       cleanup();
       process.exit(0);
-    } else if (key === '\u001b[A') {
+    } else if (key === 'up') {
       selected = (selected - 1 + items.length) % Math.max(1, items.length);
       draw();
-    } else if (key === '\u001b[B') {
+    } else if (key === 'down') {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
-    } else if (key === 'y' || key === 'Y') {
+    } else if (raw === 'y' || raw === 'Y') {
       const result = starPaperMentorRepository({ quiet: true });
       state.tuiNotice = result.message;
       draw();
-    } else if (key === '\r' || key === '\n') {
+    } else if (key === 'enter') {
       const selectedChoice = items[selected] || '';
       const willGenerate = agentAutomationAvailable(args) && !/^Change topic \/ section list$/i.test(selectedChoice);
       if (willGenerate) {
@@ -5902,9 +5952,7 @@ function runTui(args) {
     }
   };
   process.on('SIGWINCH', draw);
-  process.stdin.on('data', (chunk) => {
-    for (const key of parseTuiKeys(chunk)) handleKey(key);
-  });
+  detachKeys = attachRawKeypress(handleKey);
 }
 
 function isSourceLike(value) {
@@ -6028,6 +6076,104 @@ function learningQuote({ deterministic = false } = {}) {
   return quotes[Math.floor(Math.random() * quotes.length)] || quotes[0];
 }
 
+function renderWizardSelectScreen({ title, subtitle = '', items = [], selected = 0 } = {}) {
+  const width = terminalBoxWidth(88);
+  const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
+  const bottom = `${ansi.green}╰${'─'.repeat(width - 2)}╯${ansi.reset}`;
+  const rows = [
+    top,
+    boxHeader('✦ PaperMentor', title || 'Launch setup', width, ansi.green),
+    ...(subtitle ? boxWrappedText(subtitle, width, ansi.green, ansi.dim) : []),
+    boxRule(width, ansi.green),
+    boxLine(`${ansi.bold}Choose option${ansi.reset} ${ansi.dim}${items.length ? `(${Math.min(selected + 1, items.length)}/${items.length})` : ''}${ansi.reset}`, width, ansi.green)
+  ];
+  items.forEach((item, index) => rows.push(...menuItemBoxRows(item.label || String(item), { width, index, active: index === selected })));
+  rows.push(boxRule(width, ansi.green));
+  rows.push(boxLine(`${ansi.dim}Keys: ↑/↓ move · Enter select · Ctrl-C cancel${ansi.reset}`, width, ansi.green));
+  rows.push(bottom);
+  return rows.join('\n');
+}
+
+function promptWizardSelect({ title, subtitle = '', items = [], initial = 0 }, onSelect) {
+  if (!process.stdin.isTTY || !process.stdout.isTTY) return onSelect(items[initial] || items[0]);
+  let selected = Math.max(0, Math.min(initial, Math.max(0, items.length - 1)));
+  const draw = () => process.stdout.write(`${ansi.clear}${renderWizardSelectScreen({ title, subtitle, items, selected })}\x1b[J`);
+  let detachKeys = () => {};
+  const cleanup = () => {
+    detachKeys();
+    process.stdout.write(ansi.showCursor);
+  };
+  process.stdout.write(ansi.hideCursor);
+  draw();
+  const handleKey = (key) => {
+    if (key === 'ctrl-c') {
+      cleanup();
+      process.exit(0);
+    } else if (key === 'up') {
+      selected = (selected - 1 + items.length) % Math.max(1, items.length);
+      draw();
+    } else if (key === 'down') {
+      selected = (selected + 1) % Math.max(1, items.length);
+      draw();
+    } else if (key === 'enter') {
+      const choice = items[selected] || items[0];
+      cleanup();
+      onSelect(choice);
+    }
+  };
+  detachKeys = attachRawKeypress(handleKey);
+}
+
+function runLaunchWizard(source, args = {}) {
+  const modeItems = [
+    { label: 'Auto-detect mode', value: 'auto' },
+    { label: 'Paper', value: 'paper' },
+    { label: 'Slides', value: 'slide' },
+    { label: 'URL article', value: 'url' }
+  ];
+  const languageItems = [
+    { label: 'Auto / match source or request', value: 'auto' },
+    { label: '한국어 Korean', value: 'ko' },
+    { label: 'English', value: 'en' },
+    { label: '日本語 Japanese', value: 'ja' },
+    { label: 'العربية Arabic', value: 'ar' },
+    { label: '中文 Chinese', value: 'zh' }
+  ];
+  const htmlItems = [
+    { label: 'Open HTML reading room', value: true },
+    { label: 'Do not open browser', value: false }
+  ];
+  const tuiItems = [
+    { label: 'Enter arrow-key reading console after launch', value: true },
+    { label: 'Show launch summary only', value: false }
+  ];
+  const autoItems = [
+    { label: 'Generate Start Here now', value: true },
+    { label: 'Manual / no agent generation', value: false }
+  ];
+  promptWizardSelect({ title: 'Launch setup', subtitle: source, items: modeItems }, (mode) => {
+    promptWizardSelect({ title: 'Output language', subtitle: 'Choose the teaching language. Technical terms may stay in English.', items: languageItems }, (language) => {
+      promptWizardSelect({ title: 'HTML report', subtitle: 'Open the browser report after launch?', items: htmlItems }, (openHtml) => {
+        promptWizardSelect({ title: 'Generation', subtitle: 'Create Start Here/preliminary automatically?', items: autoItems }, (autoGen) => {
+          promptWizardSelect({ title: 'Reading console', subtitle: 'Enter the arrow-key topic/action console?', items: tuiItems }, (enterTui) => {
+            launchSession({
+              ...args,
+              _: ['launch', source],
+              source,
+              mode: mode.value,
+              language: language.value,
+              open: openHtml.value,
+              auto: autoGen.value,
+              'no-agent': !autoGen.value,
+              tui: enterTui.value
+            });
+          });
+        });
+      });
+    });
+  });
+}
+
 function renderWelcomeScreen({ input = '', status = '', includePrompt = true, quote = learningQuote() } = {}) {
   const width = terminalBoxWidth(88);
   const top = `${ansi.green}╭${'─'.repeat(width - 2)}╮${ansi.reset}`;
@@ -6086,6 +6232,10 @@ function runWelcome(args = {}) {
       askCurrentSession({ ...args, session: slug, text: source });
       return;
     }
+    if (process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) {
+      runLaunchWizard(source, args);
+      return;
+    }
     const slug = launchSession({ ...args, _: ['launch', source], source });
     if (slug && process.stdin.isTTY && process.stdout.isTTY) {
       const state = readStateForSlug(slug);
@@ -6129,42 +6279,36 @@ function runPalette(args = {}) {
     selected = Math.max(0, Math.min(selected, Math.max(0, current.items.length - 1)));
     process.stdout.write(`${ansi.clear}${current.screen}\x1b[J`);
   };
+  let detachKeys = () => {};
   const cleanup = () => {
-    if (process.stdin.isTTY) process.stdin.setRawMode(false);
-    process.stdin.pause();
+    detachKeys();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
   process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
-  process.stdin.setRawMode(true);
-  process.stdin.resume();
-  process.stdin.setEncoding('utf8');
   draw();
-  const handleKey = (rawKey) => {
-    const key = normalizeTuiKey(rawKey);
+  const handleKey = (key, raw = '') => {
     const items = current.items;
-    if (key === '\u0003') {
+    if (key === 'ctrl-c') {
       cleanup();
       process.exit(0);
-    } else if (key === '\u001b[A') {
+    } else if (key === 'up') {
       selected = (selected - 1 + items.length) % Math.max(1, items.length);
       draw();
-    } else if (key === '\u001b[B') {
+    } else if (key === 'down') {
       selected = (selected + 1) % Math.max(1, items.length);
       draw();
-    } else if (key === 'y' || key === 'Y') {
+    } else if (raw === 'y' || raw === 'Y') {
       cleanup();
       starPaperMentorRepository();
       process.exit(0);
-    } else if (key === '\r' || key === '\n') {
+    } else if (key === 'enter') {
       cleanup();
       executePaletteItem(items[selected], slug);
       process.exit(0);
     }
   };
   process.on('SIGWINCH', draw);
-  process.stdin.on('data', (chunk) => {
-    for (const key of parseTuiKeys(chunk)) handleKey(key);
-  });
+  detachKeys = attachRawKeypress(handleKey);
 }
 
 function listRecentSessions() {
@@ -6843,7 +6987,8 @@ function launchSession(args) {
     renderHtml(slug);
     if (args.open) openSessionHtml(slug);
     if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
-    const finalState = readJson(statePath(slug), pendingState);
+    let finalState = readJson(statePath(slug), pendingState);
+    if (shouldEnterLaunchTui(args) || shouldShowTuiSnapshot(args)) finalState = prepareLaunchNavigator(slug) || finalState;
     if (shouldEnterLaunchTui(args)) {
       enterLaunchTui(slug, args);
       return slug;
@@ -6885,7 +7030,8 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
   if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
-  const finalState = readJson(statePath(slug), state);
+  let finalState = readJson(statePath(slug), state);
+  if (shouldEnterLaunchTui(args) || shouldShowTuiSnapshot(args)) finalState = prepareLaunchNavigator(slug) || finalState;
   if (shouldEnterLaunchTui(args)) {
     enterLaunchTui(slug, args);
     return slug;
@@ -6911,7 +7057,7 @@ function usage(options = {}) {
 
 User commands:
   pm                         open the main menu
-  pm <file-or-url>           start a reading room
+  pm <file-or-url>           start a guided launch wizard (use --quick to skip options)
   pm open                    open the latest/current HTML
   pm go                      continue in the arrow-key reading room
   pm ask "question"          ask about the current topic
@@ -6974,7 +7120,12 @@ try {
   } else if (command === 'menu' || command === 'palette') {
     runPalette(args);
   } else if (isSourceLike(command)) {
-    launchSession({ ...args, _: ['launch', command], source: args.source || command });
+    const source = args.source || command;
+    if (process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) {
+      runLaunchWizard(source, args);
+    } else {
+      launchSession({ ...args, _: ['launch', source], source });
+    }
   } else if (command === 'open' || command === 'last') {
     openLatestSession(args);
   } else if (command === 'go' || command === 'continue') {
@@ -6989,7 +7140,8 @@ try {
     askCurrentSession({ ...args, text: args.text || args.question || args._.slice(1).join(' ') });
   } else if (command === 'new') {
     const source = args.source || args.input || args._[1];
-    if (source) launchSession({ ...args, _: ['launch', source], source });
+    if (source && process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) runLaunchWizard(source, args);
+    else if (source) launchSession({ ...args, _: ['launch', source], source });
     else runPalette(args);
   } else if (command === 'regenerate-start' || command === 'start-here') {
     regenerateStartHere(args);
