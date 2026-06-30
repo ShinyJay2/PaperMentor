@@ -1,6 +1,6 @@
 ---
 name: papermentor
-description: Interactive paper, slide, and URL/article understanding tutor. Use for deep paper/slide/web-article understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, missing slide narration, URL post/tutorial breakdowns, interruption handling, recursive why, Korean/English tutoring, conceptual visualization planning, and final insight extraction. Do not use for shallow generic summaries, blog export, reviewer simulation, or quiz generation.
+description: Interactive paper, slide, and URL/article understanding tutor. Use for deep paper/slide/web-article understanding, LaTeX-first equation explanations, derivation tracing, dependency tracing across definitions/lemmas/theorems/algorithms/equations/claims, proof and method walkthroughs, missing slide narration, URL post/tutorial breakdowns, interruption handling, recursive why, multilingual tutoring, conceptual visualization planning, and final insight extraction. Do not use for shallow generic summaries, blog export, reviewer simulation, or quiz generation.
 ---
 
 # PaperMentor
@@ -13,7 +13,7 @@ PaperMentor supports three source modes:
 
 - `paper`: research articles and preprints. Preserve the paper workflow: map, equations, derivations, dependencies, confusion repair, final insight.
 - `slide` (shown as **Slides**): PDF/PPT slides, usually with **no table of contents**. Slides are **image-first and temporal** — read each rendered slide image (not just extracted text), and treat the slides as a timeline where early slides build up ideas that later slides depend on. Reconstruct the missing lecturer narration, read figures/visual elements and color-highlighted emphasis, decode on-slide equations, group consecutive same-title build slides into one topic, and make "how this builds on earlier slides" and "continue to the next slide" first-class moves. See `prompts/slide-navigator.md`.
-- `url` (shown as **URL**): public web articles, blog posts, tutorials, notes, and interactive essays. Extract the readable webpage text and headings, then teach the article in the same HTML-first reading room: thesis, concepts, examples, code/math/diagrams if present, assumptions, implications, and final insight. If the user asks in Korean or the source is Korean, write the generated teaching blocks in Korean while preserving equations and standard technical terms.
+- `url` (shown as **URL**): public web articles, blog posts, tutorials, notes, and interactive essays. Extract the readable webpage text and headings, then teach the article in the same HTML-first reading room: thesis, concepts, examples, code/math/diagrams if present, assumptions, implications, and final insight. If the user requests a language, use that language as the main prose language for generated teaching blocks while preserving equations, symbols, model names, and natural English technical terms/phrases.
 
 Only support concrete reading artifacts: `paper`, `slide`, and `url`. Do not invent unrelated modes or attach unrelated local diagrams as evidence for a source.
 If a selected slide is protected or text extraction fails, keep `slide` mode but ask for accessible slides, screenshots, OCR text, or individual slide images; then build slide actions from the available visual/text evidence.
@@ -38,6 +38,10 @@ For every non-trivial equation in paper, slide, and URL modes, do more than defi
 Example pattern, not a fixed domain rule: for $\|\hat{o}_t-o_t\|_2^2$, do not stop at "$\hat{o}_t$ is predicted observation and $o_t$ is observed observation." Also say that this term penalizes the distance between reconstructed/predicted observation and actual observation, so minimizing it improves reconstruction fidelity at time $t$. Apply this same term-by-term purpose reading to any operation actually present: losses, norms, expectations, indicators, KL terms, constraints, weights, sums, products, matrix terms, probabilities, gradients, bounds, or slide equations.
 
 ### HTML-first reading room rule
+
+Language is part of the launch contract. If the user's PaperMentor request is in a specific language, launch/generate with `--language <code>` when known (`ko`, `en`, `ja`, `ar`, `zh`, etc.) and make the reading guide, Start Here, section menus, and appended HTML blocks use that language as the main prose language while preserving equations, symbols, model names, and natural English technical terms/phrases. If the language is genuinely unknown, leave it as auto and match the source.
+
+When Codex/Claude is asked to "open" a PaperMentor room for a human to inspect, prefer a visible surface: use `--open` for the HTML and, on macOS/iTerm, `--iterm` to open the arrow-key TUI. Do not confuse an internal Codex shell launch with a visible user terminal.
 
 On source start, render `index.html` before giving any substantive explanation in the CLI. The user-facing command surface is the `pm` launcher: `pm` opens the PaperMentor welcome/upload screen with mascot, daily learning quote, and a Claude/Codex-style input box; `pm <file-or-url>` starts a source directly; `pm open`, `pm go`, `pm ask "..."`, `pm qa`, and `pm export` operate on the active reading room. Advanced `papermentor ...` commands are internal/agent surfaces. The first HTML block must be `How to use this reading room`, a compact usage card that explains the linked HTML + CLI/TUI workflow, refresh behavior, and PDF snapshot behavior. The second block must be `Start Here`, not a terminal summary. `Start Here` must contain: (1) a one-sentence model of what the source teaches or claims, (2) the exact representative method/system/algorithm figure crop when present, and (3) a detailed preliminary ladder for concepts needed before reading sections or slides. The CLI must not contain the explanation body; it only shows the launcher, HTML path, detected sections/slides/URL headings, choices, and a place for user questions.
 
@@ -67,7 +71,7 @@ Offer diagram actions as suggestions before generating them. Do not auto-insert 
 
 ### Report typography rule
 
-Rendered reading reports must use bundled local fonts: Satoshi for English text and Pretendard for Korean text. Keep the CSS font stack in this order: `"Satoshi", "Pretendard", ...`. Do not switch back to Styrene, Anthropic Sans, generic-only stacks, or remote-only font imports. The session renderer must copy `assets/fonts/` into each session `assets/fonts/` directory so users see the intended typography after installing only this skill. If the report contains Korean, set the HTML language to `ko`, preserve LaTeX notation unchanged, and use Korean-friendly line breaking.
+Rendered reading reports must use bundled local fonts: Satoshi for English text and Pretendard for Korean text. Keep the CSS font stack in this order: `"Satoshi", "Pretendard", ...`. Do not switch back to Styrene, Anthropic Sans, generic-only stacks, or remote-only font imports. The session renderer must copy `assets/fonts/` into each session `assets/fonts/` directory so users see the intended typography after installing only this skill. If the report has a requested or detected language, set the HTML `lang` accordingly; for RTL languages such as Arabic, set RTL document direction while keeping LaTeX/math blocks left-to-right. Preserve LaTeX notation unchanged and use language-friendly line breaking where possible.
 
 ### Report structure rule
 
@@ -125,7 +129,7 @@ The preliminary ladder is a prompt, not a fixed form: do not impose required par
 - Do not skip derivation transitions.
 - Do not hide assumptions.
 - Do not treat examples as proofs.
-- If responding in Korean, preserve equations, symbols, notation, and standard English technical terms exactly. Keep common research terms in English when that is the natural academic usage: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms.
+- If responding in any non-English language, preserve equations, symbols, notation, model names, and standard English technical terms when that is the natural academic usage. Examples include: `training objective`, `objective function`, `loss`, `gradient`, `generator`, `distribution`, `pushforward`, `drift field`, `inference`, `sample`, `parameter`, `operator`, `expectation`, and similar terms.
 
 ## Select a mode
 
