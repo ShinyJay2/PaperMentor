@@ -45,7 +45,7 @@ pm <file-or-url>
 pm
 ```
 
-The first command opens a reading room directly. The second opens the launcher where you can drop a source or continue the latest room.
+The first command opens a guided terminal launch wizard where you choose mode, language, HTML opening, generation, and whether to enter the arrow-key reading console. Add `--quick` to skip the wizard. The second opens the launcher where you can drop a source or continue the latest room.
 
 ## 90-second demo
 
@@ -62,7 +62,7 @@ pm
 # - technical blog/tutorial URL
 ```
 
-Or launch directly:
+Or launch with the guided wizard:
 
 ```bash
 pm https://arxiv.org/pdf/2602.04770
