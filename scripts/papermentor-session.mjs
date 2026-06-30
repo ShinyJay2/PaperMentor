@@ -4373,6 +4373,7 @@ function userFriendlyPendingNotice(state = {}) {
 }
 
 function roomTopicLabel(state = {}) {
+  if (isTopicPickerOpen(state)) return state.currentLocation || `choose a ${sourceModeNoun(state.sourceMode || 'paper')} topic`;
   return state.currentSection || state.currentLocation || `choose a ${sourceModeNoun(state.sourceMode || 'paper')} topic`;
 }
 
@@ -4484,7 +4485,7 @@ function renderTuiScreen(state, selected = 0) {
     boxLine(`${ansi.bold}${label}${ansi.reset} ${ansi.dim}${items.length ? `(${Math.min(selected + 1, items.length)}/${items.length})` : ''}${ansi.reset}`, width, ansi.green)
   ];
   if (state.tuiNotice) rows.push(...boxWrappedText(state.tuiNotice, width, ansi.green, ansi.amber));
-  else {
+  else if (!choosingTopic) {
     const pendingNotice = userFriendlyPendingNotice(state);
     if (pendingNotice) rows.push(...boxWrappedText(pendingNotice, width, ansi.green, ansi.dim));
   }
@@ -5213,6 +5214,14 @@ function shouldAutoGenerateInLaunch(args = {}) {
   if (args['no-agent'] || args.manual) return false;
   if (args.auto || args.generate || args.agent || process.env.PAPERMENTOR_AGENT_MOCK || process.env.PAPERMENTOR_AGENT_MOCK_FILE) return agentAutomationAvailable(args);
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && agentAutomationAvailable(args));
+}
+
+function startHereLaunchStatusLine(state = {}, args = {}, autoError = '') {
+  if (!state.startHerePending) return '- Start Here: ready';
+  const next = args['no-agent'] || args.manual
+    ? '- Next: Start Here is pending; rerun with generation enabled or continue in Codex/Claude.'
+    : '- Next: continue in Codex/Claude to finish Start Here automatically.';
+  return `${next}${autoError ? `\n- Automation note: ${autoError}` : ''}`;
 }
 
 function stripMarkdownFence(value) {
@@ -6998,7 +7007,7 @@ function launchSession(args) {
     console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
-${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${finalState.startHerePending ? `- Next: continue in Codex/Claude to finish Start Here automatically.${autoError ? `\n- Automation note: ${autoError}` : ''}` : '- Start Here: ready'}`);
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${startHereLaunchStatusLine(finalState, args, autoError)}`);
     return slug;
   }
   const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
@@ -7042,9 +7051,7 @@ console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}` : ''}`);
-  if (finalState.startHerePending) console.log('- Next: continue in Codex/Claude to finish Start Here automatically.');
-  else console.log('- Start Here: ready');
-  if (autoError) console.log(`- Automation note: ${autoError}`);
+  console.log(startHereLaunchStatusLine(finalState, args, autoError));
   if (finalState.representativeFigurePrompt) {
     console.log(`- Representative figure selection prompt: ${finalState.representativeFigurePrompt}`);
   }
