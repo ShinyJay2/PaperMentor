@@ -886,7 +886,7 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     const koreanHtml = readFileSync(join(koreanDir, 'index.html'), 'utf8');
     const koreanCards = readJson(join(koreanDir, 'cards.json'), { cards: [] });
     const koreanNotes = readFileSync(join(koreanDir, 'notes.md'), 'utf8');
-    for (const phrase of ['<html lang="ko">', 'Satoshi', 'Pretendard', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2', ':lang(ko)', 'word-break:keep-all']) {
+    for (const phrase of ['<html lang="ko"', 'Satoshi', 'Pretendard', 'assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2', ':lang(ko)', 'word-break:keep-all']) {
       if (!koreanHtml.includes(phrase)) failures.push(`Korean report should load/apply report typography: ${phrase}`);
     }
     for (const rel of ['assets/fonts/satoshi/Satoshi-400.woff2', 'assets/fonts/pretendard/PretendardVariable.woff2']) {

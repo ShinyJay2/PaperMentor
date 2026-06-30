@@ -65,6 +65,64 @@ function sourceModeNoun(mode) {
   return { paper: 'paper', slide: 'slide', url: 'web article' }[normalizeSourceMode(mode)] || 'paper';
 }
 
+const responseLanguageAliases = new Map([
+  ['ko', 'ko'], ['kr', 'ko'], ['kor', 'ko'], ['korean', 'ko'], ['한국어', 'ko'], ['한글', 'ko'],
+  ['en', 'en'], ['eng', 'en'], ['english', 'en'], ['영어', 'en'],
+  ['ja', 'ja'], ['jp', 'ja'], ['jpn', 'ja'], ['japanese', 'ja'], ['日本語', 'ja'], ['일본어', 'ja'],
+  ['ar', 'ar'], ['ara', 'ar'], ['arabic', 'ar'], ['العربية', 'ar'], ['아랍어', 'ar'],
+  ['zh', 'zh'], ['cn', 'zh'], ['chinese', 'zh'], ['中文', 'zh'], ['중국어', 'zh'],
+  ['zh-cn', 'zh-CN'], ['simplified-chinese', 'zh-CN'], ['简体中文', 'zh-CN'],
+  ['zh-tw', 'zh-TW'], ['traditional-chinese', 'zh-TW'], ['繁體中文', 'zh-TW'],
+  ['es', 'es'], ['spa', 'es'], ['spanish', 'es'], ['español', 'es'], ['스페인어', 'es'],
+  ['fr', 'fr'], ['fre', 'fr'], ['fra', 'fr'], ['french', 'fr'], ['français', 'fr'], ['프랑스어', 'fr'],
+  ['de', 'de'], ['ger', 'de'], ['deu', 'de'], ['german', 'de'], ['deutsch', 'de'], ['독일어', 'de'],
+  ['pt', 'pt'], ['por', 'pt'], ['portuguese', 'pt'], ['português', 'pt'], ['포르투갈어', 'pt'],
+  ['it', 'it'], ['ita', 'it'], ['italian', 'it'], ['italiano', 'it'], ['이탈리아어', 'it'],
+  ['ru', 'ru'], ['rus', 'ru'], ['russian', 'ru'], ['русский', 'ru'], ['러시아어', 'ru'],
+  ['hi', 'hi'], ['hin', 'hi'], ['hindi', 'hi'], ['हिन्दी', 'hi'], ['힌디어', 'hi'],
+  ['auto', 'auto'], ['source', 'auto'], ['detect', 'auto'], ['detected', 'auto']
+]);
+
+const responseLanguageNames = new Map([
+  ['ko', 'Korean'], ['en', 'English'], ['ja', 'Japanese'], ['ar', 'Arabic'], ['zh', 'Chinese'], ['zh-CN', 'Simplified Chinese'], ['zh-TW', 'Traditional Chinese'],
+  ['es', 'Spanish'], ['fr', 'French'], ['de', 'German'], ['pt', 'Portuguese'], ['it', 'Italian'], ['ru', 'Russian'], ['hi', 'Hindi']
+]);
+
+function normalizeResponseLanguage(value, fallback = 'auto') {
+  const rawOriginal = String(value || '').trim();
+  const raw = rawOriginal.toLowerCase();
+  if (!raw) return fallback;
+  if (responseLanguageAliases.has(raw)) return responseLanguageAliases.get(raw);
+  if (/^[a-z]{2,3}(?:-[a-z0-9]{2,8}){0,2}$/i.test(rawOriginal)) return rawOriginal;
+  return fallback;
+}
+
+function responseLanguageFromArgs(args = {}, fallback = 'auto') {
+  return normalizeResponseLanguage(
+    args.language || args.lang || args['response-language'] || args.responseLanguage || process.env.PAPERMENTOR_LANGUAGE,
+    fallback
+  );
+}
+
+function responseLanguageLabel(value) {
+  const lang = normalizeResponseLanguage(value);
+  if (lang === 'auto') return 'Auto';
+  return responseLanguageNames.get(lang) || lang;
+}
+
+function isRtlLanguage(value) {
+  return /^(ar|he|fa|ur|ps|sd)(?:-|$)/i.test(normalizeResponseLanguage(value));
+}
+
+function responseLanguageInstruction(state = {}) {
+  const lang = normalizeResponseLanguage(state.responseLanguage || 'auto');
+  if (lang === 'auto') return 'Use the user/request language as the main prose language for every user-facing output when known; otherwise match the source/excerpt language. Non-English output may keep equations, symbols, model names, and standard English technical terms/phrases in English where natural.';
+  const label = responseLanguageLabel(lang);
+  if (lang === 'ko') return 'Use Korean as the main prose language because the user requested Korean: reading guide, Start Here, section/action menus, and HTML blocks should read naturally in Korean, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural.';
+  if (lang === 'en') return 'Use English as the main prose language because the user requested English: reading guide, Start Here, section/action menus, and HTML blocks should read naturally in English.';
+  return `Use ${label} as the main prose language because the user requested it: reading guide, Start Here, section/action menus, and HTML blocks should read naturally in ${label}, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural.`;
+}
+
 const paperMentorRepoOwner = 'ShinyJay2';
 const paperMentorRepoName = 'PaperMentor';
 const paperMentorRepoSlug = `${paperMentorRepoOwner}/${paperMentorRepoName}`;
@@ -214,7 +272,7 @@ function argsModeFromSource(source) {
   return 'paper';
 }
 
-function defaultState({ title, authors = '', source, slug, sections = [], sourceMode = 'paper' }) {
+function defaultState({ title, authors = '', source, slug, sections = [], sourceMode = 'paper', responseLanguage = 'auto' }) {
   return {
     schema: 'papermentor.session.v1',
     title,
@@ -222,6 +280,7 @@ function defaultState({ title, authors = '', source, slug, sections = [], source
     source,
     slug,
     sourceMode: normalizeSourceMode(sourceMode),
+    responseLanguage: normalizeResponseLanguage(responseLanguage),
     createdAt: now(),
     updatedAt: now(),
     currentLocation: `${sourceModeLabel(sourceMode)} map`,
@@ -240,15 +299,17 @@ function defaultState({ title, authors = '', source, slug, sections = [], source
   };
 }
 
-function ensureSession({ title, authors = '', source, slug, sections = [], sourceMode }) {
+function ensureSession({ title, authors = '', source, slug, sections = [], sourceMode, responseLanguage = 'auto' }) {
   const dir = sessionDir(slug);
   mkdirSync(dir, { recursive: true });
   const state = existsSync(statePath(slug))
     ? readJson(statePath(slug), {})
-    : defaultState({ title, authors, source, slug, sections, sourceMode: sourceMode || argsModeFromSource(source) });
+    : defaultState({ title, authors, source, slug, sections, sourceMode: sourceMode || argsModeFromSource(source), responseLanguage });
   state.updatedAt = now();
   state.title = title || state.title;
   state.source = source || state.source;
+  const normalizedResponseLanguage = normalizeResponseLanguage(responseLanguage, state.responseLanguage || 'auto');
+  if (normalizedResponseLanguage !== 'auto' || !state.responseLanguage) state.responseLanguage = normalizedResponseLanguage;
   if (authors !== undefined) state.authors = authors || state.authors || '';
   const normalizedMode = normalizeSourceMode(sourceMode || argsModeFromSource(source) || state.sourceMode, state.sourceMode || 'paper');
   const modeChanged = state.sourceMode && normalizedMode !== state.sourceMode;
@@ -1054,11 +1115,22 @@ _Not built yet. Replace this with the real preliminary, written like a patient t
 List the prerequisites in order — calibrated to this ${noun}'s actual reader: skip the trivial basics they already know and focus on the non-trivial, paper-specific concepts, up to its notation and key equations. Do not write one long prose wall. Separate the needed background into short concept blocks grouped by meaning. Each block should teach one core concept, use a small example or equation when it helps, and connect the concept to this ${noun}'s actual notation, equation, figure, theorem, or claim. Do not force a fixed ladder, table, schema, or repeated labels. Follow prompts/prerequisite-analyzer.md.`;
 }
 
+function localizedReadingGuideTitle(lang = 'en') {
+  const normalized = normalizeResponseLanguage(lang);
+  if (normalized === 'ko') return '이 리딩룸 사용법';
+  if (normalized === 'ja') return 'このリーディングルームの使い方';
+  if (normalized === 'ar') return 'كيفية استخدام غرفة القراءة هذه';
+  if (normalized === 'zh' || normalized === 'zh-CN') return '如何使用这个阅读室';
+  if (normalized === 'zh-TW') return '如何使用這個閱讀室';
+  return 'How to use this reading room';
+}
+
 function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
   const normalized = normalizeSourceMode(sourceMode);
+  const requested = normalizeResponseLanguage(lang);
   const isSlide = normalized === 'slide';
   const isUrl = normalized === 'url';
-  if (lang === 'ko') {
+  if (requested === 'ko') {
     const nounKo = isSlide ? '슬라이드' : isUrl ? 'URL 글' : '논문';
     const sectionNounKo = isSlide ? '슬라이드' : isUrl ? '섹션' : '섹션';
     return `PaperMentor는 서로 연결된 두 화면으로 동작합니다: 이 리포트(HTML)와 CLI/TUI. 이 HTML을 열어둔 채 터미널로 돌아가 ${sectionNounKo}·수식·유도·의존성·질문 중 하나를 고르세요. 고른 동작 하나가 이 리포트에 잘 정리된 설명 블록 하나로 덧붙습니다.
@@ -1066,6 +1138,24 @@ function readingGuideBody({ slug, sourceMode, lang = 'en' }) {
 **새로고침 동작:** \`state.json\`이 바뀌면 HTML이 자동으로 새로고침을 시도합니다. 브라우저가 로컬 파일 폴링을 막으면, CLI 작업이 끝난 뒤 직접 새로고침하세요. PDF 내보내기는 스냅샷이므로 블록을 추가한 뒤 다시 내보내세요.
 
 **복귀 명령:** \`papermentor tui --session ${slug}\` — 대화형 ${nounKo} 내비게이터.`;
+  }
+  if (requested === 'ja') {
+    const nounJa = isSlide ? 'スライド' : isUrl ? 'URL記事' : '論文';
+    const sectionNounJa = isSlide ? 'スライド' : isUrl ? 'セクション' : 'セクション';
+    return `PaperMentorは、このHTMLレポートとCLI/TUIの2つの画面で動きます。このHTMLを開いたままターミナルに戻り、${sectionNounJa}・数式・derivation・dependency・質問のいずれかを選んでください。選んだ操作ごとに、説明ブロックがこのレポートへ追加されます。
+
+**更新:** \`state.json\` が変わるとHTMLは自動更新を試みます。ローカルファイルのポーリングがブラウザでブロックされる場合は、CLIの処理後に手動で再読み込みしてください。PDF exportはスナップショットなので、ブロック追加後に再度exportしてください。
+
+**戻るコマンド:** \`papermentor tui --session ${slug}\` — 対話型${nounJa}ナビゲータ。`;
+  }
+  if (requested === 'ar') {
+    const nounAr = isSlide ? 'الشرائح' : isUrl ? 'مقال URL' : 'الورقة';
+    const sectionNounAr = isSlide ? 'شريحة' : 'قسم';
+    return `يعمل PaperMentor عبر سطحين مترابطين: تقرير HTML هذا وواجهة CLI/TUI. أبقِ هذا التقرير مفتوحًا، ثم عُد إلى الطرفية واختر ${sectionNounAr} أو معادلة أو derivation أو dependency أو سؤالًا. كل اختيار يضيف كتلة شرح منظمة إلى هذا التقرير نفسه.
+
+**التحديث:** يحاول HTML إعادة التحميل تلقائيًا عندما يتغير \`state.json\`. إذا منع المتصفح مراقبة الملفات المحلية، فأعد التحميل يدويًا بعد انتهاء أمر CLI. تصدير PDF هو لقطة ثابتة، لذلك أعد التصدير بعد إضافة كتل جديدة.
+
+**أمر الرجوع:** \`papermentor tui --session ${slug}\` — متصفح تفاعلي لـ ${nounAr}.`;
   }
   const noun = sourceModeNoun(sourceMode);
   const sectionNoun = isSlide ? 'slide' : isUrl ? 'URL section' : 'section';
@@ -1082,7 +1172,7 @@ function localizeReadingGuide(card, lang, slug, sourceMode) {
   if (card.type !== 'reading-guide') return card;
   return {
     ...card,
-    title: lang === 'ko' ? '이 리딩룸 사용법' : 'How to use this reading room',
+    title: localizedReadingGuideTitle(lang),
     body: readingGuideBody({ slug, sourceMode, lang })
   };
 }
@@ -1094,7 +1184,7 @@ function addReadingGuideBlock({ slug, sourceMode, sections, args = {} }) {
     type: 'reading-guide',
     title: 'How to use this reading room',
     location: 'Reading guide',
-    body: readingGuideBody({ slug, sourceMode }),
+    body: readingGuideBody({ slug, sourceMode, lang: responseLanguageFromArgs(args) }),
     choices: sections.join('|'),
     quiet: true,
     noPath: true
@@ -1749,6 +1839,20 @@ function defaultSectionActions(_section) {
   return [];
 }
 
+function isAskAnythingAction(choice) {
+  const text = String(choice || '').trim();
+  return /^ask anything about\b/i.test(text) || /(?:질문|물어보기|물어봐|질의)/.test(text);
+}
+
+function askAnythingAction(section, language = 'auto') {
+  const scope = section || 'current topic';
+  const lang = normalizeResponseLanguage(language);
+  if (lang === 'ko') return `${scope}에 대해 질문하기`;
+  if (lang === 'ja') return `${scope}について質問する`;
+  if (lang === 'ar') return `اسأل عن ${scope}`;
+  return `Ask anything about ${scope}`;
+}
+
 function defaultModeItems(mode, section) {
   const scope = section || 'this section';
   const map = {
@@ -2372,21 +2476,53 @@ function equationLabel(number, body) {
 // reconstructs the missing narration, and explains how the slide builds on the
 // earlier ones. It tailors this menu on entry via `section --choices`.
 // See prompts/slide-navigator.md.
-function slideActionProfile(section, body) {
+function slideActionProfile(section, body, language = 'auto') {
   const title = String(section || "this slide");
+  const lang = normalizeResponseLanguage(language);
+  if (lang === 'ko') {
+    return [
+      `${title}의 강의자 설명 복원하기`,
+      `${title}의 그림과 시각 요소 읽기`,
+      `${title}의 수식 해석하기`,
+      `${title}가 이전 슬라이드와 어떻게 연결되는지 설명하기`,
+      `다음 슬라이드로 계속`,
+      askAnythingAction(title, language)
+    ];
+  }
+  if (lang === 'ja') {
+    return [
+      `${title}の講義ナレーションを復元する`,
+      `${title}の図とvisual elementsを読む`,
+      `${title}の数式を解釈する`,
+      `${title}が前のスライドとどうつながるか説明する`,
+      `次のスライドへ進む`,
+      askAnythingAction(title, language)
+    ];
+  }
+  if (lang === 'ar') {
+    return [
+      `أعد بناء شرح المحاضر لـ ${title}`,
+      `اقرأ الأشكال والعناصر البصرية في ${title}`,
+      `فسّر المعادلات في ${title}`,
+      `اشرح كيف يبني ${title} على الشرائح السابقة`,
+      `تابع إلى الشريحة التالية`,
+      askAnythingAction(title, language)
+    ];
+  }
   return [
     `Reconstruct the lecturer's narration for ${title}`,
     `Read the figure(s) and visual elements on ${title}`,
     `Decode the equations on ${title}`,
     `How ${title} builds on the earlier slides`,
     `Continue to the next slide`,
-    `Ask anything about ${title}`
+    askAnythingAction(title, language)
   ];
 }
 
-function actionProfileForSection(section, body, sourceMode = 'paper') {
+
+function actionProfileForSection(section, body, sourceMode = 'paper', language = 'auto') {
   const normalizedMode = normalizeSourceMode(sourceMode);
-  if (normalizedMode === 'slide') return slideActionProfile(section, body);
+  if (normalizedMode === 'slide') return slideActionProfile(section, body, language);
   // Paper mode ships a GENERIC menu only. Classifying a section's role and proposing
   // tailored, template-mapped actions is the model's job: on entry it reads the
   // section title+content, infers the role (weak position prior), and re-runs
@@ -2482,7 +2618,7 @@ function selectSection(args) {
   const section = raw || (index ? state.paperSections?.[index - 1] : '');
   if (!section) throw new Error('section requires --section <name> or --index <n>');
   const rawProvidedChoices = splitChoices(args.choices);
-  const providedChoices = rawProvidedChoices.length ? sanitizeSectionActions(rawProvidedChoices, section, { ensureAsk: true }) : [];
+  const providedChoices = rawProvidedChoices.length ? sanitizeSectionActions(rawProvidedChoices, section, { ensureAsk: true, language: state.responseLanguage }) : [];
   const key = sectionKey(section);
   if (providedChoices.length) {
     state.sectionActions = state.sectionActions || {};
@@ -2493,7 +2629,7 @@ function selectSection(args) {
   const existingActions = sanitizeSectionActions(state.sectionActions?.[key] || [], section);
   const actions = providedChoices.length
     ? providedChoices
-    : existingActions?.length ? existingActions : sectionMenuPendingChoices(section);
+    : existingActions?.length ? existingActions : sectionMenuPendingChoices(section, state.responseLanguage);
   state.currentSection = section;
   state.currentMode = '';
   state.detectedItems = [];
@@ -2832,14 +2968,27 @@ function containsKorean(value) {
   return /[\u3131-\u318e\uac00-\ud7a3]/.test(String(value || ''));
 }
 
+function containsJapanese(value) {
+  return /[\u3040-\u30ff]/.test(String(value || ''));
+}
+
+function containsArabic(value) {
+  return /[\u0600-\u06ff]/.test(String(value || ''));
+}
+
 function documentLanguage(state, cards) {
+  const requested = normalizeResponseLanguage(state?.responseLanguage || 'auto');
+  if (requested !== 'auto') return requested;
   const text = [
     state?.title,
     state?.authors,
     state?.source,
     ...(cards?.cards || []).flatMap((card) => [card.title, card.location, card.userQuestion, card.body, card.figure?.caption])
   ].join('\n');
-  return containsKorean(text) ? 'ko' : 'en';
+  if (containsKorean(text)) return 'ko';
+  if (containsJapanese(text)) return 'ja';
+  if (containsArabic(text)) return 'ar';
+  return 'en';
 }
 
 function statusIcon(status) {
@@ -2856,7 +3005,7 @@ function renderHtml(slug) {
   const cards = readJson(cardsPath(slug), { cards: [] });
   const lang = documentLanguage(state, cards);
   const html = `<!doctype html>
-<html lang="${escapeHtml(lang)}">
+<html lang="${escapeHtml(lang)}" dir="${isRtlLanguage(lang) ? 'rtl' : 'ltr'}">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -3098,6 +3247,8 @@ body {
   border:1px solid #d9d6cf;
   background:#f5f5f3;
   font-size:15px;
+  direction:ltr;
+  text-align:left;
 }
 .body {
   position:relative;
@@ -4335,7 +4486,7 @@ function shellQuote(value) {
   return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
 }
 
-function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false } = {}) {
+function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false, language = 'auto' } = {}) {
   const seen = new Set();
   const cleaned = [];
   for (const choice of choices) {
@@ -4348,15 +4499,34 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false 
     seen.add(key);
     cleaned.push(text);
   }
-  if (ensureAsk && section && !cleaned.some((choice) => /^ask anything about\b/i.test(choice))) cleaned.push(`Ask anything about ${section}`);
+  if (ensureAsk && section && !cleaned.some(isAskAnythingAction)) cleaned.push(askAnythingAction(section, language));
   return cleaned;
 }
 
-function sectionMenuPendingChoices(section) {
+function sectionMenuPendingChoices(section, language = 'auto') {
+  const lang = normalizeResponseLanguage(language);
+  if (lang === 'ko') {
+    return sanitizeSectionActions([
+      `여기서 배울 내용을 보여주기: ${section}`,
+      askAnythingAction(section, language)
+    ], section, { ensureAsk: true, language });
+  }
+  if (lang === 'ja') {
+    return sanitizeSectionActions([
+      `ここで学べる内容を表示: ${section}`,
+      askAnythingAction(section, language)
+    ], section, { ensureAsk: true, language });
+  }
+  if (lang === 'ar') {
+    return sanitizeSectionActions([
+      `اعرض ما يمكن تعلمه هنا: ${section}`,
+      askAnythingAction(section, language)
+    ], section, { ensureAsk: true, language });
+  }
   return sanitizeSectionActions([
     `Show what I can learn here: ${section}`,
-    `Ask anything about ${section}`
-  ], section, { ensureAsk: true });
+    askAnythingAction(section, language)
+  ], section, { ensureAsk: true, language });
 }
 
 function writeSectionMenuPrompt(state, section) {
@@ -4480,7 +4650,7 @@ function actionType(action, state = {}) {
   if (/visualize|draw|diagram|graph|landscape/.test(text)) return 'visualization';
   if (/recursive why|why chain|keep asking why|deeper why/.test(text)) return 'recursive-why';
   if (/final insight|one-sentence/.test(text)) return 'final-insight';
-  if (/confusion|diagnostic|ask anything|chat|answer question/.test(text)) return 'confusion';
+  if (/confusion|diagnostic|ask anything|chat|answer question/.test(text) || /질문|물어보기|물어봐|질의/.test(text)) return 'confusion';
   const modeType = actionTypeFromMode(state.currentMode, mode);
   if (modeType) return modeType;
   if (/derivation|trace|transition/.test(text)) return 'derivation';
@@ -5002,6 +5172,7 @@ function generatedBlockCacheKey(state, action, type, insight = {}) {
     v: 1,
     mode: normalizeSourceMode(state?.sourceMode || 'paper'),
     title: state?.title || '',
+    responseLanguage: normalizeResponseLanguage(state?.responseLanguage || 'auto'),
     section: state?.currentSection || state?.currentLocation || '',
     action,
     type,
@@ -5095,6 +5266,7 @@ Return ONLY a JSON array of 4-8 action strings for the selected section. No mark
 
 Selected source: ${state.title || '(untitled)'}
 Mode: ${sourceModeLabel(state.sourceMode)}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
 Section/slide: ${section}
 
 Content signals:
@@ -5111,19 +5283,21 @@ ${excerpt}
 \`\`\`
 
 Quality rules:
+- ${responseLanguageInstruction(state)}
+- Action strings should use the requested output language as the main prose language, while preserving natural English technical terms.
 - Actions must be specific to this excerpt, not generic labels.
 - For URL mode, actions should follow the article's actual claims, concepts, examples, code/math, diagrams, assumptions, or practical takeaways.
 - Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
 - Respect the selected range; wider context may be hinted only when the action says it is context.
-- Last item must be exactly: Ask anything about ${section}
+- Last item must be exactly: ${askAnythingAction(section, state.responseLanguage)}
 `;
 }
 
 function installGeneratedSectionMenu(state, section, args = {}) {
   const prompt = generatedSectionMenuPrompt(state, section);
   const response = runAgentCompletion(prompt, { ...args, agentTask: 'section-menu' });
-  const choices = sanitizeSectionActions(parseGeneratedChoices(response), section, { ensureAsk: true }).slice(0, 8);
-  if (!choices.length || choices.every((choice) => /^ask anything about\b/i.test(choice))) {
+  const choices = sanitizeSectionActions(parseGeneratedChoices(response), section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
+  if (!choices.length || choices.every(isAskAnythingAction)) {
     throw new Error('agent did not return usable section choices');
   }
   const key = sectionKey(section);
@@ -5168,6 +5342,7 @@ Return ONLY the Markdown body for the next HTML block. No preface, no code fence
 Selected action: ${action}
 Block type: ${type}
 Mode: ${sourceModeLabel(state.sourceMode)}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
 Title: ${state.title || '(untitled)'}
 Section/slide: ${state.currentSection || state.currentLocation || 'not selected'}
 
@@ -5188,7 +5363,7 @@ ${stageQualityRules(type)}
 
 Output rules:
 - Write production-quality teaching content, not a summary.
-- If the selected action or excerpt is Korean, write the explanation in Korean while preserving technical terms/equations.
+- ${responseLanguageInstruction(state)}
 - Respect the selected range. If you use earlier/later context, label it as context/preview.
 - Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
 - Show and explain non-trivial equations in LaTeX when they appear or when explicitly labeled as context.
@@ -5248,7 +5423,7 @@ function appendGeneratedActionBlock(state, action, args = {}) {
 
 
 function prefetchGeneratedActionBlock(state, action, args = {}) {
-  if (!action || /^ask anything about\b/i.test(action)) return readStateForSlug(state.slug) || state;
+  if (!action || isAskAnythingAction(action)) return readStateForSlug(state.slug) || state;
   const type = actionType(action, state);
   const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   const cacheKey = generatedBlockCacheKey(state, action, type, insight);
@@ -5273,7 +5448,7 @@ function prefetchGeneratedActionBlock(state, action, args = {}) {
 }
 
 function firstPrefetchableAction(choices = []) {
-  return (choices || []).find((choice) => choice && !/^ask anything about\b/i.test(choice) && !/^change topic/i.test(choice)) || '';
+  return (choices || []).find((choice) => choice && !isAskAnythingAction(choice) && !/^change topic/i.test(choice)) || '';
 }
 
 function shouldBackgroundPrefetch(args = {}) {
@@ -5358,6 +5533,7 @@ ${outputRule}
 
 Source title: ${state.title || '(untitled)'}
 Mode: ${sourceModeLabel(mode)}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
 Detected sections/topics:
 ${sectionMap}
 
@@ -5368,7 +5544,7 @@ ${context}
 
 Quality rules:
 - Write a real teaching introduction, not a scaffold and not a generic summary.
-- If the source context is Korean, write the Start Here block in Korean while preserving technical terms/equations.
+- ${responseLanguageInstruction(state)}
 - For URL mode, treat the source as a web article/tutorial/post: teach the thesis, key concepts, examples, claims, diagrams/code/math if present, and reading path; do not force paper-only theorem/figure structure.
 - Orient the reader to what this source is trying to teach, what the difficult objects are, and how to enter the first meaningful section/topic.
 - Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
@@ -5405,10 +5581,10 @@ Return ONLY valid JSON with this shape:
 {
   "startHereMarkdown": "finished Start Here Markdown body",
   "firstSection": ${JSON.stringify(firstSection)},
-  "sectionChoices": ["4-8 content-specific action strings ending with Ask anything about ${firstSection}"]
+  "sectionChoices": ["4-8 content-specific action strings ending with ${askAnythingAction(firstSection, state.responseLanguage)}"]
 }
 
-The Start Here quality rules above still apply. For sectionChoices, use only the selected first-section evidence below and make the actions content-adapted, not generic.
+The Start Here quality rules above still apply. For sectionChoices, use the requested output language as the main prose language while preserving natural English technical terms; use only the selected first-section evidence below, and make the actions content-adapted, not generic.
 
 First section/topic: ${firstSection}
 Concepts:
@@ -5424,10 +5600,11 @@ ${sectionExcerpt}
 \`\`\`
 
 Section choice rules:
+- Action strings should use the requested output language as the main prose language, while preserving natural English technical terms.
 - Actions must be specific to this excerpt, not generic labels.
 - For URL mode, actions should follow the article's actual claims, concepts, examples, code/math, diagrams, assumptions, or practical takeaways.
 - Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
-- Last item must be exactly: Ask anything about ${firstSection}
+- Last item must be exactly: ${askAnythingAction(firstSection, state.responseLanguage)}
 `;
 }
 
@@ -5471,9 +5648,9 @@ function parseLaunchBundleResponse(text, expectedSection) {
 }
 
 function installBundledSectionChoices(state, section, choices = []) {
-  const cleaned = sanitizeSectionActions(choices, section, { ensureAsk: true }).slice(0, 8);
+  const cleaned = sanitizeSectionActions(choices, section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
   if (!section) throw new Error('launch bundle cannot install choices without a section');
-  if (!cleaned.length || cleaned.every((choice) => /^ask anything about\b/i.test(choice))) throw new Error('launch bundle returned no usable section choices');
+  if (!cleaned.length || cleaned.every(isAskAnythingAction)) throw new Error('launch bundle returned no usable section choices');
   state.sectionActions = state.sectionActions || {};
   state.sectionActions[sectionKey(section)] = cleaned;
   state.launchBundledSection = section;
@@ -5569,7 +5746,7 @@ function applyTuiChoice(state, selected, options = {}) {
       if (options.autoAgent && agentAutomationAvailable(options)) {
         return installGeneratedSectionMenu(state, choice, options);
       }
-      state.nextChoices = sectionMenuPendingChoices(choice);
+      state.nextChoices = sectionMenuPendingChoices(choice, state.responseLanguage);
       writeSectionMenuPrompt(state, choice);
     }
   } else if (/^Change topic \/ section list$/i.test(choice)) {
@@ -5789,7 +5966,7 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
 function executePaletteItem(item, slug) {
   if (/continue/i.test(item)) return goLatestSession({ session: slug });
   if (/open current html/i.test(item)) return openLatestSession({ session: slug });
-  if (/ask/i.test(item)) return askCurrentSession({ session: slug, text: 'Ask anything about the current topic' });
+  if (/ask/i.test(item) || /질문/.test(item)) return askCurrentSession({ session: slug, text: askAnythingAction('the current topic', state.responseLanguage) });
   if (/quality check/i.test(item)) return runQualityQa({ session: slug });
   if (/recrop|crop/i.test(item)) return previewCrops({ session: slug, overwrite: true });
   if (/regenerate start/i.test(item)) return regenerateStartHere({ session: slug });
@@ -6307,6 +6484,26 @@ function openSessionHtml(slug) {
   return true;
 }
 
+function appleScriptString(value) {
+  return String(value || '').replace(/\\/g, '\\\\').replace(/"/g, '\"');
+}
+
+function openItermTui(slug) {
+  if (process.platform !== 'darwin') return false;
+  const osascript = commandPath('osascript');
+  if (!osascript) return false;
+  const command = `cd ${shellQuote(root)} && export PATH="$HOME/.local/bin:$PATH" && ${cliCommand()} tui --session ${shellQuote(slug)}`;
+  const script = `tell application "iTerm"
+  activate
+  create window with default profile
+  tell current session of current window
+    write text "${appleScriptString(command)}"
+  end tell
+end tell`;
+  const result = spawnSync(osascript, [], { input: script, encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'] });
+  return result.status === 0;
+}
+
 function extractLaunchTexts(source, args = {}) {
   let text = '';
   try {
@@ -6334,7 +6531,7 @@ function createLaunchShell({ input, source, args }) {
   const provisionalTitle = args.title || seed || 'PaperMentor reading session';
   const slug = args.slug || slugify(provisionalTitle);
   const sourceMode = explicitSourceMode(args.mode || args['source-mode'], argsModeFromSource(source || input));
-  const { state } = ensureSession({ title: provisionalTitle, authors: args.authors || args.author || '', source, slug, sections: [], sourceMode });
+  const { state } = ensureSession({ title: provisionalTitle, authors: args.authors || args.author || '', source, slug, sections: [], sourceMode, responseLanguage: responseLanguageFromArgs(args) });
   state.currentLocation = `${sourceModeLabel(sourceMode)} launch`;
   state.currentFocus = `Preparing the HTML-first reading room for this ${sourceModeNoun(sourceMode)}.`;
   state.nextChoices = [`Detect ${sourceModeNoun(sourceMode)} sections`, 'Open the HTML reading room', 'Ask a question'];
@@ -6357,13 +6554,13 @@ function updateLaunchNavigation({ slug, source, args, text }) {
   const authors = args.authors || args.author || metadata.authors || state?.authors || '';
   const blocks = text ? extractSourceBlocks(text, [], sourceMode) : [];
   const sections = blocks.map((block) => block.title).slice(0, 60);
-  const ensured = ensureSession({ title, authors, source, slug, sections, sourceMode });
+  const ensured = ensureSession({ title, authors, source, slug, sections, sourceMode, responseLanguage: responseLanguageFromArgs(args, state?.responseLanguage || 'auto') });
   const nextState = ensured.state;
   nextState.sectionActions = {};
   nextState.sectionInsights = {};
   for (const block of blocks) {
     const key = sectionKey(block.title);
-    nextState.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode);
+    nextState.sectionActions[key] = actionProfileForSection(block.title, block.body, sourceMode, nextState.responseLanguage);
     nextState.sectionInsights[key] = buildSectionInsight(block);
   }
   nextState.paperSections = sections;
@@ -6613,6 +6810,7 @@ function launchSession(args) {
     }
     renderHtml(slug);
     if (args.open) openSessionHtml(slug);
+    if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
     const finalState = readJson(statePath(slug), pendingState);
     printConsole(finalState);
     console.log(`\nLaunch complete:
@@ -6649,6 +6847,7 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure: null });
   renderHtml(slug);
   if (args.open) openSessionHtml(slug);
+  if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
   const finalState = readJson(statePath(slug), state);
   printConsole(finalState);
 console.log(`\nLaunch complete:
@@ -6684,7 +6883,7 @@ User commands:
 Also available as: papermentor
 
 Advanced/internal commands still exist for agents and scripts:
-  papermentor launch <file-or-url> [--open] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--iterm] [--language ko|en|auto] [--slug <slug>]
   papermentor help --advanced
 `);
     return;
@@ -6692,7 +6891,7 @@ Advanced/internal commands still exist for agents and scripts:
   console.log(`PaperMentor advanced/internal commands
 
 Usage:
-  papermentor launch <file-or-url> [--open] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--iterm] [--language ko|en|auto] [--slug <slug>]
   papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide|url] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
   papermentor analyze --session <slug> --paper-text-file source.txt
   papermentor tui --session <slug>
@@ -6762,7 +6961,7 @@ try {
     const sections = splitChoices(args.sections || '');
     const modeHint = argsModeFromSource(`${source} ${title}`);
     const sourceMode = explicitSourceMode(args.mode || args['source-mode'] || args.sourceMode, modeHint);
-    const { state, cards } = ensureSession({ title, authors, source, slug, sections, sourceMode });
+    const { state, cards } = ensureSession({ title, authors, source, slug, sections, sourceMode, responseLanguage: responseLanguageFromArgs(args) });
     const hasStartHereBody = Boolean(args.body || args['body-file'] || args['figure-file'] || args['figure-url'] || args.figure || args['image-file'] || args.image || args.latex);
     if (hasStartHereBody) {
       addCard({
