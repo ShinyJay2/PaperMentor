@@ -4421,6 +4421,33 @@ function tuiMenuItems(state) {
   return items;
 }
 
+function shouldEnterLaunchTui(args = {}) {
+  return Boolean(args.tui || args.interactive || args['live-tui'] || args.codex || process.env.PAPERMENTOR_LAUNCH_TUI);
+}
+
+function shouldShowTuiSnapshot(args = {}) {
+  return Boolean(args['show-tui'] || args.snapshot || args.demo || process.env.PAPERMENTOR_CODEX_TUI);
+}
+
+function printTuiSnapshot(state, selected = 0) {
+  console.log('');
+  console.log(renderTuiScreen(state, selected));
+}
+
+function enterLaunchTui(slug, args = {}) {
+  const state = readStateForSlug(slug);
+  const html = `.papermentor/sessions/${slug}/index.html`;
+  console.log(`\nLaunch complete — entering PaperMentor TUI in this terminal.`);
+  console.log(`HTML: ${html}`);
+  console.log(`Keys: ↑/↓ move · Enter select · Ctrl-C quit`);
+  if (!process.stdin.isTTY || !process.stdout.isTTY) {
+    console.log('\nThis shell is not an interactive TTY, so PaperMentor rendered a snapshot instead of capturing arrow keys. Run the same command in an interactive terminal, or run:');
+    console.log(`  ${cliCommand()} tui --session ${slug}`);
+  }
+  runTui({ ...args, session: slug });
+  return state;
+}
+
 function renderTuiScreen(state, selected = 0) {
   const width = terminalBoxWidth(96);
   const items = tuiMenuItems(state);
@@ -6812,7 +6839,12 @@ function launchSession(args) {
     if (args.open) openSessionHtml(slug);
     if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
     const finalState = readJson(statePath(slug), pendingState);
-    printConsole(finalState);
+    if (shouldEnterLaunchTui(args)) {
+      enterLaunchTui(slug, args);
+      return slug;
+    }
+    if (shouldShowTuiSnapshot(args)) printTuiSnapshot(finalState);
+    else printConsole(finalState);
     console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
@@ -6849,7 +6881,12 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   if (args.open) openSessionHtml(slug);
   if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
   const finalState = readJson(statePath(slug), state);
-  printConsole(finalState);
+  if (shouldEnterLaunchTui(args)) {
+    enterLaunchTui(slug, args);
+    return slug;
+  }
+  if (shouldShowTuiSnapshot(args)) printTuiSnapshot(finalState);
+  else printConsole(finalState);
 console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
@@ -6883,7 +6920,7 @@ User commands:
 Also available as: papermentor
 
 Advanced/internal commands still exist for agents and scripts:
-  papermentor launch <file-or-url> [--open] [--iterm] [--language ko|en|auto] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--tui|--interactive|--codex] [--show-tui] [--language <code>] [--slug <slug>]
   papermentor help --advanced
 `);
     return;
@@ -6891,7 +6928,7 @@ Advanced/internal commands still exist for agents and scripts:
   console.log(`PaperMentor advanced/internal commands
 
 Usage:
-  papermentor launch <file-or-url> [--open] [--iterm] [--language ko|en|auto] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--tui|--interactive|--codex] [--show-tui] [--language <code>] [--slug <slug>]
   papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide|url] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
   papermentor analyze --session <slug> --paper-text-file source.txt
   papermentor tui --session <slug>
