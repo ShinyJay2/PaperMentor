@@ -37,6 +37,13 @@ For every non-trivial equation in paper, slide, and URL modes, do more than defi
 
 Example pattern, not a fixed domain rule: for $\|\hat{o}_t-o_t\|_2^2$, do not stop at "$\hat{o}_t$ is predicted observation and $o_t$ is observed observation." Also say that this term penalizes the distance between reconstructed/predicted observation and actual observation, so minimizing it improves reconstruction fidelity at time $t$. Apply this same term-by-term purpose reading to any operation actually present: losses, norms, expectations, indicators, KL terms, constraints, weights, sums, products, matrix terms, probabilities, gradients, bounds, or slide equations.
 
+
+### Codex chat inline mode
+
+When PaperMentor is invoked from a Codex chat, the chat itself becomes the PaperMentor reading console. Do not tell the user to look for a hidden shell, external iTerm, or background TUI unless they explicitly ask for an external terminal. After creating or updating the reading room, render an inline PaperMentor menu directly in the assistant message: current room title, HTML link/path, current topic, and numbered choices. Treat the user's next natural-language reply or number as the menu selection, run the corresponding PaperMentor action, append the generated block to HTML, and then render the next inline menu.
+
+Use shell TUI commands only as an implementation detail or optional evidence. The user-facing surface inside Codex is the conversation: concise menu, selected action, HTML update evidence, next choices.
+
 ### HTML-first reading room rule
 
 Language is part of the launch contract. If the user's PaperMentor request is in a specific language, launch/generate with `--language <code>` when known (`ko`, `en`, `ja`, `ar`, `zh`, etc.) and make the reading guide, Start Here, section menus, and appended HTML blocks use that language as the main prose language while preserving equations, symbols, model names, and natural English technical terms/phrases. If the language is genuinely unknown, leave it as auto and match the source.
