@@ -44,6 +44,8 @@ When PaperMentor is invoked from a Codex chat, the chat itself becomes the Paper
 
 Use shell TUI commands only as an implementation detail or optional evidence. The user-facing surface inside Codex is the conversation: concise menu, selected action, HTML update evidence, next choices.
 
+Inline console style: render the Codex-chat PaperMentor menu as a polished green bordered console, visually close to the terminal TUI. Use Unicode box borders (`╭─╮`, `│`, `╰─╯`), green accents/emojis where Markdown color is unavailable, clear numbered choices, and compact room metadata. Do not fall back to a plain bullet list unless the user explicitly asks for plain text.
+
 ### HTML-first reading room rule
 
 Language is part of the launch contract. If the user's PaperMentor request is in a specific language, launch/generate with `--language <code>` when known (`ko`, `en`, `ja`, `ar`, `zh`, etc.) and make the reading guide, Start Here, section menus, and appended HTML blocks use that language as the main prose language while preserving equations, symbols, model names, and natural English technical terms/phrases. If the language is genuinely unknown, leave it as auto and match the source.
