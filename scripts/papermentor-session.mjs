@@ -116,11 +116,11 @@ function isRtlLanguage(value) {
 
 function responseLanguageInstruction(state = {}) {
   const lang = normalizeResponseLanguage(state.responseLanguage || 'auto');
-  if (lang === 'auto') return 'Use the user/request language as the main prose language for every user-facing output when known; otherwise match the source/excerpt language. Non-English output may keep equations, symbols, model names, and standard English technical terms/phrases in English where natural.';
+  if (lang === 'auto') return 'Use the user/request language as the main prose language for every user-facing output when known; otherwise match the source/excerpt language. Non-English output may keep equations, symbols, model names, and standard English technical terms/phrases in English where natural. If the requested/user language is not English, first construct the same high-quality answer you would write in English, then translate/localize that complete structure without simplifying, shortening, dropping equations, or losing rigor.';
   const label = responseLanguageLabel(lang);
-  if (lang === 'ko') return 'Use Korean as the main prose language because the user requested Korean, but keep the same teaching depth and Markdown structure as the English output. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in Korean, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only Korean paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, and step-by-step derivations.';
+  if (lang === 'ko') return 'Use Korean as the main prose language because the user requested Korean. Internally draft the same high-quality answer you would write in English, then translate/localize the full structure into Korean without simplifying, shortening, dropping equations, or losing rigor. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in Korean, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only Korean paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, term-by-term purpose explanations, and step-by-step derivations.';
   if (lang === 'en') return 'Use English as the main prose language because the user requested English: reading guide, Start Here, section/action menus, and HTML blocks should read naturally in English, with full Markdown structure and displayed LaTeX for equations.';
-  return `Use ${label} as the main prose language because the user requested it, but keep the same teaching depth and Markdown structure as the English output. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in ${label}, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, and step-by-step derivations.`;
+  return `Use ${label} as the main prose language because the user requested it. Internally draft the same high-quality answer you would write in English, then translate/localize the full structure into ${label} without simplifying, shortening, dropping equations, or losing rigor. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in ${label}, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, and step-by-step derivations.`;
 }
 
 const paperMentorRepoOwner = 'ShinyJay2';
@@ -926,16 +926,26 @@ function representativeFigureExplanation({ sourceMode, text }) {
   ].join('\n');
 }
 
-function appendFigureFallbackNote(body, reason) {
+function appendFigureFallbackNote(body, reason, options = {}) {
   const text = String(body || '');
-  if (/No representative figure attached|could not auto-attach|no figure|not present/i.test(text)) return text;
-  const note = [
-    '## Representative figure',
-    '',
-    `No representative figure attached: ${reason}`,
-    '',
-    'Use the crop preview to attach a real method/system figure if the source has one. Do not treat a full page, result plot, or placeholder as the representative method figure.'
-  ].join('\n');
+  if (/No representative figure attached|대표 figure 없음|could not auto-attach|no figure|not present/i.test(text)) return text;
+  const lang = normalizeResponseLanguage(options.responseLanguage || options.language || 'auto');
+  const ko = lang === 'ko' || (!lang || lang === 'auto') && containsKorean(text);
+  const note = ko
+    ? [
+      '## 대표 figure 없음',
+      '',
+      `자동으로 붙일 수 있는 대표 figure crop을 찾지 못했습니다: ${reason}`,
+      '',
+      '전체 페이지, 실험 결과 plot, placeholder를 대표 method figure처럼 붙이지 않습니다. 실제 method/system figure가 있으면 crop preview에서 정확한 영역을 지정해 붙입니다.'
+    ].join('\n')
+    : [
+      '## Representative figure',
+      '',
+      `No representative figure attached: ${reason}`,
+      '',
+      'Use the crop preview to attach a real method/system figure if the source has one. Do not treat a full page, result plot, or placeholder as the representative method figure.'
+    ].join('\n');
   if (/##\s+Representative figure explanation/i.test(text)) {
     return text.replace(/##\s+Representative figure explanation[\s\S]*?(?=\n##\s+Preliminary|\n##\s+Topic timeline map|$)/i, `${note}\n`);
   }
@@ -1081,38 +1091,53 @@ function writeSlideStartHerePrompt(state, sections = []) {
   return prompt;
 }
 
-function launchStartBody({ sourceMode, text, sections = [] }) {
-  const noun = sourceModeNoun(sourceMode);
+function pendingStartHereBody({ sourceMode, sections = [], responseLanguage = 'auto' }) {
   const normalizedMode = normalizeSourceMode(sourceMode);
-  if (normalizedMode === 'slide') {
-    return `## One-sentence orientation
+  const lang = normalizeResponseLanguage(responseLanguage);
+  const isKo = lang === 'ko';
+  const nounKo = normalizedMode === 'slide' ? '강의자료' : normalizedMode === 'url' ? 'URL 글' : '논문';
+  const nounEn = normalizedMode === 'slide' ? 'lecture slides' : normalizedMode === 'url' ? 'URL source' : 'paper';
+  const topicPreview = (sections || []).slice(0, 6).filter(Boolean);
+  if (isKo) {
+    return `## Start Here 준비 중
 
-_Not written yet. Replace this with exactly one sentence stating what these slides teach or argue: name the topic, the learner's before/after state, and the central mechanism or timeline._
+PaperMentor가 이 ${nounKo}${nounKo.endsWith('문') || nounKo.endsWith('글') ? '을' : '를'} 읽고 첫 안내 블록을 생성하는 중입니다. 생성이 완료되면 이 자리에 한 문장 orientation, 대표 figure/visual 읽기(있을 때), 그리고 필요한 preliminary가 한국어로 들어갑니다.
 
-${slideTopicTimelineScaffold(sections)}
+${topicPreview.length ? `### 감지한 읽기 순서
 
-${preliminaryLadderScaffold(sourceMode)}
-`;
+${topicPreview.map((item, index) => `${index + 1}. ${item}`).join('\n')}
+
+` : ''}### 다음 단계
+
+CLI에서 섹션/토픽을 선택하면 해당 범위의 설명 블록이 HTML에 추가됩니다. Codex/Claude provider가 연결되어 있지 않으면 HTML은 변경되지 않고, 화면에 연결 필요 안내가 표시됩니다.`;
   }
-  // Launch ships only scaffolds. Every source-derived explanation below — the
-  // one-sentence model, the figure reading, and the preliminary ladder — must be
-  // written by the model after reading the source. The script never synthesises this
-  // content from the text; that is exactly the work the prompt/skill owns.
-  return `## One-sentence orientation
+  return `## Start Here pending
 
-_Not written yet. Replace this with exactly one sentence stating what this ${noun} does or claims: name the problem, the object it transforms/predicts/proves, and the main idea. Write it from the source, not from priors._
+PaperMentor is reading this ${nounEn} and preparing the first guide block. When generation finishes, this spot will contain the one-sentence orientation, representative figure/visual reading when available, and the prerequisite ladder in the requested language.
 
-${normalizedMode === 'url' ? '' : `${representativeFigureExplanation({ sourceMode, text })}\n\n`}${preliminaryLadderScaffold(sourceMode)}
-`;
+${topicPreview.length ? `### Detected reading order
+
+${topicPreview.map((item, index) => `${index + 1}. ${item}`).join('\n')}
+
+` : ''}### Next step
+
+Choose a section/topic in the CLI to add a focused explanation block to this HTML room. If no Codex/Claude provider is connected, the CLI will say that HTML was not changed.`;
+}
+
+function isStartHerePendingBody(body = '') {
+  const text = String(body || '');
+  return /Not built yet|Not written yet|Start Here pending|Start Here 준비 중|PaperMentor가 .*첫 안내 블록을 생성하는 중|PaperMentor is reading this .*preparing the first guide block/i.test(text);
+}
+
+function launchStartBody({ sourceMode, text, sections = [], responseLanguage = 'auto' }) {
+  return pendingStartHereBody({ sourceMode, sections, responseLanguage });
 }
 
 function preliminaryLadderScaffold(sourceMode) {
   const noun = sourceModeNoun(sourceMode);
   return `## Preliminary
 
-_Not built yet. Replace this with the real preliminary, written like a patient tutor — not a fixed form._
-
-List the prerequisites in order — calibrated to this ${noun}'s actual reader: skip the trivial basics they already know and focus on the non-trivial, paper-specific concepts, up to its notation and key equations. Do not write one long prose wall. Separate the needed background into short concept blocks grouped by meaning. Each block should teach one core concept, use a small example or equation when it helps, and connect the concept to this ${noun}'s actual notation, equation, figure, theorem, or claim. Do not force a fixed ladder, table, schema, or repeated labels. Follow prompts/prerequisite-analyzer.md.`;
+PaperMentor is preparing the prerequisite ladder for this ${noun}.`;
 }
 
 function localizedReadingGuideTitle(lang = 'en') {
@@ -2419,7 +2444,7 @@ function detectDefinitions(text) {
 
 function isVisualRepairRequest(text) {
   const value = String(text || '').toLowerCase();
-  return /(diagram|visuali[sz]e|draw|flow|pipeline|graph|map|landscape|structure|how.*connect|connect.*how|dependency|relationship|big picture|overall flow)/i.test(value)
+  return /(diagram|visuali[sz]e|draw|flow\s*chart|pipeline\s*diagram|concept\s*map|mind\s*map|dependency\s*graph|landscape|how.*connect|connect.*how|dependency|relationship|big picture|overall flow)/i.test(value)
     || /(그림|다이어그램|시각화|구조|흐름|관계도|연결|큰\s*그림|전체\s*흐름|의존성|파이프라인)/.test(value);
 }
 
@@ -2874,11 +2899,11 @@ function addCard(args) {
     ? cards.cards.findIndex((existing) => existing.type === type)
     : -1;
   const existingSingleton = existingIndex >= 0 ? cards.cards[existingIndex] : null;
-  const incomingIsScaffold = /Not built yet|Not written yet/.test(body);
+  const incomingIsScaffold = isStartHerePendingBody(body);
   // A re-launch ships the scaffold again; never let it clobber an already-filled
   // Start Here, so re-running the same source keeps the reader's content.
   if (type === 'start-here' && existingSingleton && incomingIsScaffold
-    && !/Not built yet|Not written yet/.test(existingSingleton.body || '')) {
+    && !isStartHerePendingBody(existingSingleton.body || '')) {
     return existingSingleton;
   }
   const cardId = args.id
@@ -3719,14 +3744,17 @@ function splitFigureExplanationSection(markdown) {
   const body = [];
   const figure = [];
   let inFigure = false;
+  let figureHeadingLevel = 0;
   for (const line of lines) {
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
+      const level = heading[1].length;
       if (isFigureExplanationHeading(heading[2])) {
         inFigure = true;
+        figureHeadingLevel = level;
         continue;
       }
-      if (inFigure) inFigure = false;
+      if (inFigure && level <= figureHeadingLevel) inFigure = false;
     }
     if (inFigure) figure.push(line);
     else body.push(line);
@@ -3901,6 +3929,7 @@ function figureExplanationMarkdown(card) {
   if (observe) parts.push(`- **${labels.observe}:** ${sentence(observe)}`);
   if (supports) parts.push(`- **${labels.supports}:** ${sentence(supports)}`);
   if (parts.length) return parts.join('\n');
+  if (section.trim()) return section.trim();
   return semanticCaption;
 }
 
@@ -4372,6 +4401,23 @@ function userFriendlyPendingNotice(state = {}) {
   return 'PaperMentor is preparing an HTML explanation block. The next generated block will be added to the reading room.';
 }
 
+function providerUnavailableNotice(state = {}) {
+  const lang = normalizeResponseLanguage(state.responseLanguage || 'auto');
+  if (lang === 'ko') {
+    return 'AI provider가 연결되지 않아 HTML block을 생성하지 못했습니다. Codex/Claude 안에서 실행하거나 PAPERMENTOR_AGENT=codex 또는 claude로 다시 실행하세요. HTML은 변경되지 않았습니다.';
+  }
+  return 'No AI provider is connected, so PaperMentor did not change the HTML. Run inside Codex/Claude or set PAPERMENTOR_AGENT=codex/claude to generate the block automatically.';
+}
+
+function markProviderUnavailable(state, choice = '') {
+  clearPendingPrompt(state);
+  delete state.sectionMenuPending;
+  state.pendingProvider = true;
+  state.currentFocus = choice || state.currentFocus || 'AI provider required';
+  state.tuiNotice = providerUnavailableNotice(state);
+  return state;
+}
+
 function roomTopicLabel(state = {}) {
   if (isTopicPickerOpen(state)) return state.currentLocation || `choose a ${sourceModeNoun(state.sourceMode || 'paper')} topic`;
   return state.currentSection || state.currentLocation || `choose a ${sourceModeNoun(state.sourceMode || 'paper')} topic`;
@@ -4488,6 +4534,7 @@ function renderTuiScreen(state, selected = 0) {
   else if (!choosingTopic) {
     const pendingNotice = userFriendlyPendingNotice(state);
     if (pendingNotice) rows.push(...boxWrappedText(pendingNotice, width, ansi.green, ansi.dim));
+    else if (state.figureReadingPending) rows.push(...boxWrappedText('Representative figure crop is attached; visual reading is still pending.', width, ansi.green, ansi.dim));
   }
   const visibleItems = items.length ? items : ['Show what I can learn here'];
   const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
@@ -4863,9 +4910,9 @@ function evaluateCardQuality(card) {
   const result = { id: card.id, type, title: card.title, score: 0, maxScore: 0, issues: [] };
   addQualityCheck(result, plain.length >= 420, 12, 'body is too short for a production teaching block');
   addQualityCheck(result, !/Not read yet|Not built yet|Not written yet|placeholder|TODO/i.test(body), 10, 'body still contains scaffold/placeholder text');
-  addQualityCheck(result, includesAny(body, [/checkpoint/i, /reconstruct/i, /resume point/i, /what.*now.*able/i]), 8, 'missing reconstruction/resume checkpoint');
-  addQualityCheck(result, includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/]), 8, 'missing LaTeX/math anchor where paper teaching usually needs notation');
-  addQualityCheck(result, includesAny(body, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /line\s+\d+/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
+  addQualityCheck(result, includesAny(body, [/checkpoint/i, /reconstruct/i, /resume point/i, /what.*now.*able/i, /복원 체크포인트|다시 설명|스스로 .*말|이제 .*할 수|이어서 읽/i]), 8, 'missing reconstruction/resume checkpoint');
+  addQualityCheck(result, includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/, /\|[^\n]*\|[^\n]*\n\|[-:| ]+\|[\s\S]*?\d+(?:\.\d+)?/, /\b\d+(?:\.\d+)?%?\b[\s\S]{0,80}\b(?:error|IOU|probability|threshold|score|metric|확률|지표|오류|점수)\b/i]), 8, 'missing LaTeX/math anchor where paper teaching usually needs notation');
+  addQualityCheck(result, includesAny(body, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /Table\s+\d+/i, /line\s+\d+/i, /selected excerpt|selected range|source excerpt/i, /그림\s*\d+|표\s*\d+|수식\s*\(?\d+|선택된\s*(excerpt|범위)|선택\s*범위/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
   const mathHeavyType = ['equation', 'derivation', 'proof', 'method', 'slide-explanation', 'slide-transition', 'missing-narration'].includes(type);
   const hasAnyMath = includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/]);
   const hasDisplayMath = includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/]);
@@ -4876,9 +4923,9 @@ function evaluateCardQuality(card) {
 
   const typeChecks = {
     'start-here': [
-      [/One-sentence orientation|One-sentence/i, 8, 'Start Here should include one-sentence orientation'],
-      [/Preliminary/i, 8, 'Start Here should include Preliminary'],
-      [/Preliminary/i, 6, 'Start Here should include a readable Preliminary section']
+      [/One-sentence orientation|One-sentence|이 논문은|이 글은|이 강의자료는|핵심 문제는/i, 8, 'Start Here should include one-sentence orientation'],
+      [/Preliminary|사전 지식|먼저 알아야|배경/i, 8, 'Start Here should include Preliminary'],
+      [/Preliminary|사전 지식|먼저 알아야|배경/i, 6, 'Start Here should include a readable Preliminary section']
     ],
     prerequisite: [
       [/concept|background|prerequisite|notation|equation|symbol|claim|theorem|figure/i, 10, 'prerequisites should be separated into meaningful concept/background blocks'],
@@ -4917,9 +4964,9 @@ function evaluateCardQuality(card) {
       [/Proof coverage|Coverage audit|Completeness audit|compression audit|compressed|omitted|every proof line|full formal proof/i, 10, 'proof block should state whether it covers every proof line or compresses/omits repeated algebra']
     ],
     confusion: [
-      [/Direct answer/i, 10, 'confusion block should answer directly'],
-      [/Missing dependency/i, 10, 'confusion block should name missing dependency'],
-      [/Reconnection|Resume point|Paused location/i, 10, 'confusion block should reconnect and resume']
+      [/Direct answer|직접 답|핵심 답|핵심 구분|막힌 지점|막힌 개념|질문에 바로 답하면|원인은|답은/i, 10, 'confusion block should answer directly'],
+      [/Missing dependency|missing dependency|필요한 빠진 의존성|빠진 의존성|막힌 개념|필요한 최소|먼저 알아야|막힌 이유|헷갈린 이유/i, 10, 'confusion block should name missing dependency'],
+      [/Reconnection|Resume point|Paused location|복원 체크포인트|다시 연결|이어서 읽|선택 범위/i, 10, 'confusion block should reconnect and resume']
     ],
     'recursive-why': [
       [/Layer|Why question|Root dependency/i, 12, 'recursive why should expose why layers and root dependency'],
@@ -4941,7 +4988,7 @@ function evaluateCardQuality(card) {
     addQualityCheck(result, pattern.test(body), points, issue);
   }
   if (card.figure) {
-    addQualityCheck(result, /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports/i.test(body), 12, 'figure block should contain the fixed element-by-element figure reading schema');
+    addQualityCheck(result, /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports|그림|figure|contracting path|expanding path|skip connection|feature map|arrow|box|채널|해상도|x-y-size|segmentation map/i.test(body), 12, 'figure block should read the actual visual elements, numbers, paths, or symbols');
   }
   result.score = result.maxScore ? Math.round((result.score / result.maxScore) * 100) : 0;
   result.score = Math.max(0, Math.min(100, result.score));
@@ -5217,6 +5264,7 @@ function shouldAutoGenerateInLaunch(args = {}) {
 }
 
 function startHereLaunchStatusLine(state = {}, args = {}, autoError = '') {
+  if (!state.startHerePending && state.figureReadingPending) return '- Start Here: ready; representative figure crop attached, visual reading pending';
   if (!state.startHerePending) return '- Start Here: ready';
   const next = args['no-agent'] || args.manual
     ? '- Next: Start Here is pending; rerun with generation enabled or continue in Codex/Claude.'
@@ -5397,6 +5445,7 @@ function installGeneratedSectionMenu(state, section, args = {}) {
   state.currentSection = section;
   state.currentMode = '';
   state.currentLocation = section;
+  delete state.pendingProvider;
   state.currentFocus = `Section choices ready: ${section}`;
   state.selectedAction = '';
   state.lastChoiceKind = 'section-menu';
@@ -5455,6 +5504,7 @@ ${stageQualityRules(type)}
 Output rules:
 - Write production-quality teaching content, not a summary.
 - ${responseLanguageInstruction(state)}
+- If the requested output language is not English, preserve the same structure, equation display, term-purpose reading, and derivation detail that the English answer would have; translate/localize, do not simplify.
 - Respect the selected range. If you use earlier/later context, label it as context/preview.
 - Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
 - Show and explain non-trivial equations in LaTeX as separate display LaTeX blocks using $$...$$ or \\[...\\] when they appear or when explicitly labeled as context; never downgrade math-heavy non-English output into prose-only explanation.
@@ -5502,6 +5552,7 @@ function appendGeneratedActionBlock(state, action, args = {}) {
       createdAt: now()
     };
   }
+  delete updated.pendingProvider;
   updated.currentFocus = `Added block: ${action}`;
   updated.selectedAction = action;
   updated.lastChoiceKind = 'action';
@@ -5587,7 +5638,7 @@ function replaceStartHereBody(slug, body) {
     };
     writeJson(cardsPath(slug), cards);
     state.startHerePending = false;
-    state.figureReadingPending = false;
+    if (splitFigureExplanationSection(body).figure) state.figureReadingPending = false;
     clearPendingPrompt(state);
     state.updatedAt = now();
     writeJson(statePath(slug), state);
@@ -5636,11 +5687,13 @@ ${context}
 Quality rules:
 - Write a real teaching introduction, not a scaffold and not a generic summary.
 - ${responseLanguageInstruction(state)}
+- If the requested output language is not English, preserve the same structure, equation display, term-purpose reading, and derivation detail that the English answer would have; translate/localize, do not simplify.
 - For URL mode, treat the source as a web article/tutorial/post: teach the thesis, key concepts, examples, claims, diagrams/code/math if present, and reading path; do not force paper-only theorem/figure structure.
 - Orient the reader to what this source is trying to teach, what the difficult objects are, and how to enter the first meaningful section/topic.
 - Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
 - Include a visible \`## Preliminary\` heading. Under it, do not write one long prose wall: separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
 - Do not force a fixed table, schema, or repeated labels. Keep the structure natural to the source.
+- End with a short reconstruction checkpoint: what the reader should now be able to explain before choosing the first section/topic.
 `;
 }
 
@@ -5700,14 +5753,27 @@ Section choice rules:
 }
 
 
+function parseProviderJson(text) {
+  try {
+    return JSON.parse(text);
+  } catch (firstError) {
+    const escapedLatex = String(text || '').replace(/\\(?!["\\/bfnrtu])/g, '\\\\');
+    try {
+      return JSON.parse(escapedLatex);
+    } catch {
+      throw firstError;
+    }
+  }
+}
+
 function extractJsonPayload(text) {
   const cleaned = stripMarkdownFence(text).trim();
   try {
-    return JSON.parse(cleaned);
+    return parseProviderJson(cleaned);
   } catch {}
   const start = cleaned.indexOf('{');
   const end = cleaned.lastIndexOf('}');
-  if (start >= 0 && end > start) return JSON.parse(cleaned.slice(start, end + 1));
+  if (start >= 0 && end > start) return parseProviderJson(cleaned.slice(start, end + 1));
   throw new Error('provider response did not contain a JSON object');
 }
 
@@ -5723,6 +5789,103 @@ function firstArrayField(object, keys = []) {
     if (Array.isArray(object?.[key])) return object[key].map(String);
   }
   return [];
+}
+
+function representativeFigureAutoSelectionPrompt(state = {}, candidates = []) {
+  const lines = candidates.slice(0, 10).map((candidate, index) => [
+    `Candidate ${index + 1}`,
+    `- label: ${candidate.label || ''}`,
+    `- page: ${candidate.page || 1}`,
+    `- auto: ${candidate.auto || candidate.label || ''}`,
+    `- section context: ${candidate.section || '(unknown)'}`,
+    `- caption: ${candidate.caption || '(none)'}`,
+    `- nearby text: ${providerPromptExcerpt(candidate.nearbyText || '', 900) || '(none)'}`
+  ].join('\n')).join('\n\n');
+  return `# PaperMentor representative figure selector
+
+Return ONLY JSON. No markdown, no prose.
+
+Choose a representative figure for the Start Here block only if a candidate semantically explains the paper's method, system, architecture, algorithm, mechanism, or central construction. Do not choose a result-only plot, benchmark figure, generic example, or full-page fallback. Do not use keyword scoring; judge from caption, nearby text, section context, and source goal.
+
+JSON schema:
+{
+  "selectedIndex": 1,
+  "reason": "one concise reason",
+  "mustVerifyFromPixels": ["what the crop must visibly contain before trusting it"]
+}
+
+Use null for selectedIndex if none is representative.
+
+Source title: ${state.title || '(untitled)'}
+Mode: ${sourceModeLabel(state.sourceMode || 'paper')}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
+
+Candidates:
+${lines || '(none)'}
+`;
+}
+
+function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
+  let state = readStateForSlug(slug);
+  const candidates = state?.representativeFigureCandidates || [];
+  if (!state || !candidates.length || args['no-figure'] || args.crop || args.figure || args['figure-number']) return state;
+  if (!agentAutomationAvailable(args)) return state;
+  const source = state.source;
+  if (!source || isUrl(source) || !existsSync(resolve(source))) return state;
+  try {
+    const response = runAgentCompletion(representativeFigureAutoSelectionPrompt(state, candidates), { ...args, agentTask: 'representative-figure' });
+    const parsed = extractJsonPayload(response);
+    const selectedIndex = parsed.selectedIndex == null ? null : Number(parsed.selectedIndex);
+    if (!Number.isInteger(selectedIndex) || selectedIndex < 1 || selectedIndex > candidates.length) {
+      state.figureSelectionWarning = parsed.reason ? `Representative figure not attached: ${parsed.reason}` : 'Representative figure selector chose no representative method figure.';
+      state.updatedAt = now();
+      writeJson(statePath(slug), state);
+      return state;
+    }
+    const selected = candidates[selectedIndex - 1];
+    const cards = readJson(cardsPath(slug), { cards: [] });
+    const start = (cards.cards || []).find((card) => card.type === 'start-here');
+    const body = start?.body || pendingStartHereBody({ sourceMode: state.sourceMode, sections: state.paperSections, responseLanguage: state.responseLanguage });
+    extractFigure({
+      ...args,
+      session: slug,
+      source,
+      page: selected.page || 1,
+      auto: selected.auto || selected.label || 'figure1',
+      type: 'start-here',
+      title: 'Start Here',
+      location: 'Start Here',
+      body,
+      caption: '',
+      choices: (state.paperSections || []).join('|'),
+      quiet: true,
+      noPath: true,
+      overwrite: true
+    });
+    state = readStateForSlug(slug) || state;
+    state.representativeFigureSelection = {
+      selectedIndex,
+      page: selected.page || 1,
+      auto: selected.auto || selected.label || 'figure1',
+      reason: parsed.reason || '',
+      mustVerifyFromPixels: Array.isArray(parsed.mustVerifyFromPixels) ? parsed.mustVerifyFromPixels : []
+    };
+    if (!splitFigureExplanationSection(body).figure) {
+      state.figureReadingPending = true;
+      state.tuiNotice = 'Representative figure crop attached; visual reading is still pending.';
+    }
+    delete state.figureSelectionWarning;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    return state;
+  } catch (error) {
+    state = readStateForSlug(slug) || state;
+    state.figureExtractionWarning = error.message;
+    state.figureSelectionWarning = 'Representative figure auto-selection/crop failed; PaperMentor did not attach a full-page fallback.';
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    return state;
+  }
 }
 
 function parseLaunchBundleResponse(text, expectedSection) {
@@ -5758,7 +5921,8 @@ function maybeAutoFillStartHere(slug, args = {}) {
   const bundleResponse = runAgentCompletion(generatedLaunchBundlePrompt(state), { ...args, agentTask: 'launch-bundle' });
   const bundle = parseLaunchBundleResponse(bundleResponse, bundledSection);
   let updated = replaceStartHereBody(slug, bundle.body);
-  updated = installBundledSectionChoices(updated, bundledSection, bundle.sectionChoices);
+  updated = maybeAutoAttachRepresentativeFigure(slug, args) || updated;
+  updated = installBundledSectionChoices(readStateForSlug(slug) || updated, bundledSection, bundle.sectionChoices);
   updated.tuiNotice = `Start Here is ready in HTML. First section choices are ready for ${bundledSection}.`;
   updated.updatedAt = now();
   writeJson(statePath(slug), updated);
@@ -5793,7 +5957,7 @@ function runChoice(args) {
   } catch (error) {
     if (!autoAgent) throw error;
     state = readJson(statePath(slug), state) || state;
-    state.tuiNotice = `Could not auto-generate: ${error.message}. PaperMentor kept an internal handoff so Codex/Claude can continue from this room.`;
+    state.tuiNotice = `Could not auto-generate: ${error.message}. PaperMentor did not change the HTML; it kept an internal handoff so Codex/Claude can continue from this room.`;
     state.updatedAt = now();
     writeJson(statePath(slug), state);
     renderHtml(slug);
@@ -5820,6 +5984,9 @@ function applyTuiChoice(state, selected, options = {}) {
   const choice = items[selected];
   if (!choice) return state;
   delete state.tuiNotice;
+  delete state.pendingProvider;
+  const canAutoGenerate = Boolean(options.autoAgent && agentAutomationAvailable(options));
+  const generationRequestedWithoutProvider = Boolean(options.autoAgent && !canAutoGenerate);
   if (isChoosingTopic(state)) {
     state.currentSection = choice;
     state.currentMode = '';
@@ -5830,16 +5997,16 @@ function applyTuiChoice(state, selected, options = {}) {
     state.lastChoiceKind = 'section';
     delete state.topicPickerOpen;
     const key = sectionKey(choice);
-    const actions = sanitizeSectionActions(state.sectionActions?.[key] || [], choice);
+    const actions = sanitizeSectionActions(state.sectionActions?.[key] || [], choice, { language: state.responseLanguage });
     if (actions?.length) {
       clearPendingPrompt(state);
       state.nextChoices = actions;
+    } else if (canAutoGenerate) {
+      return installGeneratedSectionMenu(state, choice, options);
     } else {
-      if (options.autoAgent && agentAutomationAvailable(options)) {
-        return installGeneratedSectionMenu(state, choice, options);
-      }
       state.nextChoices = sectionMenuPendingChoices(choice, state.responseLanguage);
-      writeSectionMenuPrompt(state, choice);
+      if (generationRequestedWithoutProvider) markProviderUnavailable(state, choice);
+      else writeSectionMenuPrompt(state, choice);
     }
   } else if (/^Change topic \/ section list$/i.test(choice)) {
     state.topicPickerOpen = true;
@@ -5850,13 +6017,14 @@ function applyTuiChoice(state, selected, options = {}) {
     clearPendingPrompt(state);
   } else if (/^(?:Section menu pending|Generate content-adapted choices|Create section-specific choices|Show what I can learn here)/i.test(choice)) {
     const section = state.currentSection || 'current section';
-    if (options.autoAgent && agentAutomationAvailable(options)) {
+    if (canAutoGenerate) {
       return installGeneratedSectionMenu(state, section, options);
     }
-    writeSectionMenuPrompt(state, section);
-    state.currentFocus = `Waiting for content-adapted menu for ${state.currentSection || 'current section'}`;
+    state.currentFocus = `Section-specific choices require an AI provider for ${state.currentSection || 'current section'}`;
     state.selectedAction = '';
     state.lastChoiceKind = 'section-menu';
+    if (generationRequestedWithoutProvider) markProviderUnavailable(state, section);
+    else writeSectionMenuPrompt(state, section);
   } else {
     state.currentFocus = choice;
     state.selectedAction = choice;
@@ -5875,10 +6043,11 @@ function applyTuiChoice(state, selected, options = {}) {
     }[selectedType];
     if (nextMode) state.currentMode = nextMode;
     state.lastChoiceKind = 'action';
-    if (options.autoAgent && agentAutomationAvailable(options)) {
+    if (canAutoGenerate) {
       return appendGeneratedActionBlock(state, choice, options);
     }
-    writePendingActionPrompt(state, choice);
+    if (generationRequestedWithoutProvider) markProviderUnavailable(state, choice);
+    else writePendingActionPrompt(state, choice);
   }
   state.updatedAt = now();
   writeJson(statePath(state.slug), state);
@@ -5935,7 +6104,8 @@ function runTui(args) {
       draw();
     } else if (key === 'enter') {
       const selectedChoice = items[selected] || '';
-      const willGenerate = agentAutomationAvailable(args) && !/^Change topic \/ section list$/i.test(selectedChoice);
+      const canAutoGenerate = agentAutomationAvailable(args);
+      const willGenerate = canAutoGenerate && !/^Change topic \/ section list$/i.test(selectedChoice);
       if (willGenerate) {
         state.tuiNotice = (isChoosingTopic(state) || /Show what I can learn here|Create section-specific choices/i.test(selectedChoice))
           ? 'Reading the selected section and preparing choices…'
@@ -5945,7 +6115,7 @@ function runTui(args) {
       try {
         state = applyTuiChoice(state, selected, { ...args, tui: true, autoAgent: true });
       } catch (error) {
-        state.tuiNotice = `Could not auto-generate: ${error.message}. The assistant can continue from this room.`;
+        state.tuiNotice = `Could not auto-generate: ${error.message}. PaperMentor did not change the HTML; the assistant can continue from this room.`;
         state.updatedAt = now();
         writeJson(statePath(state.slug), state);
       }
@@ -5980,7 +6150,7 @@ function sessionSummary(slug) {
   const state = readStateForSlug(slug);
   if (!state) return null;
   const cards = readJson(cardsPath(slug), { cards: [] });
-  const hasStartHere = (cards.cards || []).some((card) => card.type === 'start-here' && !/Not built yet|Not written yet/.test(card.body || ''));
+  const hasStartHere = (cards.cards || []).some((card) => card.type === 'start-here' && !isStartHerePendingBody(card.body || ''));
   return {
     state,
     cards,
@@ -6396,18 +6566,34 @@ function goLatestSession(args = {}) {
 
 function askCurrentSession(args = {}) {
   const slug = requireSessionSlug(args, 'ask');
-  const state = readStateForSlug(slug);
+  let state = readStateForSlug(slug);
   const question = args.text || args.question || args._?.slice(1).join(' ') || readTextArg(args) || 'Ask anything about the current topic';
+  const action = `Answer question: ${question}`;
   state.currentMode = 'chat';
   state.currentFocus = question;
-  state.selectedAction = `Answer question: ${question}`;
+  state.selectedAction = action;
   state.lastChoiceKind = 'action';
-  writePendingActionPrompt(state, state.selectedAction);
+  appendTurn({ session: slug, role: 'user', text: question, 'no-promote': true, quiet: true });
+  const wantsManual = args.manual || args['no-agent'] || args['no-generate'];
+  if (!wantsManual && agentAutomationAvailable(args)) {
+    try {
+      state = appendGeneratedActionBlock(state, action, { ...args, agentTask: 'html-block' });
+      appendTurn({ session: slug, role: 'assistant', text: `Added to HTML: ${action}`, 'no-promote': true, quiet: true });
+      printConsole(state);
+      return state;
+    } catch (error) {
+      state = readStateForSlug(slug) || state;
+      state.tuiNotice = `Could not auto-generate answer: ${error.message}. PaperMentor did not change the HTML; it kept the question in the room state.`;
+    }
+  } else if (!wantsManual && !agentAutomationAvailable(args)) {
+    markProviderUnavailable(state, action);
+  }
+  if (!state.pendingProvider) writePendingActionPrompt(state, action);
   state.updatedAt = now();
   writeJson(statePath(slug), state);
-  appendTurn({ session: slug, role: 'user', text: question, 'no-promote': true, quiet: true });
   renderHtml(slug);
-  console.log(renderRunnerConsole(state, state.selectedAction));
+  console.log(state.pendingProvider ? renderTuiScreen(state, 0) : renderRunnerConsole(state, action));
+  return state;
 }
 
 function prepareStartHerePrompt(state) {
@@ -6474,7 +6660,7 @@ function exportSession(args) {
   const exportRoot = join(root, '.papermentor', 'exports');
   mkdirSync(exportRoot, { recursive: true });
   const requestedOutput = args.output || args.out || '';
-  const format = String(args.format || (requestedOutput.toLowerCase().endsWith('.pdf') ? 'pdf' : 'zip')).toLowerCase();
+  const format = String(args.format || (requestedOutput.toLowerCase().endsWith('.zip') ? 'zip' : 'pdf')).toLowerCase();
   const extension = format === 'pdf' ? 'pdf' : 'zip';
   const output = resolve(requestedOutput || join(exportRoot, `${slug}-report.${extension}`));
   mkdirSync(dirname(output), { recursive: true });
@@ -6863,7 +7049,7 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
   const normalizedMode = normalizeSourceMode(sourceMode);
   const isSlide = normalizedMode === 'slide';
   const isUrl = normalizedMode === 'url';
-  const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.auto || args.figure || args['figure-number'] || args.crop || args.page || args.slide);
+  const explicitStartFigure = Boolean(args['start-figure'] || args['start-visual'] || args.figure || args['figure-number'] || args.crop || args.page || args.slide);
   const shouldAutoAttachPaperFigure = !isSlide && !isUrl && canExtractVisual && !args['no-figure'] && (explicitStartFigure || sourceIsImage);
   const addStartHereOnly = (startBody = body) => addCard({ ...args, session: slug, type: 'start-here', title: args['card-title'] || 'Start Here', location: 'Start Here', body: startBody, choices: sections.join('|'), quiet: true, noPath: true });
   if ((isSlide && !explicitStartFigure) || isUrl) {
@@ -6875,13 +7061,13 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
     state.figureSelectionWarning = 'Representative figure attachment was disabled with --no-figure.';
     state.updatedAt = now();
     writeJson(statePath(slug), state);
-    addStartHereOnly(appendFigureFallbackNote(body, 'figure attachment was disabled for this run.'));
+    addStartHereOnly(appendFigureFallbackNote(body, 'figure attachment was disabled for this run.', { responseLanguage: args.language || args.responseLanguage }));
   } else if (!canExtractVisual) {
     const state = readJson(statePath(slug), {});
     state.figureSelectionWarning = `Source type ${extension || '(none)'} cannot be rendered as a figure crop.`;
     state.updatedAt = now();
     writeJson(statePath(slug), state);
-    addStartHereOnly(appendFigureFallbackNote(body, 'this source type cannot be rendered as a figure crop.'));
+    addStartHereOnly(appendFigureFallbackNote(body, 'this source type cannot be rendered as a figure crop.', { responseLanguage: args.language || args.responseLanguage }));
   } else if (!shouldAutoAttachPaperFigure) {
     const state = readJson(statePath(slug), {});
     state.figureSelectionWarning = representativeFigureCandidates.length
@@ -6893,11 +7079,12 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
       body,
       representativeFigureCandidates.length
         ? `representative figure selection is pending in .papermentor/sessions/${slug}/representative-figure-prompt.md.`
-        : 'no Figure/Fig. caption candidates were detected.'
+        : 'no Figure/Fig. caption candidates were detected.',
+      { responseLanguage: args.language || args.responseLanguage }
     ));
   } else {
     const requestedPage = args.page || args.slide;
-    const requestedAuto = args.auto || args.figure || args['figure-number'];
+    const requestedAuto = args.figure || args['figure-number'];
     const auto = requestedAuto || (extension === '.pdf' ? (requestedPage ? 'figure1' : undefined) : undefined);
     const page = requestedPage || 1;
     const representativeCaption = '';
@@ -6919,33 +7106,10 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
     } catch (error) {
       const state = readJson(statePath(slug), {});
       state.figureExtractionWarning = error.message;
+      state.figureSelectionWarning = 'Representative figure crop failed; PaperMentor did not attach a full-page fallback as a method figure.';
       state.updatedAt = now();
       writeJson(statePath(slug), state);
-      try {
-        extractFigure({
-          ...args,
-          session: slug,
-          source,
-          page,
-          auto: undefined,
-          figure: undefined,
-          'figure-number': undefined,
-          crop: undefined,
-          type: 'start-here',
-          title: args['card-title'] || 'Start Here',
-          location: 'Start Here',
-          body,
-          caption: args.caption || args['figure-caption'] || `Page ${page}. Full-page visual fallback; run ${cliCommand()} preview-crops for a tighter figure crop if needed.`,
-          choices: sections.join('|'),
-          quiet: true,
-          noPath: true
-        });
-      } catch (fallbackError) {
-        state.figureExtractionFallbackWarning = fallbackError.message;
-        state.updatedAt = now();
-        writeJson(statePath(slug), state);
-        addStartHereOnly(appendFigureFallbackNote(body, `automatic extraction failed (${error.message}); full-page fallback also failed (${fallbackError.message}).`));
-      }
+      addStartHereOnly(appendFigureFallbackNote(body, `automatic representative figure extraction failed (${error.message}).`, { responseLanguage: args.language || args.responseLanguage }));
     }
   }
   return { canExtractVisual, attachedVisual: shouldAutoAttachPaperFigure };
@@ -6959,7 +7123,7 @@ function maybeWriteCropPreview({ slug, source, args, canExtractVisual, represent
       session: slug,
       source,
       page: args.page || representativeFigure?.page || 1,
-      auto: args.auto || representativeFigure?.auto,
+      auto: representativeFigure?.auto || args.figure || args['figure-number'],
       title: args['figure-title'] || 'Representative figure',
       overwrite: true,
       quiet: true
@@ -7010,16 +7174,16 @@ function launchSession(args) {
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${startHereLaunchStatusLine(finalState, args, autoError)}`);
     return slug;
   }
-  const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections });
+  const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections, responseLanguage: responseLanguageFromArgs(args, state?.responseLanguage || 'auto') });
   const representativeFigureCandidates = normalizeSourceMode(sourceMode) === 'paper'
     ? collectRepresentativeFigureCandidates(text || orientationText, blocks)
     : [];
-  if (representativeFigureCandidates.length && !args['no-figure'] && !args.auto && !args.figure && !args['figure-number'] && !args.crop && !args.page && !args.slide) {
+  if (representativeFigureCandidates.length && !args['no-figure'] && !args.figure && !args['figure-number'] && !args.crop && !args.page && !args.slide) {
     writeRepresentativeFigureSelectionPrompt({ slug, source, candidates: representativeFigureCandidates });
   }
   const launchVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigureCandidates });
   const startHereCard = readJson(cardsPath(slug), { cards: [] }).cards.find((existing) => existing.type === 'start-here');
-  const startHereIsScaffold = !startHereCard || /Not built yet|Not written yet/.test(startHereCard.body || '');
+  const startHereIsScaffold = !startHereCard || isStartHerePendingBody(startHereCard.body || '');
   const startHereScaffolded = !args.body && startHereIsScaffold;
   const figureScaffoldShipped = launchVisual.attachedVisual && !args.body && !args['no-figure'] && startHereIsScaffold;
   if (startHereScaffolded) {
