@@ -1275,7 +1275,15 @@ function pythonModuleAvailable(moduleName) {
 function dependencyStatusRows() {
   const libreOffice = commandPath('soffice') || commandPath('libreoffice');
   const imageMagick = commandPath('magick') || commandPath('convert') || (process.platform === 'darwin' ? commandPath('sips') : '');
+  const requestedProvider = requestedAgentProvider({});
+  const providerLabel = requestedProvider ? `AI generation provider (${requestedProvider})` : 'AI generation provider';
   return [
+    {
+      name: providerLabel,
+      ok: Boolean(requestedProvider),
+      purpose: 'generate Start Here, section choices, and HTML explanation blocks automatically',
+      install: 'Install and authenticate Codex CLI or Claude Code, ensure `codex` or `claude` is on PATH, or run inside Codex/Claude. Without this, PaperMentor can open HTML but cannot auto-fill generated blocks.'
+    },
     {
       name: 'pdftoppm',
       ok: Boolean(commandPath('pdftoppm')),
@@ -1313,6 +1321,7 @@ function runDoctor(args = {}) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
     console.log('PaperMentor dependency doctor');
+    console.log('Note: PDF reading needs pdftoppm/ImageMagick; automatic writing needs an AI generation provider.');
     for (const row of rows) {
       console.log(`${row.ok ? '[ok]' : '[missing]'} ${row.name} — ${row.purpose}`);
       if (!row.ok) console.log(`  install: ${row.install}`);

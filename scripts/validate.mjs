@@ -397,11 +397,11 @@ function validateSessionHelper() {
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor dependency doctor', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
+    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
     }
     const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
-    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 4) failures.push('doctor --json should report four passing local extraction checks in validation environment');
+    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name))) failures.push('doctor --json should report AI generation provider plus four passing local extraction checks in validation environment');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -778,6 +778,8 @@ if (/representative figure (?:selection|selector)/i.test(input)) {
       server.kill();
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
+    const recentOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
+    if (!recentOutput.includes('Recent PaperMentor reading rooms') || recentOutput.includes('PaperMentor Launch setup') || recentOutput.includes('Auto-detect mode')) failures.push('pm recent should list rooms and must not be parsed as a source launch wizard');
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
