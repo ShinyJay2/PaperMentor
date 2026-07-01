@@ -434,6 +434,22 @@ The quantizer Q maps x in R^d to B bits. Equation (1) defines MSE and Equation (
 3. Method
 The method uses randomized quantization and unbiased inner-product estimates.`);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchTextPath, '--slug', 'launch-smoke', '--no-figure', '--no-preview'], { cwd: temp, stdio: 'pipe' });
+    const legacyScaffoldPath = join(temp, 'legacy-scaffold.md');
+    writeFileSync(legacyScaffoldPath, '## One-sentence orientation\n\n_Not written yet. Replace this with exactly one sentence stating what this paper does._\n\n## Preliminary\n\n_Not built yet. Replace this with the real preliminary._\n');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Legacy Scaffold Smoke', '--source', 'paper.pdf', '--slug', 'legacy-scaffold-smoke', '--sections', '1. Introduction', '--body-file', legacyScaffoldPath], { cwd: temp, stdio: 'pipe' });
+    const legacyScaffoldHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'legacy-scaffold-smoke', 'index.html'), 'utf8');
+    if (/Not written yet|Not built yet|Replace this/.test(legacyScaffoldHtml)) failures.push('legacy Start Here scaffolds should never render raw placeholder text in HTML');
+    if (!/Start Here pending|PaperMentor is reading this/.test(legacyScaffoldHtml)) failures.push('legacy Start Here scaffolds should render a safe pending notice instead');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchTextPath, '--slug', 'launch-provider-off-smoke', '--auto', '--no-figure', '--no-preview', '--show-tui'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT: 'off' }
+    });
+    const launchProviderOffState = readJson(join(temp, '.papermentor', 'sessions', 'launch-provider-off-smoke', 'state.json'), {});
+    const launchProviderOffHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'launch-provider-off-smoke', 'index.html'), 'utf8');
+    if (!launchProviderOffState.pendingProvider || !launchProviderOffState.startHerePending || !/did not change|변경되지/i.test(launchProviderOffState.tuiNotice || '')) failures.push('launch --auto with provider disabled should mark provider unavailable instead of silently pretending to generate');
+    if (/Not written yet|Not built yet|Replace this/.test(launchProviderOffHtml)) failures.push('launch --auto provider-off HTML should not expose raw Start Here placeholders');
     const slideLaunchPath = join(temp, 'Lecture 09.md');
     writeFileSync(slideLaunchPath, `sungwoong kim © All rights Reserved. Lecture 09
 
@@ -563,9 +579,9 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
 
     const fakeCodexDir = join(temp, 'fake-codex-bin');
     mkdirSync(fakeCodexDir, { recursive: true });
-    const fakeCodexPath = join(fakeCodexDir, 'codex');
-    writeFileSync(fakeCodexPath, `#!/usr/bin/env node
-const fs = require('fs');
+    const fakeCodexScriptPath = join(fakeCodexDir, 'fake-codex.js');
+    const fakeCodexPath = process.platform === 'win32' ? join(fakeCodexDir, 'codex.cmd') : join(fakeCodexDir, 'codex');
+    const fakeCodexScript = `const fs = require('fs');
 const input = fs.readFileSync(0, 'utf8');
 const outFlag = process.argv.indexOf('--output-last-message');
 const out = outFlag >= 0 ? process.argv[outFlag + 1] : '';
@@ -582,8 +598,16 @@ if (/representative figure (?:selection|selector)/i.test(input)) {
     sectionChoices: ['Explain the encoder scoring pipeline', 'Trace the ranking objective', 'Ask anything about ' + firstSection]
   }));
 }
+`;
+    writeFileSync(fakeCodexScriptPath, fakeCodexScript);
+    if (process.platform === 'win32') {
+      writeFileSync(fakeCodexPath, `@echo off\r\nnode "%~dp0fake-codex.js" %*\r\n`);
+    } else {
+      writeFileSync(fakeCodexPath, `#!/usr/bin/env node
+require('./fake-codex.js');
 `);
-    chmodSync(fakeCodexPath, 0o755);
+      chmodSync(fakeCodexPath, 0o755);
+    }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-auto', '--auto', '--no-preview'], {
       cwd: temp,
       stdio: 'pipe',
@@ -597,6 +621,14 @@ if (/representative figure (?:selection|selector)/i.test(input)) {
     if (representativeAutoState.representativeFigureSelection?.selectedIndex !== 2) failures.push(`representative auto-selection should preserve the model-selected candidate index, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
     if (!representativeAutoState.figureReadingPending) failures.push('representative auto-crop should keep figureReadingPending true until a pixel-based visual reading is written');
     if (/Full-page visual fallback/i.test(JSON.stringify(representativeAutoCards))) failures.push('representative auto-selection should not attach full-page fallback text');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-env-bin', '--auto', '--no-preview'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_CODEX_BIN: fakeCodexPath, PAPERMENTOR_AGENT: 'codex' }
+    });
+    const representativeEnvBinState = readJson(join(temp, '.papermentor', 'sessions', 'representative-choice-env-bin', 'state.json'), {});
+    if (representativeEnvBinState.representativeFigureSelection?.selectedIndex !== 2) failures.push('PAPERMENTOR_CODEX_BIN should select the Codex executable path without relying on PATH lookup');
 
     const resultOnlyPdfPath = join(temp, 'result-only-figures.pdf');
     writeResultOnlyPdfFixture(resultOnlyPdfPath);
@@ -780,6 +812,9 @@ if (/representative figure (?:selection|selector)/i.test(input)) {
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     const recentOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
     if (!recentOutput.includes('Recent PaperMentor reading rooms') || recentOutput.includes('PaperMentor Launch setup') || recentOutput.includes('Auto-detect mode')) failures.push('pm recent should list rooms and must not be parsed as a source launch wizard');
+    writeFileSync(join(temp, 'recent'), 'reserved-command-collision');
+    const recentCollisionOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
+    if (!recentCollisionOutput.includes('Recent PaperMentor reading rooms') || recentCollisionOutput.includes('PaperMentor Launch setup') || recentCollisionOutput.includes('Auto-detect mode')) failures.push('pm recent should remain a command even when a local file named recent exists');
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });

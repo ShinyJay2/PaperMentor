@@ -96,6 +96,14 @@ iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.p
 .\install.ps1 all
 ```
 
+Windows에서 npm global Codex를 설치한 경우 PowerShell의 실제 실행 파일은 보통 `codex.cmd`이다. PowerShell에서 `codex`는 실행되지만 PaperMentor 자동 생성에서 Codex를 찾지 못하면 다음처럼 명시한다.
+
+```powershell
+$env:PAPERMENTOR_AGENT = "codex"
+$env:PAPERMENTOR_CODEX_BIN = "$env:APPDATA\npm\codex.cmd"
+pm https://arxiv.org/pdf/1505.04597
+```
+
 ### 3.5 로컬 clone 또는 pinned commit 설치
 
 보안상 `main`에서 바로 pipe 실행하는 것이 부담스럽다면 다음 방식이 더 안전하다.
@@ -550,4 +558,3 @@ PDF export:
 ```bash
 pm export
 ```
-

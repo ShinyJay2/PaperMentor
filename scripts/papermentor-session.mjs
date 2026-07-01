@@ -1260,11 +1260,47 @@ function copyBundledReportAssets(slug) {
 }
 
 
+function commandEnvVar(name) {
+  return `PAPERMENTOR_${String(name || '').toUpperCase().replace(/[^A-Z0-9]+/g, '_')}_BIN`;
+}
+
+function resolveWindowsCommandShim(command, platform = process.platform) {
+  const value = String(command || '').trim();
+  if (!value) return '';
+  if (existsSync(value)) return value;
+  if (platform === 'win32' && !extname(value)) {
+    for (const suffix of ['.cmd', '.exe', '.bat']) {
+      const candidate = `${value}${suffix}`;
+      if (existsSync(candidate)) return candidate;
+    }
+  }
+  return value;
+}
+
 function commandPath(name) {
+  const explicit = process.env[commandEnvVar(name)];
+  if (explicit) return resolveWindowsCommandShim(explicit);
   const lookup = process.platform === 'win32' ? 'where' : 'which';
   const result = spawnSync(lookup, [name], { encoding: 'utf8' });
   if (result.status !== 0) return '';
-  return String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
+  const found = String(result.stdout || '').split(/\r?\n/).map((line) => line.trim()).find(Boolean) || '';
+  return resolveWindowsCommandShim(found);
+}
+
+function windowsCommandLineArg(value) {
+  const text = String(value ?? '');
+  if (text === '') return '""';
+  if (!/[ \t"&^<>|]/.test(text)) return text;
+  return `"${text.replace(/(\\*)"/g, '$1$1\\"').replace(/\\+$/g, '$&$&')}"`;
+}
+
+function execCommandFileSync(command, argv, options = {}) {
+  if (process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command)) {
+    const shell = process.env.ComSpec || 'cmd.exe';
+    const line = [command, ...(argv || [])].map(windowsCommandLineArg).join(' ');
+    return execFileSync(shell, ['/d', '/s', '/c', line], options);
+  }
+  return execFileSync(command, argv, options);
 }
 
 function pythonModuleAvailable(moduleName) {
@@ -3587,7 +3623,7 @@ html.papermentor-print-preview .latex { font-size:12px; padding:10px 12px; margi
     ${state.authors ? `<div class="paper-authors">${escapeHtml(state.authors)}</div>` : ''}
   </header>
   <section class="blocks">
-    ${(cards.cards || []).map((card, index) => renderCardArticle(localizeReadingGuide(card, lang, slug, state.sourceMode), index)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
+    ${(cards.cards || []).map((card, index) => renderCardArticle(localizeReadingGuide(card, lang, slug, state.sourceMode), index, state)).join('\n') || '<article class="block empty">No paper blocks yet.</article>'}
   </section>
 </main>
 <script>
@@ -3669,10 +3705,22 @@ html.papermentor-print-preview .latex { font-size:12px; padding:10px 12px; margi
 }
 
 
-function renderCardArticle(card, index) {
-  const figureSourceBody = card.figure ? bodyWithoutFigureExplanation(card.body || '') : (card.body || '');
+function renderableCardBody(card, state = {}) {
+  if (card?.type === 'start-here' && isStartHerePendingBody(card.body || '')) {
+    return pendingStartHereBody({
+      sourceMode: state.sourceMode || 'paper',
+      sections: state.paperSections || card.choices || [],
+      responseLanguage: state.responseLanguage || 'auto'
+    });
+  }
+  return card?.body || '';
+}
+
+function renderCardArticle(card, index, state = {}) {
+  const renderedBody = renderableCardBody(card, state);
+  const figureSourceBody = card.figure ? bodyWithoutFigureExplanation(renderedBody) : renderedBody;
   const baseBody = htmlExplanationOnly(figureSourceBody);
-  const figure = renderFigure(card.figure, figureExplanationMarkdown(card));
+  const figure = renderFigure(card.figure, figureExplanationMarkdown({ ...card, body: renderedBody }));
   const typeAttr = slugify(card.type || 'note');
   const head = `<article id="${escapeHtml(card.id)}" class="block" data-type="${escapeHtml(typeAttr)}" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
@@ -4501,7 +4549,7 @@ function prepareLaunchNavigator(slug) {
     state.nextChoices = state.paperSections;
     state.selectedAction = '';
     state.lastChoiceKind = 'topic-picker';
-    delete state.tuiNotice;
+    if (!state.pendingProvider) delete state.tuiNotice;
     delete state.prefetchNotice;
     state.updatedAt = now();
     writeJson(statePath(slug), state);
@@ -5272,7 +5320,22 @@ function shouldAutoGenerateInLaunch(args = {}) {
   return Boolean(process.stdin.isTTY && process.stdout.isTTY && agentAutomationAvailable(args));
 }
 
+function launchGenerationRequested(args = {}) {
+  return Boolean(args.auto || args.generate || args.agent || process.env.PAPERMENTOR_AGENT_MOCK || process.env.PAPERMENTOR_AGENT_MOCK_FILE);
+}
+
+function markLaunchProviderUnavailable(slug, fallbackState = {}) {
+  const state = readJson(statePath(slug), fallbackState || {});
+  markProviderUnavailable(state, 'Generate Start Here now');
+  state.startHerePending = true;
+  state.currentFocus = state.currentFocus || 'AI provider required';
+  state.updatedAt = now();
+  writeJson(statePath(slug), state);
+  return state;
+}
+
 function startHereLaunchStatusLine(state = {}, args = {}, autoError = '') {
+  if (state.pendingProvider) return `- Start Here: pending; ${providerUnavailableNotice(state)}`;
   if (!state.startHerePending && state.figureReadingPending) return '- Start Here: ready; representative figure crop attached, visual reading pending';
   if (!state.startHerePending) return '- Start Here: ready';
   const next = args['no-agent'] || args.manual
@@ -5359,7 +5422,7 @@ function runAgentCompletion(prompt, args = {}) {
     const workdir = agentWorkdir(args);
     const outputDir = generationOnlyAgentTask(args) ? workdir : mkdtempSync(join(papermentorDir(), 'agent-'));
     const out = join(outputDir, 'last-message.md');
-    const output = execFileSync(codex, [
+    const output = execCommandFileSync(codex, [
       'exec',
       '--cd', workdir,
       '--skip-git-repo-check',
@@ -5377,7 +5440,7 @@ function runAgentCompletion(prompt, args = {}) {
     const argv = generationOnlyAgentTask(args)
       ? ['--print', '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'), '-']
       : ['--print', '--add-dir', root, '--max-budget-usd', String(args.maxBudgetUsd || process.env.PAPERMENTOR_AGENT_MAX_BUDGET_USD || '0.35'), '-'];
-    return execFileSync(claude, argv, { cwd: workdir, input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
+    return execCommandFileSync(claude, argv, { cwd: workdir, input: prompt, encoding: 'utf8', timeout, stdio: ['pipe', 'pipe', 'pipe'] });
   }
   throw new Error(`unsupported PaperMentor agent provider: ${provider}`);
 }
@@ -7163,6 +7226,10 @@ function launchSession(args) {
     let autoError = '';
     try {
       if (shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
+      else if (launchGenerationRequested(args)) {
+        const providerState = markLaunchProviderUnavailable(slug, pendingState);
+        autoError = providerUnavailableNotice(providerState);
+      }
     } catch (error) {
       autoError = error.message;
     }
@@ -7205,6 +7272,10 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   let autoError = '';
   try {
     if (startHereScaffolded && shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
+    else if (startHereScaffolded && launchGenerationRequested(args)) {
+      const providerState = markLaunchProviderUnavailable(slug, readJson(statePath(slug), state));
+      autoError = providerUnavailableNotice(providerState);
+    }
   } catch (error) {
     autoError = error.message;
   }
@@ -7288,6 +7359,21 @@ Usage:
 `);
 }
 
+const RESERVED_SOURCE_COMMANDS = new Set([
+  '/papermentor', 'papermentor', 'menu', 'palette', 'open', 'last', 'go', 'continue',
+  'recent', 'rooms', 'star', 'github-star', 'clean', 'ask', 'new', 'regenerate-start',
+  'start-here', 'launch', 'start', 'sections', 'analyze', 'tui', 'run', 'choose',
+  'prefetch', 'section', 'mode', 'diagram', 'preview-crops', 'preview', 'qa', 'quality',
+  'check', 'qa-batch', 'batch-qa', 'quality-batch', 'figure-audit', 'figures',
+  'crop-audit', 'proof-audit', 'proofs', 'extract-figure', 'card', 'turn', 'promote',
+  'pause', 'resume', 'render', 'export', 'bundle', 'state', 'status', 'doctor',
+  'help', '--help', '-h'
+]);
+
+function isReservedSourceCommand(command) {
+  return RESERVED_SOURCE_COMMANDS.has(String(command || '').toLowerCase());
+}
+
 const args = parseArgs(process.argv.slice(2));
 const command = args._[0];
 if (args.help || args.h || command === 'help' || command === '--help' || command === '-h') {
@@ -7299,7 +7385,7 @@ try {
     runWelcome(args);
   } else if (command === 'menu' || command === 'palette') {
     runPalette(args);
-  } else if (isSourceLike(command)) {
+  } else if (!isReservedSourceCommand(command) && isSourceLike(command)) {
     const source = args.source || command;
     if (process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) {
       runLaunchWizard(source, args);

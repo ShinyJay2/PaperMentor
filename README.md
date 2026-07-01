@@ -153,6 +153,14 @@ iwr -useb https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.p
 .\install.ps1 codex     # or: .\install.ps1 claude / .\install.ps1 all
 ```
 
+If Codex is installed through npm on Windows and PowerShell can run `codex` but PaperMentor cannot find it, point PaperMentor at the npm shim explicitly:
+
+```powershell
+$env:PAPERMENTOR_AGENT = "codex"
+$env:PAPERMENTOR_CODEX_BIN = "$env:APPDATA\npm\codex.cmd"
+pm https://arxiv.org/pdf/1505.04597
+```
+
 Pinned/local install:
 
 ```bash
