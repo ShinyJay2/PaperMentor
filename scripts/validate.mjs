@@ -1,7 +1,10 @@
 import { existsSync, readFileSync, statSync, mkdtempSync, rmSync, writeFileSync, readdirSync, mkdirSync, chmodSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execFileSync, spawn } from 'node:child_process';
+import { deflateRawSync } from 'node:zlib';
+import { Buffer } from 'node:buffer';
+import { execFile, execFileSync } from 'node:child_process';
+import { createServer } from 'node:http';
 import { loadManifest, packageFiles, repoRoot, runtimeInstallDestinations } from './manifest.mjs';
 
 const root = repoRoot;
@@ -48,30 +51,119 @@ function writeTinyPdfFixture(path) {
   writeFileSync(path, pdf);
 }
 
+function dosDateTime(date = new Date()) {
+  const year = Math.max(1980, date.getFullYear());
+  const dosTime = (date.getHours() << 11) | (date.getMinutes() << 5) | Math.floor(date.getSeconds() / 2);
+  const dosDate = ((year - 1980) << 9) | ((date.getMonth() + 1) << 5) | date.getDate();
+  return { dosTime, dosDate };
+}
+
+function crc32(buffer) {
+  let crc = 0xffffffff;
+  for (const byte of buffer) {
+    crc ^= byte;
+    for (let i = 0; i < 8; i += 1) crc = (crc >>> 1) ^ (0xedb88320 & -(crc & 1));
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
+function writeZipFixture(path, entries) {
+  const fileParts = [];
+  const centralParts = [];
+  let offset = 0;
+  const { dosTime, dosDate } = dosDateTime(new Date('2020-01-01T00:00:00Z'));
+  for (const entry of entries) {
+    const name = Buffer.from(entry.name.replace(/^\/+/, ''), 'utf8');
+    const data = Buffer.isBuffer(entry.data) ? entry.data : Buffer.from(String(entry.data), 'utf8');
+    const compressed = deflateRawSync(data);
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0, 6);
+    local.writeUInt16LE(8, 8);
+    local.writeUInt16LE(dosTime, 10);
+    local.writeUInt16LE(dosDate, 12);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(compressed.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+    local.writeUInt16LE(0, 28);
+    fileParts.push(local, name, compressed);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0, 8);
+    central.writeUInt16LE(8, 10);
+    central.writeUInt16LE(dosTime, 12);
+    central.writeUInt16LE(dosDate, 14);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(compressed.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt16LE(0, 30);
+    central.writeUInt16LE(0, 32);
+    central.writeUInt16LE(0, 34);
+    central.writeUInt16LE(0, 36);
+    central.writeUInt32LE(0, 38);
+    central.writeUInt32LE(offset, 42);
+    centralParts.push(central, name);
+    offset += local.length + name.length + compressed.length;
+  }
+  const centralOffset = offset;
+  const centralBuffer = Buffer.concat(centralParts);
+  const end = Buffer.alloc(22);
+  end.writeUInt32LE(0x06054b50, 0);
+  end.writeUInt16LE(0, 4);
+  end.writeUInt16LE(0, 6);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(centralBuffer.length, 12);
+  end.writeUInt32LE(centralOffset, 16);
+  end.writeUInt16LE(0, 20);
+  writeFileSync(path, Buffer.concat([...fileParts, centralBuffer, end]));
+}
+
 function writeTinyPptxFixture(path) {
-  const code = String.raw`
-import sys
-from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.enum.shapes import MSO_SHAPE
-prs = Presentation()
-slide = prs.slides.add_slide(prs.slide_layouts[5])
-slide.shapes.title.text = "Slide 1: Retrieval Encoder Pipeline"
-left = Inches(0.9)
-top = Inches(1.65)
-for i, label in enumerate(["query", "encoder", "ranking score"]):
-    shape = slide.shapes.add_shape(MSO_SHAPE.ROUNDED_RECTANGLE, left + Inches(i * 2.15), top, Inches(1.55), Inches(0.75))
-    shape.text = label
-    shape.text_frame.paragraphs[0].font.size = Pt(16)
-tx = slide.shapes.add_textbox(Inches(0.9), Inches(3.0), Inches(6.2), Inches(0.6))
-tx.text_frame.text = "Figure 1. The slide shows how tokens become retrieval scores."
-slide2 = prs.slides.add_slide(prs.slide_layouts[5])
-slide2.shapes.title.text = "Slide 2: Evaluation"
-body = slide2.shapes.add_textbox(Inches(1), Inches(1.6), Inches(6), Inches(1.2))
-body.text_frame.text = "Accuracy and calibration error test the retrieval model."
-prs.save(sys.argv[1])
-`;
-  execFileSync('python3', ['-c', code, path], { stdio: 'pipe' });
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+  <Override PartName="/ppt/slides/slide1.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+  <Override PartName="/ppt/slides/slide2.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>
+</Types>`;
+  const rootRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`;
+  const presentation = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+  <p:sldIdLst><p:sldId id="256" r:id="rId1"/><p:sldId id="257" r:id="rId2"/></p:sldIdLst>
+  <p:sldSz cx="9144000" cy="6858000" type="screen4x3"/>
+</p:presentation>`;
+  const presentationRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide1.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide2.xml"/>
+</Relationships>`;
+  const slide = (title, body) => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+  <p:cSld><p:spTree><p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>
+    <p:sp><p:nvSpPr><p:cNvPr id="2" name="Title"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>${title}</a:t></a:r></a:p></p:txBody></p:sp>
+    <p:sp><p:nvSpPr><p:cNvPr id="3" name="Body"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr><p:txBody><a:bodyPr/><a:p><a:r><a:t>${body}</a:t></a:r></a:p></p:txBody></p:sp>
+  </p:spTree></p:cSld>
+</p:sld>`;
+  writeZipFixture(path, [
+    { name: '[Content_Types].xml', data: contentTypes },
+    { name: '_rels/.rels', data: rootRels },
+    { name: 'ppt/presentation.xml', data: presentation },
+    { name: 'ppt/_rels/presentation.xml.rels', data: presentationRels },
+    { name: 'ppt/slides/slide1.xml', data: slide('Slide 1: Retrieval Encoder Pipeline', 'query encoder ranking score Figure 1. The slide shows how tokens become retrieval scores.') },
+    { name: 'ppt/slides/slide2.xml', data: slide('Slide 2: Evaluation', 'Accuracy and calibration error test the retrieval model.') }
+  ]);
 }
 
 
@@ -108,6 +200,40 @@ function writeRepresentativeChoicePdfFixture(path) {
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
   writeFileSync(path, pdf);
 }
+
+function writeNoFigurePdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (No Figure Paper) Tj',
+    '/F1 12 Tf 0 -36 Td (Abstract) Tj',
+    '0 -18 Td (This paper explains a retrieval method entirely in prose.) Tj',
+    '0 -36 Td (1. Introduction) Tj',
+    '0 -18 Td (There is no figure caption on this page.) Tj',
+    '0 -36 Td (2. Method) Tj',
+    '0 -18 Td (The method maps queries to vectors and compares scores.) Tj',
+    'ET',
+    '0.2 0.37 0.62 RG 72 520 360 52 re S'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
 
 function writeResultOnlyPdfFixture(path) {
   const stream = [
@@ -154,6 +280,16 @@ function markdownSection(markdown, heading) {
   return start === -1 ? '' : markdown.slice(start, next === -1 ? undefined : next).trim();
 }
 
+function markdownPlainText(value) {
+  return String(value || '')
+    .replace(/```[\s\S]*?```/g, ' ')
+    .replace(/\$\$[\s\S]*?\$\$/g, ' math ')
+    .replace(/\$[^$\n]+\$/g, ' math ')
+    .replace(/[#>*_`|[\]()-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 for (const rel of required) {
   const p = join(root, rel);
   if (!existsSync(p)) failures.push(`missing ${rel}`);
@@ -193,7 +329,7 @@ for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude C
 }
 
 const sessionScript = readFileSync(join(root, 'scripts/papermentor-session.mjs'), 'utf8');
-for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure', 'assets/mathjax/tex-svg.js', 'extractFigure', 'previewCrops', 'launchSession', 'inferMetadataFromText', 'pendingBlockPrompt', 'pdftoppm', 'soffice']) {
+for (const phrase of ['Satoshi-400.woff2', 'PretendardVariable.woff2', '@font-face', 'copyBundledReportAssets', 'paper-figure', 'assets/mathjax/tex-svg.js', 'extractFigure', 'previewCrops', 'launchSession', 'inferMetadataFromText', 'pendingBlockPrompt', 'pdftoppm']) {
   if (!sessionScript.includes(phrase)) failures.push(`session renderer missing phrase: ${phrase}`);
 }
 for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/static/pretendard.css', 'cdn.jsdelivr.net/npm/mathjax']) {
@@ -319,7 +455,7 @@ for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-
 
 for (const rel of ['docs/ci/github-actions-ci.yml']) {
   const ci = readFileSync(join(root, rel), 'utf8');
-  for (const phrase of ['poppler-utils', 'libreoffice', 'imagemagick', 'python3-pptx', 'npm test', 'npm run pack:check']) {
+  for (const phrase of ['poppler-utils', 'imagemagick', 'npm test', 'npm run pack:check']) {
     if (!ci.includes(phrase)) failures.push(`${rel} missing phrase: ${phrase}`);
   }
 }
@@ -372,7 +508,7 @@ function validateInstalledArtifact() {
     const installedPalette = execFileSync('pm', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified main-menu commands');
     const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedDoctor.includes('"status": "ok"') || !installedDoctor.includes('"python3-pptx"')) failures.push('installed papermentor doctor should run through the installed CLI shim');
+    if (!installedDoctor.includes('"status": "ok"') || installedDoctor.includes('python3-pptx') || installedDoctor.includes('LibreOffice')) failures.push('installed papermentor doctor should run through the installed CLI shim without PPTX renderer dependencies');
 
     const claudeHome = join(temp, '.claude');
     execFileSync(join(root, 'install.sh'), ['claude'], { cwd: root, env: { ...process.env, CLAUDE_HOME: claudeHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
@@ -380,11 +516,43 @@ function validateInstalledArtifact() {
   } catch (error) {
     failures.push(`install smoke failed: ${error.message}`);
   } finally {
-    rmSync(temp, { recursive: true, force: true });
+    if (process.env.PAPERMENTOR_KEEP_VALIDATE_TEMP) console.warn(`[keep] validate temp: ${temp}`);
+    else rmSync(temp, { recursive: true, force: true });
   }
 }
 
-function validateSessionHelper() {
+function execFileAsync(command, args = [], options = {}) {
+  return new Promise((resolve, reject) => {
+    execFile(command, args, { encoding: 'utf8', maxBuffer: 10 * 1024 * 1024, ...options }, (error, stdout, stderr) => {
+      if (error) {
+        error.stdout = stdout;
+        error.stderr = stderr;
+        reject(error);
+        return;
+      }
+      resolve(stdout);
+    });
+  });
+}
+
+async function withTextServer(file, fn) {
+  const server = createServer((req, res) => {
+    res.setHeader('content-type', 'text/plain');
+    res.end(readFileSync(file));
+  });
+  await new Promise((resolve, reject) => {
+    server.once('error', reject);
+    server.listen(0, '127.0.0.1', resolve);
+  });
+  try {
+    const { port } = server.address();
+    return await fn(port);
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+}
+
+async function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
@@ -397,11 +565,11 @@ function validateSessionHelper() {
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'LibreOffice', 'ImageMagick', 'python3-pptx']) {
+    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'pdftohtml', 'pdfinfo', 'ImageMagick']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
     }
     const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
-    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name))) failures.push('doctor --json should report AI generation provider plus four passing local extraction checks in validation environment');
+    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'pdftohtml') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -576,27 +744,73 @@ We evaluate I-JEPA with ViT-H and ViT-L encoders in a self-supervised setup.`);
     if (representativeChoiceStartCard?.figure) failures.push('representative figure selection should not auto-attach a figure before model judgment');
     if (!/selected: Figure <label>|selected: none|Do not choose from/i.test(representativePrompt)) failures.push('representative figure prompt should ask the model to choose or reject candidates');
     if (!/Figure 1[\s\S]+Figure 2/.test(representativePrompt)) failures.push('representative figure prompt should include collected caption candidates in source order');
+    const pdffiguresJsonPath = join(temp, 'representative-choice-pdffigures.json');
+    writeFileSync(pdffiguresJsonPath, JSON.stringify([
+      {
+        page: 0,
+        name: '1',
+        figType: 'Figure',
+        caption: 'Figure 1. Linear Evaluation. Accuracy results on a benchmark.',
+        regionBoundary: { x1: 72, y1: 150, x2: 332, y2: 182 },
+        captionBoundary: { x1: 72, y1: 184, x2: 380, y2: 198 }
+      },
+      {
+        page: 0,
+        name: '2',
+        figType: 'Figure',
+        caption: 'Figure 2. Overall method pipeline. The encoder maps queries to vectors and ranks documents.',
+        regionBoundary: { x1: 72, y1: 220, x2: 492, y2: 272 },
+        captionBoundary: { x1: 72, y1: 274, x2: 540, y2: 292 }
+      }
+    ]));
 
     const fakeCodexDir = join(temp, 'fake-codex-bin');
     mkdirSync(fakeCodexDir, { recursive: true });
     const fakeCodexScriptPath = join(fakeCodexDir, 'fake-codex.js');
     const fakeCodexPath = process.platform === 'win32' ? join(fakeCodexDir, 'codex.cmd') : join(fakeCodexDir, 'codex');
     const fakeCodexScript = `const fs = require('fs');
+const path = require('path');
 const input = fs.readFileSync(0, 'utf8');
 const outFlag = process.argv.indexOf('--output-last-message');
 const out = outFlag >= 0 ? process.argv[outFlag + 1] : '';
 const write = (value) => { if (out) fs.writeFileSync(out, value); process.stdout.write(value); };
-if (/representative figure (?:selection|selector)/i.test(input)) {
-  write(JSON.stringify({ selectedIndex: 2, reason: 'Figure 2 is the method pipeline, not a benchmark result.', mustVerifyFromPixels: ['encoder box', 'ranking flow'] }));
-} else {
-  const marker = 'First section/topic:';
+const countFile = process.env.PAPERMENTOR_FAKE_CODEX_COUNT_FILE;
+if (countFile) {
+  const key = /PaperMentor Start Here generator/i.test(input) ? 'start-here'
+    : /representative figure (?:selection|selector)/i.test(input) ? 'representative-figure'
+    : /PaperMentor representative figure visual reader/i.test(input) ? 'representative-figure-reading'
+    : /PaperMentor section action generator/i.test(input) ? 'section-menu'
+    : /PPTX to PDF conversion task/i.test(input) ? 'pptx-to-pdf'
+    : 'other';
+  const counts = fs.existsSync(countFile) ? JSON.parse(fs.readFileSync(countFile, 'utf8')) : {};
+  counts[key] = (counts[key] || 0) + 1;
+  fs.writeFileSync(countFile, JSON.stringify(counts));
+}
+if (/PPTX to PDF conversion task/i.test(input)) {
+  const match = input.match(/Required output PDF:\\n([^\\n]+)/);
+  const pdfPath = match ? match[1].trim() : '';
+  if (pdfPath && process.env.PAPERMENTOR_FAKE_CONVERTED_PDF) {
+    fs.mkdirSync(path.dirname(pdfPath), { recursive: true });
+    fs.copyFileSync(process.env.PAPERMENTOR_FAKE_CONVERTED_PDF, pdfPath);
+    write(JSON.stringify({ ok: true, pdfPath }));
+  } else {
+    write(JSON.stringify({ ok: false, error: 'missing fake conversion target' }));
+  }
+} else if (/PaperMentor representative figure visual reader/i.test(input)) {
+  write('# Start Here\\n\\n## One-sentence orientation\\n\\nThis slide deck teaches a retrieval encoder pipeline: tokens are encoded into vectors, vectors are compared with document vectors, and the resulting scores rank candidate documents.\\n\\n## Figure explanation under image\\n\\n- **Figure / location:** Figure 2, the representative method pipeline crop.\\n- **Concept / method role:** The visual is an encoder-to-ranking pipeline: query tokens enter an encoder box, document representations are compared against the query representation, and the final block emits ranking scores.\\n- **How to read it:** The query input box names the user text, the encoder box names the learned transformation into vectors, and the ranking score box names the decision output used by retrieval.\\n- **Parts to identify:** The arrows carry representations from input tokens through the encoder to score comparison; the boxes separate input, transformation, and scoring roles so the reader does not confuse data with the learned representation.\\n- **In-figure math / symbols:** The crop uses labels rather than equations; the matching score is connected to the surrounding equation $score(q,d)=q^{T}d$.\\n- **Flow / sequence:** Read the pipeline as query tokens -> encoder representation -> document comparison -> ranking score, with each step narrowing raw text into a retrieval decision.\\n- **What to observe:** The figure encodes that retrieval quality depends on representation learning before benchmark metrics can be interpreted.\\n- **Equations or claims it supports:** It anchors the margin objective and the claim that better encoder representations improve ranking.\\n\\n## Preliminary\\n\\n### Encoder scores\\n\\nA query vector and document vector are compared to rank relevant documents. The score rule can be read as a tiny equation anchor from Eq. (1):\\n\\n$$score(q,d)=q^{T}d$$\\n\\n### Reconstruction checkpoint\\n\\nBefore continuing, the reader should be able to reconstruct why query encoding, document encoding, and score comparison are three different roles.');
+} else if (/PaperMentor section action generator/i.test(input)) {
+  const marker = 'Section/slide:';
   const at = input.indexOf(marker);
   const firstSection = at >= 0 ? input.slice(at + marker.length).split(String.fromCharCode(10))[0].trim() : '1. Method';
-  write(JSON.stringify({
-    startHereMarkdown: '# Start Here\\n\\nThis paper teaches a retrieval encoder pipeline and how it transforms a query into ranked document scores.\\n\\n## Preliminary\\n\\n### Encoder scores\\n\\nA query vector and document vector are compared to rank relevant documents. The inner product is a tiny score rule: if q=[1,2] and d=[3,4], then q dot d = 11, so larger alignment means a stronger match.\\n\\n### Margin objective\\n\\nThe method compares the score of a positive document against a negative document and pushes the positive one higher. This unlocks the figure because the boxes should show query encoding, document encoding, and score comparison.\\n\\n### Reconstruction checkpoint\\n\\nThe reader should be able to explain why the method figure is a pipeline, not a result plot, and how each arrow carries vectors into a ranking score.',
-    firstSection,
-    sectionChoices: ['Explain the encoder scoring pipeline', 'Trace the ranking objective', 'Ask anything about ' + firstSection]
-  }));
+  write(JSON.stringify(['Explain the encoder scoring pipeline', 'Trace the ranking objective', 'Ask anything about ' + firstSection]));
+} else if (/PaperMentor Start Here generator/i.test(input)) {
+  const body = '# Start Here\\n\\n## One-sentence orientation\\n\\nThis slide deck teaches a retrieval encoder pipeline: tokens are encoded into vectors, vectors are compared with document vectors, and the resulting scores rank candidate documents. Figure 2 is the entry point because it shows the visual flow from query tokens to encoder boxes to ranking score output, rather than only reporting a benchmark.\\n\\n## Figure explanation under image\\n\\n- **Figure / location:** Figure 2, the representative method pipeline crop.\\n- **Concept / method role:** The visual is an encoder-to-ranking pipeline: query tokens enter an encoder box, document representations are compared against the query representation, and the final block emits ranking scores.\\n- **How to read it:** The query input box names the user text, the encoder box names the learned transformation into vectors, and the ranking score box names the decision output used by retrieval.\\n- **Parts to identify:** The arrows carry representations from input tokens through the encoder to score comparison; the boxes separate input, transformation, and scoring roles so the reader does not confuse data with the learned representation.\\n- **In-figure math / symbols:** The crop uses labels rather than equations; the matching score is connected to the surrounding equation $score(q,d)=q^{T}d$.\\n- **Flow / sequence:** Read the pipeline as query tokens -> encoder representation -> document comparison -> ranking score, with each step narrowing raw text into a retrieval decision.\\n- **What to observe:** The figure encodes that retrieval quality depends on representation learning before benchmark metrics can be interpreted.\\n- **Equations or claims it supports:** It anchors the margin objective and the claim that better encoder representations improve ranking.\\n\\n## Preliminary\\n\\n### Encoder scores\\n\\nA query vector and document vector are compared to rank relevant documents. The score rule can be read as a tiny equation anchor from Eq. (1):\\n\\n$$score(q,d)=q^{T}d$$\\n\\nIf q=[1,2] and d=[3,4], then the score is 11, so larger alignment means a stronger match.\\n\\n### Margin objective\\n\\nThe method compares the score of a positive document against a negative document and pushes the positive one higher. This objective matters because the slide diagram is a pipeline, not a result plot: each arrow carries representations toward a ranking decision.\\n\\n### Reconstruction checkpoint\\n\\nBefore continuing, the reader should be able to reconstruct why query encoding, document encoding, and score comparison are three different roles, and then explain how the next slide evaluates whether those scores improve retrieval.';
+  if (/Candidate figure crops to inspect/i.test(input)) write(JSON.stringify({ selectedFigureIndex: 2, reason: 'Figure 2 is the method pipeline, not a benchmark result.', mustVerifyFromPixels: ['encoder box', 'ranking flow'], body }));
+  else write(body.replace(/Figure 2 is the entry point/, 'Figure 1 is the entry point').replace(/\\n\\n## Figure explanation under image[\\s\\S]*?\\n\\n## Preliminary/, '\\n\\n## Preliminary'));
+} else if (/representative figure (?:selection|selector)/i.test(input)) {
+  write(JSON.stringify({ selectedIndex: 2, reason: 'Figure 2 is the method pipeline, not a benchmark result.', mustVerifyFromPixels: ['encoder box', 'ranking flow'] }));
+} else {
+  write('## Generated block\\n\\nThis generated explanation block is long enough to pass the smoke path and names a checkpoint, Figure 1, and the retrieval score $score(q,d)$ so the HTML block has concrete teaching content.');
 }
 `;
     writeFileSync(fakeCodexScriptPath, fakeCodexScript);
@@ -608,18 +822,30 @@ require('./fake-codex.js');
 `);
       chmodSync(fakeCodexPath, 0o755);
     }
+    const representativeAutoCountFile = join(temp, 'representative-auto-counts.json');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-auto', '--auto', '--no-preview'], {
       cwd: temp,
       stdio: 'pipe',
-      env: { ...process.env, PATH: `${fakeCodexDir}:${process.env.PATH}`, PAPERMENTOR_AGENT: 'codex' }
+      env: { ...process.env, PATH: `${fakeCodexDir}:${process.env.PATH}`, PAPERMENTOR_AGENT: 'codex', PAPERMENTOR_PDFFIGURES2_JSON: pdffiguresJsonPath, PAPERMENTOR_FAKE_CODEX_COUNT_FILE: representativeAutoCountFile }
     });
     const representativeAutoDir = join(temp, '.papermentor', 'sessions', 'representative-choice-auto');
     const representativeAutoState = readJson(join(representativeAutoDir, 'state.json'), {});
     const representativeAutoCards = readJson(join(representativeAutoDir, 'cards.json'), { cards: [] });
+    const representativeAutoHtml = readFileSync(join(representativeAutoDir, 'index.html'), 'utf8');
     const representativeAutoStart = representativeAutoCards.cards?.find((card) => card.type === 'start-here');
-    if (!representativeAutoStart?.figure?.src?.endsWith('.png')) failures.push('representative auto-selection should attach the model-selected method figure crop');
+    if (!representativeAutoStart?.figure?.src?.endsWith('.png')) failures.push(`representative auto-selection should attach the model-selected method figure crop; warning=${representativeAutoState.figureExtractionWarning || representativeAutoState.figureSelectionWarning || 'none'}`);
     if (representativeAutoState.representativeFigureSelection?.selectedIndex !== 2) failures.push(`representative auto-selection should preserve the model-selected candidate index, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
-    if (!representativeAutoState.figureReadingPending) failures.push('representative auto-crop should keep figureReadingPending true until a pixel-based visual reading is written');
+    if (representativeAutoState.representativeFigureSelection?.source !== 'pdffigures2') failures.push(`representative auto-selection should preserve exact figure-parser source, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
+    if (!representativeAutoState.representativeFigureSelection?.crop) failures.push('representative auto-selection should pass exact figure-parser crop into extract-figure');
+    if (!representativeAutoState.representativeFigureCandidates?.some((candidate) => candidate.source === 'pdffigures2' && candidate.crop)) failures.push('representative figure candidates should include exact parser crop metadata when pdffigures2 JSON is available');
+    if (representativeAutoState.figureReadingPending) failures.push(`representative auto-generation should finish the pixel-based visual reading, got warning=${representativeAutoState.figureReadingWarning || 'none'}`);
+    const representativeAutoCounts = readJson(representativeAutoCountFile, {});
+    if (representativeAutoCounts['start-here'] !== 1 || representativeAutoCounts['representative-figure'] || representativeAutoCounts['representative-figure-reading']) failures.push(`representative auto-generation should combine figure selection and visual reading into one Start Here provider call, got ${JSON.stringify(representativeAutoCounts)}`);
+    if (!/Figure explanation under image|encoder-to-ranking pipeline|query tokens -> encoder representation/.test(representativeAutoStart?.body || '')) failures.push('representative auto-generation should add a pixel-based Figure explanation under image section to Start Here');
+    for (const phrase of ['encoder-to-ranking pipeline', 'query tokens -&gt; encoder representation', 'Parts to identify', 'Flow / sequence']) {
+      if (!representativeAutoHtml.includes(phrase)) failures.push(`representative auto-generation should render visual reading in HTML under the image: ${phrase}`);
+    }
+    if (!(representativeAutoHtml.indexOf('class="paper-figure"') < representativeAutoHtml.indexOf('Preliminary'))) failures.push('representative auto-generation should render the visual reading between the figure image and Preliminary content');
     if (/Full-page visual fallback/i.test(JSON.stringify(representativeAutoCards))) failures.push('representative auto-selection should not attach full-page fallback text');
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-env-bin', '--auto', '--no-preview'], {
@@ -643,7 +869,7 @@ require('./fake-codex.js');
 
     const realPdfPath = join(temp, 'tiny-method-paper.pdf');
     writeTinyPdfFixture(realPdfPath);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPdfPath, '--slug', 'real-pdf-launch', '--page', '1'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPdfPath, '--slug', 'real-pdf-launch', '--page', '1', '--preview'], { cwd: temp, stdio: 'pipe' });
     const realPdfDir = join(temp, '.papermentor', 'sessions', 'real-pdf-launch');
     const realPdfState = readJson(join(realPdfDir, 'state.json'), {});
     const realPdfCards = readJson(join(realPdfDir, 'cards.json'), { cards: [] });
@@ -667,39 +893,77 @@ require('./fake-codex.js');
     const realPdfAfterExtract = readJson(join(realPdfDir, 'cards.json'), { cards: [] });
     if (!realPdfAfterExtract.cards?.some((card) => card.title === 'PDF method figure' && card.figure?.src?.endsWith('.png'))) failures.push('real PDF extract-figure should append a PNG figure card');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPdfPath, '--slug', 'real-pdf-layout-fallback', '--page', '1', '--force-layout-crop', '--no-preview'], { cwd: temp, stdio: 'pipe' });
-    const layoutFallbackDir = join(temp, '.papermentor', 'sessions', 'real-pdf-layout-fallback');
-    const layoutFallbackState = readJson(join(layoutFallbackDir, 'state.json'), {});
-    const layoutFallbackCards = readJson(join(layoutFallbackDir, 'cards.json'), { cards: [] });
-    if (layoutFallbackState.figureExtractionWarning || layoutFallbackState.figureExtractionFallbackWarning) failures.push('layout fallback crop should avoid visible figure extraction warnings');
-    const layoutFallbackStartCard = layoutFallbackCards.cards?.find((card) => card.type === 'start-here');
-    if (!layoutFallbackStartCard?.figure?.src?.endsWith('.png')) failures.push('layout fallback crop should attach a Start Here PNG when bbox extraction is unavailable');
-
     const realPptxPath = join(temp, 'tiny-slide.pptx');
     writeTinyPptxFixture(realPptxPath);
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-launch', '--mode', 'slide', '--page', '1'], { cwd: temp, stdio: 'pipe' });
-    const realPptxDir = join(temp, '.papermentor', 'sessions', 'real-pptx-launch');
-    const realPptxState = readJson(join(realPptxDir, 'state.json'), {});
-    const realPptxCards = readJson(join(realPptxDir, 'cards.json'), { cards: [] });
-    const realPptxHtml = readFileSync(join(realPptxDir, 'index.html'), 'utf8');
-    const realPptxPendingPrompt = readFileSync(join(realPptxDir, 'pending-prompt.md'), 'utf8');
-    if (realPptxState.sourceMode !== 'slide') failures.push(`real PPTX launch should preserve slide mode, got ${realPptxState.sourceMode}`);
-    if (!realPptxState.cropPreview || !existsSync(join(realPptxDir, 'crop-preview.html'))) failures.push('real PPTX launch should write crop preview evidence');
-    const realPptxStartCard = realPptxCards.cards?.find((card) => card.type === 'start-here');
-    if (realPptxStartCard) failures.push('real PPTX launch should not render a Start Here scaffold before the writer prompt is filled');
-    if (!realPptxHtml.includes('How to use this reading room') || realPptxHtml.includes('Not written yet') || realPptxHtml.includes('Topic role')) failures.push('real PPTX launch report should render only non-scaffold HTML before Start Here is filled');
-    for (const phrase of ['Slide Start Here Writer Prompt', 'Topic timeline map', 'Do not output placeholder text', 'Do not use these field names']) {
-      if (!realPptxPendingPrompt.includes(phrase)) failures.push(`real PPTX pending Start Here prompt missing phrase: ${phrase}`);
+    const unsupportedPptPath = join(temp, 'unsupported.ppt');
+    const legacyPptHeader = Buffer.from([0xd0, 0xcf, 0x11, 0xe0, 0xa1, 0xb1, 0x1a, 0xe1, 0, 0, 0, 0]);
+    writeFileSync(unsupportedPptPath, legacyPptHeader);
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', unsupportedPptPath, '--slug', 'unsupported-ppt'], { cwd: temp, stdio: 'pipe' });
+      failures.push('legacy .ppt launch should fail with an unsupported-source error');
+    } catch (error) {
+      const output = `${error.stdout || ''}${error.stderr || ''}`;
+      if (!/PPT\/Keynote input is not supported|unsupported/i.test(output)) failures.push(`legacy .ppt launch should explain that PPT is unsupported, got ${output.slice(0, 300)}`);
     }
-    for (const forbidden of ['Drifting Models', 'pushforward distribution', 'anti-symmetric drifting field', 'stop-gradient target']) {
-      if (realPptxHtml.includes(forbidden)) failures.push(`real PPTX Start Here should not leak paper-specific helper concept: ${forbidden}`);
+    const unsupportedPptWithoutExtension = join(temp, 'unsupported-legacy-ppt');
+    writeFileSync(unsupportedPptWithoutExtension, legacyPptHeader);
+    try {
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', unsupportedPptWithoutExtension, '--slug', 'unsupported-ppt-bytes'], { cwd: temp, stdio: 'pipe' });
+      failures.push('extensionless legacy PPT launch should fail from content detection');
+    } catch (error) {
+      const output = `${error.stdout || ''}${error.stderr || ''}`;
+      if (!/PPT\/Keynote input is not supported|unsupported/i.test(output)) failures.push(`extensionless legacy PPT should be rejected by bytes, got ${output.slice(0, 300)}`);
     }
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'real-pptx-launch', '--source', realPptxPath, '--page', '1', '--overwrite'], { cwd: temp, stdio: 'pipe' });
-    const realPptxPreviews = readJson(join(realPptxDir, 'crop-previews.json'), { previews: [] });
-    if (!realPptxPreviews.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('real PPTX preview-crops should include full-slide candidate');
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'real-pptx-launch', '--source', realPptxPath, '--page', '1', '--title', 'PPTX slide visual', '--body', '## Extracted visual explanation\n\n- **Question:** What does this slide show?\n- **Concept:** retrieval encoder pipeline.\n- **What to observe:** the slide flows from query to score.\n- **Conclusion:** this is source slide evidence, not a generated diagram.'], { cwd: temp, stdio: 'pipe' });
-    const realPptxAfterExtract = readJson(join(realPptxDir, 'cards.json'), { cards: [] });
-    if (!realPptxAfterExtract.cards?.some((card) => card.title === 'PPTX slide visual' && card.figure?.src?.endsWith('.png'))) failures.push('real PPTX extract-figure should append a PNG slide card');
+    const noFigurePdfPath = join(temp, 'no-figure-paper.pdf');
+    writeNoFigurePdfFixture(noFigurePdfPath);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'No Figure Preview', '--source', noFigurePdfPath, '--slug', 'no-figure-preview'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'no-figure-preview', '--source', noFigurePdfPath, '--page', '1', '--overwrite'], { cwd: temp, stdio: 'pipe' });
+    const noFigurePreview = readJson(join(temp, '.papermentor', 'sessions', 'no-figure-preview', 'crop-previews.json'), { previews: [] });
+    const noFigurePreviewState = readJson(join(temp, '.papermentor', 'sessions', 'no-figure-preview', 'state.json'), {});
+    if (!noFigurePreview.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('preview-crops should still write full-page preview when auto Figure 1 is absent');
+    if (noFigurePreview.previews?.some((preview) => /Auto Figure/.test(preview.label))) failures.push('preview-crops should not invent an auto Figure crop when no Figure 1 caption exists');
+    if (!/Auto figure crop unavailable|could not locate Figure 1/i.test(noFigurePreview.warning || noFigurePreviewState.cropPreviewWarning || '')) failures.push('preview-crops should persist an auto-crop warning without aborting the preview');
+    const fakeConvertedPdf = join(temp, 'fake-converted-slide.pdf');
+    writeTinyPdfFixture(fakeConvertedPdf);
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-fake-pdf-launch', '--no-preview', '--no-figure'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT: 'codex', PAPERMENTOR_CODEX_BIN: fakeCodexPath, PAPERMENTOR_FAKE_CONVERTED_PDF: fakeConvertedPdf }
+    });
+    const fakePptxPdfState = readJson(join(temp, '.papermentor', 'sessions', 'real-pptx-fake-pdf-launch', 'state.json'), {});
+    if (fakePptxPdfState.sourceMode !== 'slide') failures.push(`fake PPTX PDF conversion should preserve slide mode, got ${fakePptxPdfState.sourceMode}`);
+    if (!String(fakePptxPdfState.source || '').endsWith('.pdf')) failures.push(`fake PPTX PDF conversion should store converted PDF as source, got ${fakePptxPdfState.source}`);
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'PPTX Preview Args', '--source', realPptxPath, '--slug', 'pptx-preview-args'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'pptx-preview-args', '--source', realPptxPath, '--page', '1', '--agent', 'codex', '--overwrite'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_CODEX_BIN: fakeCodexPath, PAPERMENTOR_FAKE_CONVERTED_PDF: fakeConvertedPdf }
+    });
+    const pptxPreview = readJson(join(temp, '.papermentor', 'sessions', 'pptx-preview-args', 'crop-previews.json'), { previews: [] });
+    if (!pptxPreview.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('PPTX preview-crops should pass provider args into conversion and write full-page preview');
+
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-auto-quality', '--auto', '--no-preview', '--no-figure'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PAPERMENTOR_AGENT: 'codex', PAPERMENTOR_CODEX_BIN: fakeCodexPath, PAPERMENTOR_FAKE_CONVERTED_PDF: fakeConvertedPdf }
+    });
+    const pptxAutoDir = join(temp, '.papermentor', 'sessions', 'real-pptx-auto-quality');
+    const pptxAutoState = readJson(join(pptxAutoDir, 'state.json'), {});
+    const pptxAutoCards = readJson(join(pptxAutoDir, 'cards.json'), { cards: [] });
+    const pptxAutoHtml = readFileSync(join(pptxAutoDir, 'index.html'), 'utf8');
+    const pptxAutoStartCard = pptxAutoCards.cards?.find((card) => card.type === 'start-here');
+    const pptxQa = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'qa', '--session', 'real-pptx-auto-quality', '--json', '--min', '82'], { cwd: temp, encoding: 'utf8' }));
+    if (pptxAutoState.sourceMode !== 'slide') failures.push(`PPTX auto quality launch should stay in slide mode, got ${pptxAutoState.sourceMode}`);
+    if (!String(pptxAutoState.source || '').endsWith('.pdf')) failures.push(`PPTX auto quality launch should read the converted PDF, got ${pptxAutoState.source}`);
+    if (!pptxAutoStartCard || markdownPlainText(pptxAutoStartCard.body).length < 420) failures.push('PPTX auto quality launch should write a substantial Start Here card');
+    if (!pptxAutoState.nextChoices?.length) failures.push('PPTX auto quality launch should keep default section choices available after Start Here');
+    if (pptxAutoState.prefetchNotice) failures.push('PPTX auto quality launch should not block on provider-generated section menu prefetch by default');
+    if (pptxQa.status !== 'pass' || pptxQa.overall < 82) failures.push(`PPTX auto quality launch should pass content QA, got ${pptxQa.overall}/${pptxQa.status}`);
+    for (const phrase of ['Start Here', 'One-sentence orientation', 'Preliminary', 'Figure 1', 'retrieval encoder pipeline']) {
+      if (!pptxAutoHtml.includes(phrase)) failures.push(`PPTX auto quality HTML missing ${phrase}`);
+    }
+    if (/Start Here pending|Not written yet|Not built yet|placeholder/i.test(pptxAutoHtml)) failures.push('PPTX auto quality HTML should contain finished Start Here content, not pending/scaffold text');
 
     const goldenFiles = {
       equation: join(temp, 'golden-equation-card.md'),
@@ -793,21 +1057,20 @@ require('./fake-codex.js');
     if (!/HTML/.test(providerOffState.tuiNotice || '') || !/변경되지 않았습니다|did not change/i.test(providerOffState.tuiNotice || '')) failures.push('provider-off generated run should explicitly say the HTML was not changed');
     if ((providerOffCards.cards || []).length !== 1) failures.push('provider-off generated run should not append an HTML block without a provider');
 
-    const serverScript = join(temp, 'serve-once.cjs');
-    const portFile = join(temp, 'server-port.txt');
-    writeFileSync(serverScript, `const http=require('http');const fs=require('fs');const file=process.argv[2];const portFile=process.argv[3];const server=http.createServer((req,res)=>{res.setHeader('content-type','text/plain');res.end(fs.readFileSync(file));});server.listen(0,'127.0.0.1',()=>fs.writeFileSync(portFile,String(server.address().port)));`);
-    const server = spawn('node', [serverScript, launchTextPath, portFile], { cwd: temp, stdio: 'ignore' });
     try {
-      for (let i = 0; i < 50 && !existsSync(portFile); i += 1) execFileSync('node', ['-e', 'Atomics.wait(new Int32Array(new SharedArrayBuffer(4)),0,0,50)']);
-      const port = readFileSync(portFile, 'utf8').trim();
-      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke', '--no-figure', '--no-preview', '--allow-insecure-http'], { cwd: temp, stdio: 'pipe' });
-      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', `http://127.0.0.1:${port}/launch-source.txt`, '--slug', 'launch-url-smoke-2', '--no-figure', '--no-preview', '--allow-insecure-http'], { cwd: temp, stdio: 'pipe' });
-      const sourceFiles = readdirSync(join(temp, '.papermentor', 'sources')).filter((name) => name.endsWith('.txt'));
-      if (sourceFiles.length !== 1) failures.push(`URL launch should reuse deterministic source cache, got ${sourceFiles.join(',')}`);
-      const urlHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'launch-url-smoke', 'index.html'), 'utf8');
-      if (urlHtml.includes('127.0.0.1') || urlHtml.includes('/launch-source.txt')) failures.push('URL launch HTML should not expose source URL or cached source path');
-    } finally {
-      server.kill();
+      await withTextServer(launchTextPath, async (port) => {
+        const launchUrl = `http://127.0.0.1:${port}/launch-source.txt`;
+        const launchArgs = (slug) => [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchUrl, '--slug', slug, '--no-figure', '--no-preview', '--allow-insecure-http'];
+        await execFileAsync('node', launchArgs('launch-url-smoke'), { cwd: temp, timeout: 30000 });
+        await execFileAsync('node', launchArgs('launch-url-smoke-2'), { cwd: temp, timeout: 30000 });
+        const sourceFiles = readdirSync(join(temp, '.papermentor', 'sources')).filter((name) => name.endsWith('.txt'));
+        if (sourceFiles.length !== 1) failures.push(`URL launch should reuse deterministic source cache, got ${sourceFiles.join(',')}`);
+        const urlHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'launch-url-smoke', 'index.html'), 'utf8');
+        if (urlHtml.includes('127.0.0.1') || urlHtml.includes('/launch-source.txt')) failures.push('URL launch HTML should not expose source URL or cached source path');
+      });
+    } catch (error) {
+      if (error?.code === 'EPERM' || /listen EPERM/.test(error?.message || '')) console.warn(`[skip] URL launch smoke requires local listen permission: ${error.message}`);
+      else throw error;
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     const recentOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
@@ -1010,7 +1273,8 @@ require('./fake-codex.js');
   } catch (error) {
     failures.push(`session helper smoke failed: ${error.message}`);
   } finally {
-    rmSync(temp, { recursive: true, force: true });
+    if (process.env.PAPERMENTOR_KEEP_VALIDATE_TEMP) console.warn(`[keep] session temp: ${temp}`);
+    else rmSync(temp, { recursive: true, force: true });
   }
 }
 
@@ -1112,203 +1376,6 @@ function commandAvailable(name) {
     return true;
   } catch {
     return false;
-  }
-}
-
-function pythonPackageAvailable(packageName) {
-  try {
-    execFileSync('python3', ['-c', `import ${packageName}`], { stdio: 'pipe' });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function validatePptxExtractionWhenAvailable() {
-  if (!commandAvailable('soffice') || !pythonPackageAvailable('pptx')) return;
-
-  const temp = mkdtempSync(join(tmpdir(), 'papermentor-pptx-'));
-  try {
-    const pptxPath = join(temp, 'papermentor-smoke.pptx');
-    const makeSlidePath = join(temp, 'make_slides.py');
-    writeFileSync(makeSlidePath, `from pptx import Presentation
-from pptx.util import Inches, Pt
-from pptx.dml.color import RGBColor
-
-prs = Presentation()
-prs.slide_width = Inches(13.333)
-prs.slide_height = Inches(7.5)
-slide = prs.slides.add_slide(prs.slide_layouts[6])
-
-bg = slide.background
-fill = bg.fill
-fill.solid()
-fill.fore_color.rgb = RGBColor(251, 250, 246)
-
-title = slide.shapes.add_textbox(Inches(0.6), Inches(0.4), Inches(12.0), Inches(0.7))
-tf = title.text_frame
-tf.text = "PaperMentor PPTX Smoke: Method Slide"
-p = tf.paragraphs[0]
-p.font.size = Pt(30)
-p.font.bold = True
-p.font.color.rgb = RGBColor(34, 34, 34)
-
-items = [
-    ("Upload paper / slides", 0.8),
-    ("Detect section / slide", 3.7),
-    ("Choose action in TUI", 6.6),
-    ("Append HTML block", 9.5),
-]
-for text, left in items:
-    box = slide.shapes.add_shape(1, Inches(left), Inches(2.35), Inches(2.35), Inches(1.25))
-    box.fill.solid()
-    box.fill.fore_color.rgb = RGBColor(255, 255, 255)
-    box.line.color.rgb = RGBColor(64, 64, 64)
-    frame = box.text_frame
-    frame.text = text
-    frame.paragraphs[0].font.size = Pt(16)
-    frame.paragraphs[0].font.bold = True
-    frame.paragraphs[0].font.color.rgb = RGBColor(31, 31, 31)
-
-for left in [3.25, 6.15, 9.05]:
-    arrow = slide.shapes.add_shape(33, Inches(left), Inches(2.72), Inches(0.35), Inches(0.4))
-    arrow.fill.solid()
-    arrow.fill.fore_color.rgb = RGBColor(74, 74, 74)
-    arrow.line.color.rgb = RGBColor(74, 74, 74)
-
-footer = slide.shapes.add_textbox(Inches(0.85), Inches(5.3), Inches(11.6), Inches(0.7))
-footer.text_frame.text = "This slide verifies real PPTX → PDF → PNG extraction through LibreOffice soffice."
-footer.text_frame.paragraphs[0].font.size = Pt(16)
-footer.text_frame.paragraphs[0].font.color.rgb = RGBColor(80, 80, 80)
-
-prs.save(${JSON.stringify(pptxPath)})
-`);
-    execFileSync('python3', [makeSlidePath], { cwd: temp, stdio: 'pipe' });
-
-    execFileSync('node', [
-      join(root, 'scripts', 'papermentor-session.mjs'),
-      'start',
-      '--title',
-      'PPTX Smoke Slide',
-      '--slug',
-      'pptx-smoke',
-      '--source',
-      pptxPath,
-      '--mode',
-      'slide'
-    ], { cwd: temp, stdio: 'pipe' });
-
-    const previewOutput = execFileSync('node', [
-      join(root, 'scripts', 'papermentor-session.mjs'),
-      'preview-crops',
-      '--session',
-      'pptx-smoke',
-      '--source',
-      pptxPath,
-      '--page',
-      '1',
-      '--title',
-      'Slide 1 — Full method pipeline',
-      '--overwrite'
-    ], { cwd: temp, encoding: 'utf8' });
-    const previewHtmlPath = join(temp, '.papermentor', 'sessions', 'pptx-smoke', 'crop-preview.html');
-    const previewJsonPath = join(temp, '.papermentor', 'sessions', 'pptx-smoke', 'crop-previews.json');
-    const previewHtml = readFileSync(previewHtmlPath, 'utf8');
-    const previewData = readJson(previewJsonPath, { previews: [] });
-    if (!previewOutput.includes('Crop preview written')) failures.push('preview-crops should print the preview path');
-    if (!previewHtml.includes('Crop preview') || !previewHtml.includes('Full page / slide')) failures.push('preview-crops should render a visual preview HTML');
-    if (previewHtml.includes(temp) || previewHtml.includes(pptxPath)) failures.push('crop preview HTML should not leak absolute local source paths');
-    if (!previewData.previews?.length || !previewData.previews?.[0]?.command?.includes('extract-figure')) failures.push('preview-crops should persist recrop commands');
-    if (JSON.stringify(previewData).includes(temp) || JSON.stringify(previewData).includes(pptxPath)) failures.push('crop preview metadata should use relative/session source paths, not absolute paths');
-
-    execFileSync('node', [
-      join(root, 'scripts', 'papermentor-session.mjs'),
-      'extract-figure',
-      '--session',
-      'pptx-smoke',
-      '--source',
-      pptxPath,
-      '--page',
-      '1',
-      '--title',
-      'Slide 1 — Full method pipeline',
-      '--caption',
-      'Slide 1. Full method pipeline.',
-      '--body',
-      '## Slide explanation\n\n- **Question:** What does this slide verify?\n- **Concept:** PPTX-to-reading-room extraction.\n- **What to observe:** the entire slide is preserved without clipping.\n- **Conclusion:** slide sessions can attach real converted visuals.'
-    ], { cwd: temp, stdio: 'pipe' });
-
-    const sessionDir = join(temp, '.papermentor', 'sessions', 'pptx-smoke');
-    const htmlPath = join(sessionDir, 'index.html');
-    const cardsPath = join(sessionDir, 'cards.json');
-    const assetsDir = join(sessionDir, 'assets');
-    const html = readFileSync(htmlPath, 'utf8');
-    const data = readJson(cardsPath, { cards: [] });
-    const pngs = readdirSync(assetsDir).filter((name) => name.endsWith('.png') && !name.startsWith('crop-preview-'));
-    if (pngs.length !== 1) failures.push(`pptx extraction should create one PNG asset, got ${pngs.length}`);
-    if (pngs.length === 1) {
-      const pngPath = join(assetsDir, pngs[0]);
-      const fileOutput = execFileSync('file', [pngPath], { encoding: 'utf8' });
-      if (!fileOutput.includes('PNG image data')) failures.push('pptx extraction asset should be a PNG image');
-      const dims = fileOutput.match(/PNG image data,\s*(\d+)\s*x\s*(\d+)/);
-      if (!dims) failures.push(`pptx extraction should expose PNG dimensions: ${fileOutput.trim()}`);
-      else if (Number(dims[1]) < 1600 || Number(dims[2]) < 900) failures.push(`pptx extraction PNG unexpectedly small: ${dims[1]}x${dims[2]}`);
-    }
-    if (!html.includes('class="paper-figure"')) failures.push('pptx extraction should render the converted slide as a paper figure');
-    if (!html.includes('Slide 1 — Full method pipeline')) failures.push('pptx extraction HTML should include the slide explanation title');
-    if (!html.includes('assets/mathjax/tex-svg.js')) failures.push('pptx extraction report should use local MathJax');
-    if (data.cards?.length !== 1 || data.cards?.[0]?.type !== 'slide-explanation') failures.push('pptx extraction should persist a slide-explanation card for slide mode');
-
-    execFileSync('soffice', ['--headless', '--convert-to', 'ppt', '--outdir', temp, pptxPath], { cwd: temp, stdio: 'pipe' });
-    const pptPath = join(temp, 'papermentor-smoke.ppt');
-    if (!existsSync(pptPath)) failures.push('legacy .ppt fixture conversion should create a .ppt file');
-    else {
-      execFileSync('node', [
-        join(root, 'scripts', 'papermentor-session.mjs'),
-        'start',
-        '--title',
-        'Legacy PPT Smoke Slide',
-        '--slug',
-        'legacy-ppt-smoke',
-        '--source',
-        pptPath,
-        '--mode',
-        'slide'
-      ], { cwd: temp, stdio: 'pipe' });
-      execFileSync('node', [
-        join(root, 'scripts', 'papermentor-session.mjs'),
-        'extract-figure',
-        '--session',
-        'legacy-ppt-smoke',
-        '--source',
-        pptPath,
-        '--page',
-        '1',
-        '--title',
-        'Legacy PPT slide',
-        '--caption',
-        'Slide 1. Legacy PPT smoke.',
-        '--body',
-        '## Slide explanation\n\n- **Question:** Does legacy PPT extraction work?\n- **Concept:** LibreOffice converts PPT to PDF, then PaperMentor renders a slide image.\n- **What to observe:** the full slide is preserved.\n- **Conclusion:** PPT works through the same extraction path.'
-      ], { cwd: temp, stdio: 'pipe' });
-      const legacySessionDir = join(temp, '.papermentor', 'sessions', 'legacy-ppt-smoke');
-      const legacyHtml = readFileSync(join(legacySessionDir, 'index.html'), 'utf8');
-      const legacyCards = readJson(join(legacySessionDir, 'cards.json'), { cards: [] });
-      const legacyPngs = readdirSync(join(legacySessionDir, 'assets')).filter((name) => name.endsWith('.png') && !name.startsWith('crop-preview-'));
-      if (legacyPngs.length !== 1) failures.push(`legacy .ppt extraction should create one PNG asset, got ${legacyPngs.length}`);
-      if (legacyPngs.length === 1) {
-        const fileOutput = execFileSync('file', [join(legacySessionDir, 'assets', legacyPngs[0])], { encoding: 'utf8' });
-        const dims = fileOutput.match(/PNG image data,\s*(\d+)\s*x\s*(\d+)/);
-        if (!fileOutput.includes('PNG image data')) failures.push('legacy .ppt extraction asset should be a PNG image');
-        else if (dims && (Number(dims[1]) < 1600 || Number(dims[2]) < 900)) failures.push(`legacy .ppt extraction PNG unexpectedly small: ${dims[1]}x${dims[2]}`);
-      }
-      if (!legacyHtml.includes('Legacy PPT slide') || !legacyHtml.includes('class="paper-figure"')) failures.push('legacy .ppt extraction should render a slide figure block');
-      if (legacyCards.cards?.length !== 1 || legacyCards.cards?.[0]?.type !== 'slide-explanation') failures.push('legacy .ppt extraction should persist a slide-explanation card');
-    }
-  } catch (error) {
-    failures.push(`pptx extraction smoke failed: ${error.message}`);
-  } finally {
-    rmSync(temp, { recursive: true, force: true });
   }
 }
 
@@ -1900,9 +1967,8 @@ validateContentQualityQa();
 validateProductGradeAudits();
 validatePaperStageRunnerPrompts();
 validateInstalledArtifact();
-validateSessionHelper();
+await validateSessionHelper();
 validateSourceModes();
-validatePptxExtractionWhenAvailable();
 validateAllBlockTypes();
 
 if (failures.length) {

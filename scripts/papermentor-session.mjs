@@ -43,7 +43,7 @@ const sourceModePathItems = {
 function normalizeSourceMode(value, fallback = 'paper') {
   const raw = String(value || '').toLowerCase().trim().replace(/_/g, '-');
   if (['paper', 'research-paper', 'pdf-paper'].includes(raw)) return 'paper';
-  if (['slide', 'slides', 'ppt', 'pptx', 'presentation'].includes(raw)) return 'slide';
+  if (['slide', 'slides', 'pptx', 'presentation'].includes(raw)) return 'slide';
   if (['url', 'web', 'webpage', 'web-page', 'website', 'blog', 'post', 'html', 'article'].includes(raw)) return 'url';
   if (raw === 'auto' || raw === '') return fallback;
   return fallback;
@@ -266,9 +266,9 @@ function latestSessionSlug() {
 
 function argsModeFromSource(source) {
   const value = String(source || '').toLowerCase();
-  if (/\.(pptx?|key)(\?|#|$)/.test(value) || /slide|presentation/.test(value)) return 'slide';
+  if (/\.pptx(\?|#|$)/.test(value) || /slide|presentation/.test(value)) return 'slide';
   if (/\.(html?|xhtml)(\?|#|$)/.test(value)) return 'url';
-  if (/^https?:\/\//i.test(value) && !/\.(pdf|tex|txt|md|pptx?|key)(\?|#|$)/i.test(value) && !/arxiv\.org\/(?:abs|pdf)\//i.test(value) && !/docs\.google\.com\/(?:presentation|document)\/d\//i.test(value) && !/drive\.google\.com\/(?:file\/d\/|open\b|uc\b)/i.test(value)) return 'url';
+  if (/^https?:\/\//i.test(value) && !/\.(pdf|tex|txt|md|pptx)(\?|#|$)/i.test(value) && !/arxiv\.org\/(?:abs|pdf)\//i.test(value) && !/docs\.google\.com\/(?:presentation|document)\/d\//i.test(value) && !/drive\.google\.com\/(?:file\/d\/|open\b|uc\b)/i.test(value)) return 'url';
   return 'paper';
 }
 
@@ -623,7 +623,7 @@ function detectSourceExtensionFromBytes(path) {
   if (head[0] === 0xff && head[1] === 0xd8 && head[2] === 0xff) return '.jpg';
   if (head.subarray(0, 6).toString() === 'GIF87a' || head.subarray(0, 6).toString() === 'GIF89a') return '.gif';
   if (head.subarray(0, 4).toString() === 'RIFF' && head.subarray(8, 12).toString() === 'WEBP') return '.webp';
-  if (head.length >= 8 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0) return '.ppt';
+  if (head.length >= 8 && head[0] === 0xd0 && head[1] === 0xcf && head[2] === 0x11 && head[3] === 0xe0 && head[4] === 0xa1 && head[5] === 0xb1 && head[6] === 0x1a && head[7] === 0xe1) return '.ppt';
   if (head.subarray(0, 2).toString() === 'PK') {
     const zipText = probe.toString('latin1');
     if (zipText.includes('ppt/presentation.xml')) return '.pptx';
@@ -702,12 +702,14 @@ function downloadSourceIfNeeded(source, slugHint = 'source', args = {}) {
 
 function extractTextFromSourceFile(source, args = {}) {
   const absolute = resolve(source);
-  const extension = extname(absolute).toLowerCase();
+  const extension = extname(absolute).toLowerCase() || detectSourceExtensionFromBytes(absolute);
   if (['.txt', '.md', '.tex'].includes(extension)) return readFileSync(absolute, 'utf8');
   if (['.html', '.htm', '.xhtml'].includes(extension)) return htmlToReadableText(readFileSync(absolute, 'utf8'), absolute);
   const pdftotext = commandPath('pdftotext');
   if (!pdftotext) {
-    if (['.pdf', '.ppt', '.pptx', '.key'].includes(extension)) throw new Error('text extraction requires `pdftotext` (Poppler) on PATH');
+    if (extension === '.pdf') throw new Error('text extraction requires `pdftotext` (Poppler) on PATH');
+    if (extension === '.pptx') throw new Error('PPTX input must be converted to PDF before text extraction');
+    if (['.ppt', '.key'].includes(extension)) throw new Error('PPT/Keynote input is not supported; export to PDF or PPTX first');
     return '';
   }
   const firstOnly = Boolean(args.firstPage || args['first-page']);
@@ -716,17 +718,8 @@ function extractTextFromSourceFile(source, args = {}) {
   if (extension === '.pdf') {
     return execFileSync(pdftotext, [...baseArgs, absolute, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   }
-  if (['.ppt', '.pptx', '.key'].includes(extension)) {
-    mkdirSync(sourceCacheDir(), { recursive: true });
-    const tempDir = mkdtempSync(join(sourceCacheDir(), 'text-extract-tmp-'));
-    try {
-      mkdirSync(tempDir, { recursive: true });
-      const pdf = convertPptToPdf(absolute, tempDir);
-      return execFileSync(pdftotext, [...baseArgs, pdf, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-    } finally {
-      rmSync(tempDir, { recursive: true, force: true });
-    }
-  }
+  if (extension === '.pptx') throw new Error('PPTX input must be converted to PDF before text extraction');
+  if (['.ppt', '.key'].includes(extension)) throw new Error('PPT/Keynote input is not supported; export to PDF or PPTX first');
   return '';
 }
 
@@ -1303,14 +1296,8 @@ function execCommandFileSync(command, argv, options = {}) {
   return execFileSync(command, argv, options);
 }
 
-function pythonModuleAvailable(moduleName) {
-  const result = spawnSync('python3', ['-c', `import ${moduleName}`], { encoding: 'utf8' });
-  return result.status === 0;
-}
-
 function dependencyStatusRows() {
-  const libreOffice = commandPath('soffice') || commandPath('libreoffice');
-  const imageMagick = commandPath('magick') || commandPath('convert') || (process.platform === 'darwin' ? commandPath('sips') : '');
+  const imageMagick = commandPath('magick') || commandPath('convert');
   const requestedProvider = requestedAgentProvider({});
   const providerLabel = requestedProvider ? `AI generation provider (${requestedProvider})` : 'AI generation provider';
   return [
@@ -1327,22 +1314,22 @@ function dependencyStatusRows() {
       install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
     },
     {
-      name: 'LibreOffice',
-      ok: Boolean(libreOffice),
-      purpose: 'convert PPT/PPTX files to PDF before slide image extraction',
-      install: 'Ubuntu: sudo apt-get install libreoffice; macOS: brew install --cask libreoffice'
+      name: 'pdftohtml',
+      ok: Boolean(commandPath('pdftohtml')),
+      purpose: 'extract stable PDF text coordinates for figure crops',
+      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
+    },
+    {
+      name: 'pdfinfo',
+      ok: Boolean(commandPath('pdfinfo')),
+      purpose: 'read PDF page sizes for coordinate-accurate figure crops',
+      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
     },
     {
       name: 'ImageMagick',
       ok: Boolean(imageMagick),
       purpose: 'crop rendered pages/slides when --crop or --auto is used',
       install: 'Ubuntu: sudo apt-get install imagemagick; macOS: brew install imagemagick'
-    },
-    {
-      name: 'python3-pptx',
-      ok: pythonModuleAvailable('pptx'),
-      purpose: 'generate and validate PPTX fixture smoke tests',
-      install: 'Ubuntu: sudo apt-get install python3-pptx; Python env: python3 -m pip install python-pptx'
     }
   ];
 }
@@ -1403,57 +1390,75 @@ function runTool(command, args, errorHint) {
   }
 }
 
-function sleepMs(ms) {
-  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+function assertPdfFile(path, label = 'PDF') {
+  if (!existsSync(path)) throw new Error(`${label} was not created at ${path}`);
+  const probe = readFileProbe(path, { headBytes: 8, tailBytes: 0 });
+  if (probe.subarray(0, 4).toString() !== '%PDF') throw new Error(`${label} is not a PDF file: ${path}`);
 }
 
-function convertPptToPdf(source, outDir) {
-  const soffice = commandPath('soffice') || commandPath('libreoffice');
-  if (!soffice) throw new Error('PPT/PPTX extraction requires LibreOffice (`soffice`) on PATH to convert slides to PDF');
-  mkdirSync(outDir, { recursive: true });
-  const profileDir = mkdtempSync(join(outDir, 'libreoffice-profile-'));
-  const args = ['--headless', `-env:UserInstallation=${pathToFileURL(profileDir).href}`, '--convert-to', 'pdf', '--outdir', outDir, source];
+function buildPptxConversionPrompt(source, output) {
+  return `# PaperMentor PPTX to PDF conversion task
+
+Convert this PPTX file into a faithful PDF for PaperMentor slide reading.
+
+Source PPTX:
+${source}
+
+Required output PDF:
+${output}
+
+Rules:
+- Create the PDF exactly at the required output path.
+- Preserve slide images, diagrams, layout, and visible text.
+- Do not use LibreOffice, soffice, or libreoffice command-line tools.
+- Use any other available system application, scripting bridge, package, or export mechanism.
+- If conversion is impossible in this environment, do not create a fake PDF; report the blocker.
+- Return only a short JSON object such as {"ok":true,"pdfPath":"${output}"} or {"ok":false,"error":"..."}.
+`;
+}
+
+function convertPptxWithAgent(source, output, args = {}) {
+  mkdirSync(dirname(output), { recursive: true });
+  const prompt = buildPptxConversionPrompt(source, output);
   try {
-    execFileSync(soffice, args, { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+    runAgentCompletion(prompt, {
+      ...args,
+      agentTask: 'pptx-to-pdf',
+      repoContext: true,
+      timeout: args.timeout || process.env.PAPERMENTOR_PPTX_CONVERSION_TIMEOUT_MS || process.env.PAPERMENTOR_AGENT_TIMEOUT_MS || 300000
+    });
   } catch (error) {
-    const stdout = error.stdout ? String(error.stdout).trim() : '';
-    const stderr = error.stderr ? String(error.stderr).trim() : '';
-    throw new Error(`LibreOffice could not convert the slides to PDF${stderr ? `: ${stderr.slice(0, 400)}` : stdout ? `: ${stdout.slice(0, 400)}` : ''}`);
+    throw new Error(`PPTX to PDF conversion via ${requestedAgentProvider(args) || 'agent'} failed: ${error.message}`);
   }
-  const pdf = join(outDir, `${basename(source, extname(source))}.pdf`);
-  for (let attempt = 0; attempt < 8; attempt += 1) {
-    if (existsSync(pdf)) return pdf;
-    const candidates = readdirSync(outDir)
-      .filter((name) => extname(name).toLowerCase() === '.pdf')
-      .map((name) => join(outDir, name));
-    if (candidates.length === 1) return candidates[0];
-    if (attempt < 7) sleepMs(125);
+  assertPdfFile(output, 'Agent-converted PPTX PDF');
+  return output;
+}
+
+function convertPptxSourceToPdf(source, args = {}) {
+  const absolute = resolve(source);
+  const extension = extname(absolute).toLowerCase() || detectSourceExtensionFromBytes(absolute);
+  if (extension === '.ppt' || extension === '.key') {
+    throw new Error('PPT/Keynote input is not supported; export to PDF or PPTX first');
   }
-  const seen = readdirSync(outDir).filter((name) => !name.startsWith('libreoffice-profile-')).join(', ') || 'none';
-  throw new Error(`LibreOffice conversion finished but no PDF was found at ${pdf}; outdir files: ${seen}`);
+  if (extension !== '.pptx') return absolute;
+  mkdirSync(sourceCacheDir(), { recursive: true });
+  const stem = slugify(basename(absolute, extension)) || 'slides';
+  const sourceStat = statSync(absolute);
+  const key = createHash('sha256').update(`${absolute}:${sourceStat.size}:${sourceStat.mtimeMs}`).digest('hex').slice(0, 12);
+  const cachedPdf = join(sourceCacheDir(), `${stem}-${key}.pdf`);
+  if (existsSync(cachedPdf)) return cachedPdf;
+  return convertPptxWithAgent(absolute, cachedPdf, args);
 }
 
 function renderPdfPageToImage(pdfPath, page, outFile, dpi = 180) {
   const pdftoppm = commandPath('pdftoppm');
-  if (pdftoppm) {
-    const outBase = outFile.replace(/\.png$/i, '');
-    runTool(pdftoppm, ['-png', '-f', String(page), '-singlefile', '-r', String(dpi), pdfPath, outBase], 'pdftoppm could not render the requested PDF page');
-    const generated = `${outBase}.png`;
-    if (!existsSync(generated)) throw new Error(`pdftoppm did not create ${generated}`);
-    if (generated !== outFile) copyFileSync(generated, outFile);
-    return outFile;
-  }
-  const qlmanage = commandPath('qlmanage');
-  if (qlmanage && Number(page) === 1) {
-    const outDir = dirname(outFile);
-    runTool(qlmanage, ['-t', '-s', '1600', '-o', outDir, pdfPath], 'qlmanage could not render a PDF thumbnail');
-    const generated = join(outDir, `${basename(pdfPath)}.png`);
-    if (existsSync(generated)) {
-      copyFileSync(generated, outFile);
-      return outFile;
-    }
-  }
-  throw new Error('PDF extraction requires `pdftoppm` (Poppler) on PATH; macOS qlmanage fallback only supports page 1 thumbnails');
+  if (!pdftoppm) throw new Error('PDF extraction requires `pdftoppm` (Poppler) on PATH');
+  const outBase = outFile.replace(/\.png$/i, '');
+  runTool(pdftoppm, ['-png', '-f', String(page), '-singlefile', '-r', String(dpi), pdfPath, outBase], 'pdftoppm could not render the requested PDF page');
+  const generated = `${outBase}.png`;
+  if (!existsSync(generated)) throw new Error(`pdftoppm did not create ${generated}`);
+  if (generated !== outFile) copyFileSync(generated, outFile);
+  return outFile;
 }
 
 function cropImage(sourceImage, outImage, crop) {
@@ -1472,13 +1477,7 @@ function cropImage(sourceImage, outImage, crop) {
     runTool(convert, [sourceImage, '-crop', `${rect.width}x${rect.height}+${rect.x}+${rect.y}`, '+repage', outImage], 'ImageMagick convert could not crop the extracted image');
     return outImage;
   }
-  const sips = commandPath('sips');
-  if (sips && process.platform === 'darwin') {
-    copyFileSync(sourceImage, outImage);
-    runTool(sips, ['-c', String(rect.height), String(rect.width), '--cropOffset', String(rect.y), String(rect.x), outImage], 'macOS sips could not crop the extracted image');
-    return outImage;
-  }
-  throw new Error('cropping requires ImageMagick (`magick`/`convert`) or macOS `sips`; rerun without --crop to attach the full rendered page');
+  throw new Error('cropping requires ImageMagick (`magick`/`convert`) on PATH');
 }
 
 function imageDimensions(file) {
@@ -1542,34 +1541,190 @@ function figureQualityHints({ extracted, rendered, crop, autoCrop }) {
   return { dimensions: dims, renderedDimensions: renderedDims, warnings };
 }
 
-function parsePdfBbox(xml) {
-  const pageMatch = String(xml || '').match(/<page[^>]*width="([0-9.]+)"[^>]*height="([0-9.]+)"/);
-  const page = pageMatch ? { width: Number(pageMatch[1]), height: Number(pageMatch[2]) } : { width: 612, height: 792 };
-  const words = [];
-  const wordRegex = /<word[^>]*xMin="([0-9.]+)"[^>]*yMin="([0-9.]+)"[^>]*xMax="([0-9.]+)"[^>]*yMax="([0-9.]+)"[^>]*>(.*?)<\/word>/g;
-  for (const match of String(xml || '').matchAll(wordRegex)) {
-    words.push({
-      xMin: Number(match[1]),
-      yMin: Number(match[2]),
-      xMax: Number(match[3]),
-      yMax: Number(match[4]),
-      text: match[5].replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>')
-    });
+function escapeRegex(value) {
+  return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function normalizeFigureLabel(value) {
+  return String(value || '').trim().replace(/^fig(?:ure)?\.?\s*/i, '').replace(/[.:]+$/g, '') || '1';
+}
+
+function decodeXmlText(value) {
+  return String(value || '')
+    .replace(/<[^>]*>/g, '')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
+}
+
+function parsePdftohtmlXml(xml, pageNumber) {
+  const pageRegex = /<page\b([^>]*)>([\s\S]*?)<\/page>/g;
+  for (const pageMatch of String(xml || '').matchAll(pageRegex)) {
+    const attrs = pageMatch[1] || '';
+    const number = Number(attrs.match(/\bnumber="([^"]+)"/)?.[1] || 1);
+    if (number !== Number(pageNumber)) continue;
+    const width = Number(attrs.match(/\bwidth="([^"]+)"/)?.[1] || 918);
+    const height = Number(attrs.match(/\bheight="([^"]+)"/)?.[1] || 1188);
+    const texts = [];
+    const textRegex = /<text\b([^>]*)>([\s\S]*?)<\/text>/g;
+    for (const textMatch of pageMatch[2].matchAll(textRegex)) {
+      const textAttrs = textMatch[1] || '';
+      const top = Number(textAttrs.match(/\btop="([^"]+)"/)?.[1]);
+      const left = Number(textAttrs.match(/\bleft="([^"]+)"/)?.[1]);
+      const textWidth = Number(textAttrs.match(/\bwidth="([^"]+)"/)?.[1] || 0);
+      const textHeight = Number(textAttrs.match(/\bheight="([^"]+)"/)?.[1] || 0);
+      const text = decodeXmlText(textMatch[2]).replace(/\s+/g, ' ').trim();
+      if (!text || ![top, left, textWidth, textHeight].every(Number.isFinite)) continue;
+      texts.push({
+        text,
+        xMin: left,
+        yMin: top,
+        xMax: left + Math.max(1, textWidth),
+        yMax: top + Math.max(1, textHeight)
+      });
+    }
+    return { page: { width, height }, texts };
   }
-  return { page, words };
+  return { page: { width: 918, height: 1188 }, texts: [] };
+}
+
+function groupCoordinateItemsIntoLines(items = []) {
+  const sorted = [...items].sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin);
+  const lines = [];
+  for (const item of sorted) {
+    const yMid = (item.yMin + item.yMax) / 2;
+    const existing = lines.find((line) => Math.abs(line.yMid - yMid) <= 4.8);
+    if (existing) {
+      existing.items.push(item);
+      existing.yMin = Math.min(existing.yMin, item.yMin);
+      existing.yMax = Math.max(existing.yMax, item.yMax);
+      existing.xMin = Math.min(existing.xMin, item.xMin);
+      existing.xMax = Math.max(existing.xMax, item.xMax);
+      existing.yMid = (existing.yMin + existing.yMax) / 2;
+    } else {
+      lines.push({
+        items: [item],
+        xMin: item.xMin,
+        yMin: item.yMin,
+        xMax: item.xMax,
+        yMax: item.yMax,
+        yMid
+      });
+    }
+  }
+  return lines.map((line) => {
+    line.items.sort((a, b) => a.xMin - b.xMin);
+    line.text = line.items.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim();
+    return line;
+  }).sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin);
+}
+
+function pdftohtmlLineMatchesCaption(line, label) {
+  return new RegExp(`^\\s*Fig(?:ure)?\\.?\\s*${escapeRegex(normalizeFigureLabel(label))}\\b`, 'i').test(line?.text || '');
+}
+
+function rectFromPdftohtmlUnits({ xmlPage, pdfPage, dpi, left, top, right, bottom }) {
+  const scaleX = pdfPage.width / Math.max(1, xmlPage.width);
+  const scaleY = pdfPage.height / Math.max(1, xmlPage.height);
+  return rectFromPdfPoints({
+    page: pdfPage,
+    dpi,
+    leftPt: left * scaleX,
+    topPt: top * scaleY,
+    rightPt: right * scaleX,
+    bottomPt: bottom * scaleY
+  });
+}
+
+function rectFromPdffigureBoundary(boundary, page, dpi, args = {}) {
+  if (!boundary || typeof boundary !== 'object') return null;
+  const x1 = Number(boundary.x1 ?? boundary.left ?? boundary.x ?? boundary.minX ?? boundary.xMin);
+  const y1 = Number(boundary.y1 ?? boundary.top ?? boundary.y ?? boundary.minY ?? boundary.yMin);
+  const rawX2 = boundary.x2 ?? boundary.right ?? boundary.maxX ?? boundary.xMax;
+  const rawY2 = boundary.y2 ?? boundary.bottom ?? boundary.maxY ?? boundary.yMax;
+  const width = Number(boundary.width ?? boundary.w);
+  const height = Number(boundary.height ?? boundary.h);
+  const x2 = Number(rawX2 ?? (Number.isFinite(x1) && Number.isFinite(width) ? x1 + width : NaN));
+  const y2 = Number(rawY2 ?? (Number.isFinite(y1) && Number.isFinite(height) ? y1 + height : NaN));
+  if (![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) return null;
+  const pad = Number(args['pdffigures-pad'] || 3);
+  return rectFromPdfPoints({
+    page,
+    dpi,
+    leftPt: Math.max(0, x1 - pad),
+    topPt: Math.max(0, y1 - pad),
+    rightPt: Math.min(page.width, x2 + pad),
+    bottomPt: Math.min(page.height, y2 + pad)
+  });
+}
+
+function readPdffigures2Output(pdfPath) {
+  const fixture = process.env.PAPERMENTOR_PDFFIGURES2_JSON;
+  if (fixture && existsSync(resolve(fixture))) {
+    return readJson(resolve(fixture), null);
+  }
+  const bin = process.env.PAPERMENTOR_PDFFIGURES2_BIN;
+  if (!bin) return null;
+  try {
+    const out = execFileSync(bin, [pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
+    return JSON.parse(out);
+  } catch {
+    return null;
+  }
+}
+
+function normalizePdffigures2Entries(raw, pdfPath) {
+  const source = Array.isArray(raw)
+    ? raw
+    : Array.isArray(raw?.figures)
+      ? raw.figures
+      : Array.isArray(raw?.figuresAndTables)
+        ? raw.figuresAndTables
+        : [];
+  return source
+    .map((item) => {
+      const pageIndex = Number(item.page ?? item.pageNumber ?? item.pageIndex ?? 0);
+      const page = Number.isFinite(pageIndex) ? pageIndex + 1 : 1;
+      const pageSize = pdfPageSize(pdfPath, page);
+      const label = normalizeFigureLabel(item.name || item.label || item.figureNumber || item.caption || '1');
+      const regionBoundary = item.regionBoundary || item.figureBoundary || item.boundary || item.bbox || item.box;
+      const captionBoundary = item.captionBoundary || item.captionBox || item.captionBBox;
+      return {
+        source: 'pdffigures2',
+        label,
+        auto: `figure${label}`,
+        page,
+        figType: item.figType || item.type || 'Figure',
+        caption: String(item.caption || item.captionText || '').replace(/\s+/g, ' ').trim(),
+        regionBoundary,
+        captionBoundary,
+        crop: rectFromPdffigureBoundary(regionBoundary, pageSize, 180),
+        pageSize
+      };
+    })
+    .filter((item) => /^figure$/i.test(String(item.figType || 'Figure')) && item.regionBoundary);
+}
+
+function pdffigures2EntriesForPdf(pdfPath) {
+  const raw = readPdffigures2Output(pdfPath);
+  if (!raw) return [];
+  return normalizePdffigures2Entries(raw, pdfPath);
 }
 
 function pdfPageSize(pdfPath, pageNumber) {
   const pdfinfo = commandPath('pdfinfo');
-  if (!pdfinfo) return { width: 612, height: 792 };
+  if (!pdfinfo) throw new Error('PDF page-size detection requires `pdfinfo` (Poppler) on PATH');
   try {
     const out = execFileSync(pdfinfo, ['-f', String(pageNumber), '-l', String(pageNumber), pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
     const match = out.match(/Page\s+\d+\s+size:\s+([0-9.]+)\s+x\s+([0-9.]+)\s+pts/i) || out.match(/Page size:\s+([0-9.]+)\s+x\s+([0-9.]+)\s+pts/i);
     if (match) return { width: Number(match[1]), height: Number(match[2]) };
-  } catch {
-    // Keep the conservative letter-size fallback below.
+  } catch (error) {
+    throw new Error(`pdfinfo could not read page ${pageNumber} size: ${error.message}`);
   }
-  return { width: 612, height: 792 };
+  throw new Error(`pdfinfo did not report page ${pageNumber} size`);
 }
 
 function rectFromPdfPoints({ page, dpi, leftPt, topPt, rightPt, bottomPt }) {
@@ -1587,64 +1742,43 @@ function rectFromPdfPoints({ page, dpi, leftPt, topPt, rightPt, bottomPt }) {
   };
 }
 
-function autoFigureCropFromLayoutText(pdfPath, pageNumber, args = {}) {
-  const pdftotext = commandPath('pdftotext');
-  if (!pdftotext) return null;
-  const label = String(args.auto || args.figure || args['figure-number'] || '1').replace(/^fig(?:ure)?\.?\s*/i, '') || '1';
-  let text = '';
-  try {
-    text = execFileSync(pdftotext, ['-layout', '-f', String(pageNumber), '-l', String(pageNumber), pdfPath, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch {
-    return null;
-  }
-  const lines = text.replace(/\f/g, '').split(/\r?\n/);
-  const labelRegex = new RegExp(`\\bFig(?:ure)?\\.?\\s*${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[.:]?`, 'i');
-  const index = lines.findIndex((line) => labelRegex.test(line));
-  if (index < 0) return null;
-  const line = lines[index] || '';
-  const column = Math.max(0, line.search(labelRegex));
-  const maxColumns = Math.max(90, ...lines.map((item) => item.length));
-  const page = pdfPageSize(pdfPath, pageNumber);
-  const captionY = (index / Math.max(1, lines.length - 1)) * page.height;
-  const rightColumn = column > maxColumns * 0.42;
-  const leftColumn = column > 4 && column < maxColumns * 0.30;
-  const leftPt = Number(args['auto-left'] || (rightColumn ? page.width * 0.49 : leftColumn ? 42 : 50));
-  const rightPt = Number(args['auto-right'] || (rightColumn ? page.width - 38 : leftColumn ? page.width * 0.51 : page.width - 50));
-  const topPt = Math.max(0, captionY - Number(args['auto-layout-top-pad'] || args['auto-top-pad'] || 260));
-  const includeCaption = Boolean(args['include-caption'] || args.includeCaption);
-  const bottomPt = includeCaption
-    ? Math.min(page.height, captionY + Number(args['auto-layout-bottom-pad'] || args['auto-height'] || 110))
-    : Math.max(topPt + 20, captionY - Number(args['auto-caption-gap'] || 8));
-  return rectFromPdfPoints({ page, dpi: args.dpi, leftPt, topPt, rightPt, bottomPt });
-}
-
 function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
-  const pdftotext = commandPath('pdftotext');
-  if (!pdftotext) return null;
-  if (args['force-layout-crop'] || process.env.PAPERMENTOR_FORCE_LAYOUT_CROP === '1') {
-    return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
+  const label = normalizeFigureLabel(args.auto || args.figure || args['figure-number'] || '1');
+  const pdffigure = pdffigures2EntriesForPdf(pdfPath).find((item) => item.page === Number(pageNumber) && normalizeFigureLabel(item.label) === label);
+  if (pdffigure?.regionBoundary) {
+    const crop = rectFromPdffigureBoundary(pdffigure.regionBoundary, pdffigure.pageSize || pdfPageSize(pdfPath, pageNumber), args.dpi, args);
+    if (crop) return crop;
   }
-  const label = String(args.auto || args.figure || args['figure-number'] || '1').replace(/^fig(?:ure)?\.?\s*/i, '') || '1';
-  let xml = '';
-  try {
-    xml = execFileSync(pdftotext, ['-bbox', '-f', String(pageNumber), '-l', String(pageNumber), pdfPath, '-'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  } catch {
-    return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
+  const pdftohtml = commandPath('pdftohtml');
+  if (!pdftohtml) throw new Error('auto figure crop requires `pdftohtml` (Poppler) on PATH');
+  const xml = execFileSync(pdftohtml, ['-xml', '-f', String(pageNumber), '-l', String(pageNumber), '-stdout', pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
+  const xmlPage = parsePdftohtmlXml(xml, pageNumber);
+  const lines = groupCoordinateItemsIntoLines(xmlPage.texts);
+  const captionIndex = lines.findIndex((line) => pdftohtmlLineMatchesCaption(line, label));
+  if (captionIndex < 0) throw new Error(`pdftohtml could not locate Figure ${label} caption on page ${pageNumber}`);
+  const captionLine = lines[captionIndex];
+  let startIndex = Math.max(0, captionIndex - 1);
+  for (let i = captionIndex - 1; i > 0; i -= 1) {
+    const gap = lines[i + 1].yMin - lines[i].yMax;
+    if (gap > Number(args['auto-figure-gap'] || 42)) break;
+    startIndex = i;
   }
-  const { page, words } = parsePdfBbox(xml);
-  const figureIndex = words.findIndex((word, index) => /^fig(?:ure)?\.?$/i.test(word.text) && new RegExp(`^${label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[.:]?$`).test(words[index + 1]?.text || ''));
-  if (figureIndex < 0) return autoFigureCropFromLayoutText(pdfPath, pageNumber, args);
-  const figureWord = words[figureIndex];
-  const after = words.filter((word) => word.yMin > figureWord.yMin + 18);
-  const nextHeading = after.find((word) => /^(Abstract|Introduction|Background|Preliminaries|Methods?|Experiments?|Conclusion|References)$/i.test(word.text));
-  const topPt = Math.max(0, figureWord.yMin - Number(args['auto-top-pad'] || 114));
+  const figureLines = lines.slice(startIndex, captionIndex);
+  if (!figureLines.length) throw new Error(`pdftohtml found Figure ${label} caption but no figure content above it on page ${pageNumber}`);
+  const figureItems = figureLines.flatMap((line) => line.items);
+  const sidePad = Number(args['auto-side-pad'] || 28);
+  const topPad = Number(args['auto-top-pad'] || 18);
   const includeCaption = Boolean(args['include-caption'] || args.includeCaption);
-  const bottomPt = includeCaption
-    ? Math.min(page.height, (nextHeading?.yMin || figureWord.yMin + Number(args['auto-height'] || 86)) - Number(args['auto-bottom-pad'] || 8))
-    : Math.max(topPt + 20, figureWord.yMin - Number(args['auto-caption-gap'] || 8));
-  const leftPt = Number(args['auto-left'] || 50);
-  const rightPt = Number(args['auto-right'] || (page.width - 50));
-  return rectFromPdfPoints({ page, dpi: args.dpi, leftPt, topPt, rightPt, bottomPt });
+  const xmlRect = {
+    left: Math.max(0, Math.min(...figureItems.map((item) => item.xMin)) - sidePad),
+    top: Math.max(0, Math.min(...figureItems.map((item) => item.yMin)) - topPad),
+    right: Math.min(xmlPage.page.width, Math.max(...figureItems.map((item) => item.xMax)) + sidePad),
+    bottom: includeCaption
+      ? Math.min(xmlPage.page.height, captionLine.yMax + Number(args['auto-caption-bottom-pad'] || 16))
+      : Math.max(0, captionLine.yMin - Number(args['auto-caption-gap'] || 8))
+  };
+  const pdfPage = pdfPageSize(pdfPath, pageNumber);
+  return rectFromPdftohtmlUnits({ xmlPage: xmlPage.page, pdfPage, dpi: args.dpi, ...xmlRect });
 }
 
 function visualExplanationBody(args, state) {
@@ -1653,6 +1787,52 @@ function visualExplanationBody(args, state) {
   // exists to eliminate. Emit the same honest, element-by-element forcing scaffold the
   // launch flow uses, so the model is told to replace it by reading the actual crop.
   return representativeFigureExplanation({ sourceMode: state.sourceMode });
+}
+
+function prepareRepresentativeFigureCandidateImages(slug, source, candidates = [], args = {}) {
+  const absoluteSource = resolve(source || '');
+  if (!absoluteSource || !existsSync(absoluteSource) || isUrl(source)) return { candidates: [], failures: [] };
+  const extension = extname(absoluteSource).toLowerCase();
+  if (!['.pdf', '.pptx'].includes(extension)) return { candidates: [], failures: [] };
+  const limit = Math.max(1, Math.min(6, Number(args['figure-candidate-limit'] || process.env.PAPERMENTOR_FIGURE_CANDIDATE_LIMIT || 4)));
+  const dpi = boundedInteger('dpi', args.dpi || 180, { min: 72, max: 300 });
+  mkdirSync(assetDir(slug), { recursive: true });
+  const tempDir = mkdtempSync(join(assetDir(slug), 'candidate-tmp-'));
+  const renderedByPage = new Map();
+  try {
+    const renderedPdf = extension === '.pdf' ? absoluteSource : convertPptxSourceToPdf(absoluteSource, args);
+    const prepared = [];
+    const failures = [];
+    for (const [index, candidate] of candidates.slice(0, limit).entries()) {
+      const page = boundedInteger('candidate page', candidate.page || 1, { min: 1, max: 10000 });
+      try {
+        let rendered = renderedByPage.get(page);
+        if (!rendered) {
+          rendered = renderPdfPageToImage(renderedPdf, page, join(tempDir, `page-${page}.png`), dpi);
+          renderedByPage.set(page, rendered);
+        }
+        const crop = candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
+          ? candidate.crop
+          : autoFigureCropFromPdf(renderedPdf, page, { ...args, auto: candidate.auto || candidate.label || 'figure1', dpi });
+        const out = uniqueOutputPath(assetDir(slug), `representative-candidate-${String(index + 1).padStart(2, '0')}.png`, true);
+        cropImage(rendered, out, crop);
+        prepared.push({
+          ...candidate,
+          candidateIndex: index + 1,
+          page,
+          crop,
+          src: `assets/${basename(out)}`,
+          imagePath: out
+        });
+      } catch (error) {
+        const label = candidate.label ? `Figure ${candidate.label}` : `candidate ${index + 1}`;
+        failures.push(`${label} on page ${page}: ${error.message}`);
+      }
+    }
+    return { candidates: prepared, failures };
+  } finally {
+    rmSync(tempDir, { recursive: true, force: true });
+  }
 }
 
 
@@ -1674,10 +1854,10 @@ function extractFigure(args) {
   const state = readJson(statePath(slug), null);
   if (!state) throw new Error(`session not found: ${slug}`);
   const source = args.source || args['source-file'] || args.input || args['figure-file'];
-  if (!source) throw new Error('extract-figure requires --source <pdf|ppt|pptx|image> or --figure-file <image>');
+  if (!source) throw new Error('extract-figure requires --source <pdf|pptx|image> or --figure-file <image>');
   const absoluteSource = resolve(source);
   if (!existsSync(absoluteSource) && !isUrl(source)) throw new Error(`source file not found: ${source}`);
-  if (isUrl(source)) throw new Error('extract-figure currently expects a local PDF/PPT/image path; download the source first for deterministic crop extraction');
+  if (isUrl(source)) throw new Error('extract-figure currently expects a local PDF/PPTX/image path; download the source first for deterministic crop extraction');
   mkdirSync(assetDir(slug), { recursive: true });
   const page = boundedInteger('page/slide', args.page || args.slide || 1, { min: 1, max: 10000 });
   const dpi = boundedInteger('dpi', args.dpi || 180, { min: 72, max: 300 });
@@ -1706,14 +1886,14 @@ function extractFigure(args) {
       const pageImage = join(tempDir, `${slugify(basename(absoluteSource, extension))}-page-${page}.png`);
       mkdirSync(tempDir, { recursive: true });
       rendered = renderPdfPageToImage(absoluteSource, page, pageImage, dpi);
-    } else if (['.ppt', '.pptx', '.key'].includes(extension)) {
+    } else if (extension === '.pptx') {
       mkdirSync(tempDir, { recursive: true });
-      const pdf = convertPptToPdf(absoluteSource, tempDir);
+      const pdf = convertPptxSourceToPdf(absoluteSource, args);
       renderedPdf = pdf;
       const pageImage = join(tempDir, `${slugify(basename(absoluteSource, extension))}-slide-${page}.png`);
       rendered = renderPdfPageToImage(pdf, page, pageImage, dpi);
     } else if (!imageExtensions.includes(extension)) {
-      throw new Error(`unsupported extraction source extension ${extension}; expected PDF, PPT/PPTX, or image`);
+      throw new Error(`unsupported extraction source extension ${extension}; expected PDF, PPTX, or image`);
     }
     const requestedAutoCrop = Boolean(args.auto || args.figure || args['figure-number']);
     autoCrop = requestedAutoCrop && renderedPdf ? autoFigureCropFromPdf(renderedPdf, page, { ...args, dpi }) : null;
@@ -1750,7 +1930,7 @@ function extractFigure(args) {
   if (!args.quiet) console.log(`Extracted visual saved to .papermentor/sessions/${slug}/assets/${basename(extracted)}`);
 }
 
-function renderSourcePageForPreview(source, page, dpi, tempDir) {
+function renderSourcePageForPreview(source, page, dpi, tempDir, args = {}) {
   const absoluteSource = resolve(source);
   const extension = extname(absoluteSource).toLowerCase();
   const imageExtensions = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'];
@@ -1758,13 +1938,13 @@ function renderSourcePageForPreview(source, page, dpi, tempDir) {
     const pageImage = join(tempDir, `${slugify(basename(absoluteSource, extension))}-page-${page}.png`);
     return { rendered: renderPdfPageToImage(absoluteSource, page, pageImage, dpi), renderedPdf: absoluteSource, extension };
   }
-  if (['.ppt', '.pptx', '.key'].includes(extension)) {
-    const pdf = convertPptToPdf(absoluteSource, tempDir);
+  if (extension === '.pptx') {
+    const pdf = convertPptxSourceToPdf(absoluteSource, args);
     const pageImage = join(tempDir, `${slugify(basename(absoluteSource, extension))}-slide-${page}.png`);
     return { rendered: renderPdfPageToImage(pdf, page, pageImage, dpi), renderedPdf: pdf, extension };
   }
   if (imageExtensions.includes(extension)) return { rendered: absoluteSource, renderedPdf: '', extension };
-  throw new Error(`unsupported preview source extension ${extension}; expected PDF, PPT/PPTX, or image`);
+  throw new Error(`unsupported preview source extension ${extension}; expected PDF, PPTX, or image`);
 }
 
 
@@ -1822,7 +2002,7 @@ function previewCrops(args) {
   const state = readJson(statePath(slug), null);
   if (!state) throw new Error(`session not found: ${slug}`);
   const source = args.source || args['source-file'] || args.input || state.source;
-  if (!source) throw new Error('preview-crops requires --source <pdf|ppt|pptx|image> or a session source');
+  if (!source) throw new Error('preview-crops requires --source <pdf|pptx|image> or a session source');
   const absoluteSource = resolve(source);
   if (!existsSync(absoluteSource)) throw new Error(`source file not found: ${source}`);
   mkdirSync(assetDir(slug), { recursive: true });
@@ -1833,7 +2013,7 @@ function previewCrops(args) {
   const previews = [];
   try {
     mkdirSync(tempDir, { recursive: true });
-    const { rendered, renderedPdf } = renderSourcePageForPreview(absoluteSource, page, dpi, tempDir);
+    const { rendered, renderedPdf } = renderSourcePageForPreview(absoluteSource, page, dpi, tempDir, args);
     const fullName = uniqueOutputPath(assetDir(slug), `crop-preview-page-${page}-full.png`, Boolean(args.overwrite));
     copyFileSync(rendered, fullName);
     previews.push({
@@ -1841,27 +2021,37 @@ function previewCrops(args) {
       src: `assets/${basename(fullName)}`,
       command: `${cliCommand()} extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --title ${shellQuote(args.title || 'Representative figure')}`
     });
-    const autoCrop = renderedPdf ? autoFigureCropFromPdf(renderedPdf, page, { ...args, auto: args.auto || 'figure1', dpi }) : null;
-    if (autoCrop) {
-      const autoName = uniqueOutputPath(assetDir(slug), `crop-preview-page-${page}-auto-figure.png`, Boolean(args.overwrite));
-      cropImage(rendered, autoName, autoCrop);
-      const crop = `${autoCrop.x},${autoCrop.y},${autoCrop.width},${autoCrop.height}`;
-      previews.push({
-        label: `Auto Figure ${String(args.auto || '1').replace(/^fig(?:ure)?\.?\s*/i, '')}`,
-        src: `assets/${basename(autoName)}`,
-        command: `${cliCommand()} extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --crop ${shellQuote(crop)} --title ${shellQuote(args.title || 'Representative figure')}`
-      });
+    let autoCropWarning = '';
+    if (renderedPdf) {
+      try {
+        const autoCrop = autoFigureCropFromPdf(renderedPdf, page, { ...args, auto: args.auto || 'figure1', dpi });
+        if (autoCrop) {
+          const autoName = uniqueOutputPath(assetDir(slug), `crop-preview-page-${page}-auto-figure.png`, Boolean(args.overwrite));
+          cropImage(rendered, autoName, autoCrop);
+          const crop = `${autoCrop.x},${autoCrop.y},${autoCrop.width},${autoCrop.height}`;
+          previews.push({
+            label: `Auto Figure ${String(args.auto || '1').replace(/^fig(?:ure)?\.?\s*/i, '')}`,
+            src: `assets/${basename(autoName)}`,
+            command: `${cliCommand()} extract-figure --session ${shellQuote(slug)} --source ${shellQuote(commandSourcePath(slug, absoluteSource))} --page ${page} --crop ${shellQuote(crop)} --title ${shellQuote(args.title || 'Representative figure')}`
+          });
+        }
+      } catch (error) {
+        autoCropWarning = `Auto figure crop unavailable: ${error.message}`;
+      }
     }
     const previewPath = safeSessionPath(slug, 'crop-preview.html');
     writeFileSync(previewPath, cropPreviewHtml({ title: state.title, slug, page, previews }));
-    writeJson(safeSessionPath(slug, 'crop-previews.json'), { schema: 'papermentor.crop-previews.v1', source: commandSourcePath(slug, absoluteSource), page, dpi, previews });
+    writeJson(safeSessionPath(slug, 'crop-previews.json'), { schema: 'papermentor.crop-previews.v1', source: commandSourcePath(slug, absoluteSource), page, dpi, previews, warning: autoCropWarning });
     state.cropPreview = `.papermentor/sessions/${slug}/crop-preview.html`;
+    if (autoCropWarning) state.cropPreviewWarning = autoCropWarning;
+    else delete state.cropPreviewWarning;
     state.nextChoices = unique([`Open crop preview: ${state.cropPreview}`, ...(state.nextChoices || [])]).slice(0, 12);
     state.updatedAt = now();
     writeJson(statePath(slug), state);
     if (!args.quiet) {
       console.log(`Crop preview written to .papermentor/sessions/${slug}/crop-preview.html`);
       for (const preview of previews) console.log(`- ${preview.label}: ${preview.command}`);
+      if (autoCropWarning) console.log(`- ${autoCropWarning}`);
     }
   } finally {
     rmSync(tempDir, { recursive: true, force: true });
@@ -3720,7 +3910,14 @@ function renderCardArticle(card, index, state = {}) {
   const renderedBody = renderableCardBody(card, state);
   const figureSourceBody = card.figure ? bodyWithoutFigureExplanation(renderedBody) : renderedBody;
   const baseBody = htmlExplanationOnly(figureSourceBody);
-  const figure = renderFigure(card.figure, figureExplanationMarkdown({ ...card, body: renderedBody }));
+  let figureExplanation = figureExplanationMarkdown({ ...card, body: renderedBody });
+  const rawFigureExplanation = splitFigureExplanationSection(renderedBody).figure;
+  const storedCaption = String(card.figure?.caption || '').trim();
+  const hasRenderedVisualReading = /Concept \/ method role|How to read it|Parts to identify|In-figure math \/ symbols|Flow \/ sequence|What to observe|Equations \/ claims it supports|개념 \/ 방법 역할|보는 법|각 부분|그림 속 수식 \/ 기호|흐름 \/ 순서|관찰할 점|연결되는 수식 \/ 주장/i.test(figureExplanation);
+  if (card.figure && rawFigureExplanation && (!figureExplanation || figureExplanation.trim() === storedCaption || !hasRenderedVisualReading)) {
+    figureExplanation = rawFigureExplanation;
+  }
+  const figure = renderFigure(card.figure, figureExplanation);
   const typeAttr = slugify(card.type || 'note');
   const head = `<article id="${escapeHtml(card.id)}" class="block" data-type="${escapeHtml(typeAttr)}" data-index="${index + 1}"><header class="block-head"><div><h2 class="block-title">${escapeHtml(displayCardTitle(card))}</h2><div class="location">${escapeHtml(card.location)}</div></div></header>${renderUserQuestion(card)}${card.latex ? `<div class="latex">$$
 ${escapeHtml(card.latex)}
@@ -4963,13 +5160,14 @@ function addQualityCheck(result, condition, points, issue) {
 function evaluateCardQuality(card) {
   const type = String(card.type || 'note');
   const body = String(card.body || '');
+  const qualitySurface = `${body}\n${card.figure?.caption || ''}\n${card.figure?.alt || ''}`;
   const plain = markdownPlainText(body);
   const result = { id: card.id, type, title: card.title, score: 0, maxScore: 0, issues: [] };
   addQualityCheck(result, plain.length >= 420, 12, 'body is too short for a production teaching block');
   addQualityCheck(result, !/Not read yet|Not built yet|Not written yet|placeholder|TODO/i.test(body), 10, 'body still contains scaffold/placeholder text');
   addQualityCheck(result, includesAny(body, [/checkpoint/i, /reconstruct/i, /resume point/i, /what.*now.*able/i, /복원 체크포인트|다시 설명|스스로 .*말|이제 .*할 수|이어서 읽/i]), 8, 'missing reconstruction/resume checkpoint');
   addQualityCheck(result, includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/, /\|[^\n]*\|[^\n]*\n\|[-:| ]+\|[\s\S]*?\d+(?:\.\d+)?/, /\b\d+(?:\.\d+)?%?\b[\s\S]{0,80}\b(?:error|IOU|probability|threshold|score|metric|확률|지표|오류|점수)\b/i]), 8, 'missing LaTeX/math anchor where paper teaching usually needs notation');
-  addQualityCheck(result, includesAny(body, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /Table\s+\d+/i, /line\s+\d+/i, /selected excerpt|selected range|source excerpt/i, /그림\s*\d+|표\s*\d+|수식\s*\(?\d+|선택된\s*(excerpt|범위)|선택\s*범위/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
+  addQualityCheck(result, includesAny(qualitySurface, [/Eq\.?\s*\(?\d+/i, /Algorithm\s+\d+/i, /Theorem\s+\d+/i, /Lemma\s+\d+/i, /Proposition\s+\d+/i, /Figure\s+\d+/i, /Table\s+\d+/i, /line\s+\d+/i, /selected excerpt|selected range|source excerpt/i, /그림\s*\d+|표\s*\d+|수식\s*\(?\d+|선택된\s*(excerpt|범위)|선택\s*범위/i]), 8, 'missing explicit paper anchor such as equation, algorithm, theorem, lemma, proposition, or figure');
   const mathHeavyType = ['equation', 'derivation', 'proof', 'method', 'slide-explanation', 'slide-transition', 'missing-narration'].includes(type);
   const hasAnyMath = includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/, /\$[^$\n]+\$/]);
   const hasDisplayMath = includesAny(body, [/\$\$[\s\S]+?\$\$/, /\\\[[\s\S]+?\\\]/]);
@@ -4980,7 +5178,7 @@ function evaluateCardQuality(card) {
 
   const typeChecks = {
     'start-here': [
-      [/One-sentence orientation|One-sentence|이 논문은|이 글은|이 강의자료는|핵심 문제는/i, 8, 'Start Here should include one-sentence orientation'],
+      [/One-sentence orientation|One-sentence|^This (paper|source|article|slide deck)\b|이 논문은|이 글은|이 강의자료는|핵심 문제는/i, 8, 'Start Here should include one-sentence orientation'],
       [/Preliminary|사전 지식|먼저 알아야|배경/i, 8, 'Start Here should include Preliminary'],
       [/Preliminary|사전 지식|먼저 알아야|배경/i, 6, 'Start Here should include a readable Preliminary section']
     ],
@@ -5504,6 +5702,21 @@ Quality rules:
 `;
 }
 
+function storeBundledSectionMenu(state, section, choices = []) {
+  if (!state || !section) return false;
+  const sanitized = sanitizeSectionActions(choices, section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
+  if (!sanitized.length || sanitized.every(isAskAnythingAction)) return false;
+  const key = sectionKey(section);
+  state.sectionActions = state.sectionActions || {};
+  state.sectionActions[key] = sanitized;
+  state.bundledFirstSection = section;
+  state.bundledFirstSectionChoices = sanitized.length;
+  if (state.currentSection && sameSectionTitle(state.currentSection, section) && !state.currentMode) {
+    state.nextChoices = sanitized;
+  }
+  return true;
+}
+
 function installGeneratedSectionMenu(state, section, args = {}) {
   const prompt = generatedSectionMenuPrompt(state, section);
   const response = runAgentCompletion(prompt, { ...args, agentTask: 'section-menu' });
@@ -5596,7 +5809,29 @@ function cleanGeneratedMarkdown(value) {
   return text.trim();
 }
 
+function sessionHasPendingStartHere(state = {}) {
+  if (!state?.slug) return false;
+  if (state.startHerePending || state.pendingBlockType === 'start-here') return true;
+  const cards = readJson(cardsPath(state.slug), { cards: [] });
+  const start = (cards.cards || []).find((card) => card.type === 'start-here');
+  return Boolean(start && isStartHerePendingBody(start.body || ''));
+}
+
+function ensureStartHereReadyBeforeAction(state, args = {}) {
+  if (!sessionHasPendingStartHere(state)) return state;
+  try {
+    const filled = maybeAutoFillStartHere(state.slug, args) || readStateForSlug(state.slug) || state;
+    if (sessionHasPendingStartHere(filled)) {
+      throw new Error('provider left the Start Here block pending');
+    }
+    return filled;
+  } catch (error) {
+    throw new Error(`Start Here is still pending and could not be generated before adding more HTML: ${error.message}`);
+  }
+}
+
 function appendGeneratedActionBlock(state, action, args = {}) {
+  state = ensureStartHereReadyBeforeAction(state, args);
   const type = actionType(action, state);
   const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   const cacheKey = generatedBlockCacheKey(state, action, type, insight);
@@ -5696,6 +5931,10 @@ function runPrefetch(args = {}) {
   prefetchGeneratedActionBlock(state, action, args);
 }
 
+function startHereNeedsFigureReading(card) {
+  return Boolean(card?.figure?.src && !hasFinishedFigureExplanation(card.body || ''));
+}
+
 function replaceStartHereBody(slug, body) {
   const state = readStateForSlug(slug);
   if (!state) throw new Error(`session not found: ${slug}`);
@@ -5710,7 +5949,7 @@ function replaceStartHereBody(slug, body) {
     };
     writeJson(cardsPath(slug), cards);
     state.startHerePending = false;
-    if (splitFigureExplanationSection(body).figure) state.figureReadingPending = false;
+    state.figureReadingPending = startHereNeedsFigureReading(cards.cards[index]);
     clearPendingPrompt(state);
     state.updatedAt = now();
     writeJson(statePath(slug), state);
@@ -5733,17 +5972,69 @@ function startHereContextSections(state, maxSections = 6) {
   }).join('\n\n---\n\n');
 }
 
+function startHereRepresentativeFigureContext(state = {}) {
+  const cards = state.slug ? readJson(cardsPath(state.slug), { cards: [] }) : { cards: [] };
+  const start = (cards.cards || []).find((card) => card.type === 'start-here');
+  if (!start?.figure?.src) return '';
+  const figurePath = join(safeSessionPath(state.slug), start.figure.src);
+  const selection = state.representativeFigureSelection || {};
+  const checks = (selection.mustVerifyFromPixels || []).map((item) => `- ${item}`).join('\n') || '- inspect all visible labels, arrows, shapes, dimensions, legend entries, and symbols';
+  return `Representative figure crop already attached:
+- image file: ${figurePath}
+- selected figure: Figure ${selection.auto || selection.page || ''}
+- selection reason: ${selection.reason || '(none)'}
+- pixel checks:
+${checks}
+
+Because this figure is attached to Start Here, include a real pixel-based \`## Figure explanation under image\` section before \`## Preliminary\`. Use this exact bullet shape:
+- \`- **Figure / location:** ...\`
+- \`- **Concept / method role:** ...\`
+- \`- **How to read it:** ...\`
+- \`- **Parts to identify:** ...\`
+- \`- **In-figure math / symbols:** ...\`
+- \`- **Flow / sequence:** ...\`
+- \`- **What to observe:** ...\`
+- \`- **Equations / claims it supports:** ...\`
+
+The figure explanation must be read from the image pixels, not copied from the caption or generic U-Net knowledge. If the crop cannot be inspected, leave the figure section out so PaperMentor can run the visual reader repair step.`;
+}
+
+function startHereCandidateFigureContext(candidates = []) {
+  if (!candidates.length) return '';
+  return candidates.map((candidate) => [
+    `Candidate ${candidate.candidateIndex}`,
+    `- image file: ${candidate.imagePath}`,
+    `- label: ${candidate.label || ''}`,
+    `- page: ${candidate.page || 1}`,
+    `- source: ${candidate.source || 'text-caption'}`,
+    `- section context: ${candidate.section || '(unknown)'}`,
+    `- caption: ${candidate.caption || '(none)'}`,
+    `- nearby text: ${providerPromptExcerpt(candidate.nearbyText || '', 700) || '(none)'}`,
+    `- crop: ${candidate.crop ? `${candidate.crop.x},${candidate.crop.y},${candidate.crop.width},${candidate.crop.height}` : '(unknown)'}`
+  ].join('\n')).join('\n\n');
+}
+
 function generatedStartHerePrompt(state, options = {}) {
   const mode = normalizeSourceMode(state.sourceMode || 'paper');
   const sections = (state.paperSections || []).slice(0, mode === 'slide' ? 14 : 10);
   const sectionMap = sections.length ? sections.map((section, index) => `${index + 1}. ${section}`).join('\n') : '(no section list detected)';
   const context = startHereContextSections(state, mode === 'slide' ? 8 : 6) || '(no extracted source context; use only the title and do not fabricate details)';
-  const outputRule = options.bundle
-    ? 'Write the finished Start Here Markdown body for the JSON field `startHereMarkdown`. Do not include shell commands, prefaces, or code fences inside that field.'
-    : 'Return ONLY the finished Markdown body for the Start Here HTML block. No preface, no code fence, no shell command.';
-  return `# PaperMentor Start Here generator
+  const representativeFigure = startHereRepresentativeFigureContext(state);
+  const candidateFigures = startHereCandidateFigureContext(options.figureCandidates || []);
+  if (candidateFigures) {
+    return `# PaperMentor Start Here generator with candidate figure crop choice
 
-${outputRule}
+Return ONLY JSON. No markdown outside JSON, no preface, no code fence.
+
+JSON schema:
+{
+  "selectedFigureIndex": 1,
+  "reason": "why this candidate is the representative method/system/architecture/mechanism figure, or why none is selected",
+  "mustVerifyFromPixels": ["pixel-level facts verified from the selected crop"],
+  "body": "finished Start Here Markdown body"
+}
+
+Use null for selectedFigureIndex if none of the candidates is a representative method/system/architecture/mechanism figure.
 
 Source title: ${state.title || '(untitled)'}
 Mode: ${sourceModeLabel(mode)}
@@ -5756,7 +6047,60 @@ Selected source context:
 ${context}
 \`\`\`
 
+Candidate figure crops to inspect:
+${candidateFigures}
+
 Quality rules:
+- Choose a representative figure only by semantic model judgment from caption, nearby text, section context, source goal, and the actual crop pixels. Do not choose result-only plots, benchmark figures, generic examples, or full-page fallbacks.
+- If selectedFigureIndex is not null, inspect that candidate image file and include a real pixel-based \`## Figure explanation under image\` section before \`## Preliminary\`.
+- The figure section must use this exact bullet shape:
+  - \`- **Figure / location:** ...\`
+  - \`- **Concept / method role:** ...\`
+  - \`- **How to read it:** ...\`
+  - \`- **Parts to identify:** ...\`
+  - \`- **In-figure math / symbols:** ...\`
+  - \`- **Flow / sequence:** ...\`
+  - \`- **What to observe:** ...\`
+  - \`- **Equations / claims it supports:** ...\`
+- Name the visible components, labels, arrows, colors/legend entries, dimensions, and any in-figure symbols from the selected crop.
+- Write a real teaching introduction, not a scaffold and not a generic summary.
+- ${responseLanguageInstruction(state)}
+- If the requested output language is not English, preserve the same structure, equation display, term-purpose reading, and derivation detail that the English answer would have; translate/localize, do not simplify.
+- Include only prerequisites actually needed for this source. Use equations or concrete examples when the material needs them.
+- Include a visible \`## Preliminary\` heading. Under it, separate needed background into short concept blocks grouped by meaning.
+- End with a short reconstruction checkpoint: what the reader should now be able to explain before choosing the first section/topic.
+`;
+  }
+  const bundledSection = options.bundleSection || sections[0] || '';
+  return `# PaperMentor Start Here generator / launch bundle generator
+
+Return ONLY JSON. No markdown outside JSON, no preface, no code fence, no shell command.
+
+JSON schema:
+{
+  "startHereMarkdown": "finished Start Here Markdown body",
+  "firstSection": "${bundledSection || '<first detected section/topic>'}",
+  "sectionChoices": ["4-8 concrete action strings for firstSection"]
+}
+
+The \`firstSection\` value must be one of the detected sections/topics. Prefer: ${bundledSection || '(first meaningful detected section/topic)'}.
+
+Source title: ${state.title || '(untitled)'}
+Mode: ${sourceModeLabel(mode)}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
+Detected sections/topics:
+${sectionMap}
+
+Selected source context:
+\`\`\`text
+${context}
+\`\`\`
+
+${representativeFigure ? `Representative figure context:
+${representativeFigure}
+` : ''}
+
+Start Here quality rules:
 - Write a real teaching introduction, not a scaffold and not a generic summary.
 - ${responseLanguageInstruction(state)}
 - If the requested output language is not English, preserve the same structure, equation display, term-purpose reading, and derivation detail that the English answer would have; translate/localize, do not simplify.
@@ -5766,11 +6110,16 @@ Quality rules:
 - Include a visible \`## Preliminary\` heading. Under it, do not write one long prose wall: separate needed background into short concept blocks grouped by meaning. Each block teaches one core concept and connects it to this source's actual notation, equation, figure, theorem, slide element, or claim.
 - Do not force a fixed table, schema, or repeated labels. Keep the structure natural to the source.
 - End with a short reconstruction checkpoint: what the reader should now be able to explain before choosing the first section/topic.
+
+Bundled first-section menu rules:
+- Build sectionChoices for firstSection only; do not make generic labels.
+- Actions must be specific to the selected excerpt/source signals and should name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
+- Last item must be exactly: ${askAnythingAction(bundledSection || 'this section', state.responseLanguage)}
 `;
 }
 
 
-function launchBundleSection(state = {}) {
+function firstLaunchSection(state = {}) {
   const sections = state.paperSections || [];
   const mode = normalizeSourceMode(state.sourceMode || 'paper');
   const section = mode === 'slide'
@@ -5778,52 +6127,9 @@ function launchBundleSection(state = {}) {
     : mode === 'url'
       ? firstMeaningfulUrlSection(sections, state.title || '')
       : sections[0];
-  if (!section) throw new Error('launch bundle requires detected sections/topics');
+  if (!section) throw new Error('Start Here generation requires detected sections/topics');
   return section;
 }
-
-function generatedLaunchBundlePrompt(state) {
-  const mode = normalizeSourceMode(state.sourceMode || 'paper');
-  const firstSection = launchBundleSection(state);
-  const firstInsight = ensureSectionInsight(state, firstSection) || {};
-  const sectionConcepts = (firstInsight.concepts || []).slice(0, 10).map((item) => `- ${item}`).join('\n') || '- none detected';
-  const sectionEquations = (firstInsight.equations || []).slice(0, 10).map((item) => `- Eq. (${item})`).join('\n') || '- none detected';
-  const sectionSnippets = (firstInsight.equationSnippets || []).slice(0, 5).map((item, idx) => `${idx + 1}. ${item}`).join('\n') || 'none detected';
-  const sectionExcerpt = providerPromptExcerpt(firstInsight.sourceExcerpt || firstInsight.preview || '', 2600) || '(no excerpt extracted; use only the title and do not fabricate details)';
-  return `${generatedStartHerePrompt(state, { bundle: true })}
-## Also generate the first section menu
-
-Return ONLY valid JSON with this shape:
-{
-  "startHereMarkdown": "finished Start Here Markdown body",
-  "firstSection": ${JSON.stringify(firstSection)},
-  "sectionChoices": ["4-8 content-specific action strings ending with ${askAnythingAction(firstSection, state.responseLanguage)}"]
-}
-
-The Start Here quality rules above still apply. For sectionChoices, use the requested output language as the main prose language while preserving natural English technical terms; use only the selected first-section evidence below, and make the actions content-adapted, not generic.
-
-First section/topic: ${firstSection}
-Concepts:
-${sectionConcepts}
-Equations:
-${sectionEquations}
-Equation/text snippets:
-${sectionSnippets}
-
-First-section excerpt:
-\`\`\`text
-${sectionExcerpt}
-\`\`\`
-
-Section choice rules:
-- Action strings should use the requested output language as the main prose language, while preserving natural English technical terms.
-- Actions must be specific to this excerpt, not generic labels.
-- For URL mode, actions should follow the article's actual claims, concepts, examples, code/math, diagrams, assumptions, or practical takeaways.
-- Name the actual object, equation role, proof obligation, visual, conceptual gap, or method mechanism.
-- Last item must be exactly: ${askAnythingAction(firstSection, state.responseLanguage)}
-`;
-}
-
 
 function parseProviderJson(text) {
   try {
@@ -5869,6 +6175,8 @@ function representativeFigureAutoSelectionPrompt(state = {}, candidates = []) {
     `- label: ${candidate.label || ''}`,
     `- page: ${candidate.page || 1}`,
     `- auto: ${candidate.auto || candidate.label || ''}`,
+    `- source: ${candidate.source || 'text-caption'}`,
+    `- exact crop available: ${candidate.crop ? 'yes' : 'no'}`,
     `- section context: ${candidate.section || '(unknown)'}`,
     `- caption: ${candidate.caption || '(none)'}`,
     `- nearby text: ${providerPromptExcerpt(candidate.nearbyText || '', 900) || '(none)'}`
@@ -5897,6 +6205,95 @@ ${lines || '(none)'}
 `;
 }
 
+function hasFinishedFigureExplanation(body) {
+  const figure = splitFigureExplanationSection(body).figure;
+  if (!figure) return false;
+  if (/Not read yet|replace every bullet|Delete this note/i.test(figure)) return false;
+  return markdownPlainText(figure).length >= 180;
+}
+
+function representativeFigureVisualReadingPrompt(state = {}, card = {}, selection = {}) {
+  const figurePath = card.figure?.src ? join(safeSessionPath(state.slug), card.figure.src) : '';
+  return `# PaperMentor representative figure visual reader
+
+Return ONLY the revised Start Here Markdown body. No JSON, no preface, no code fence, no shell command.
+
+You are filling the visual reading under the already attached representative figure crop.
+
+Crop image file to inspect:
+${figurePath}
+
+Source title: ${state.title || '(untitled)'}
+Mode: ${sourceModeLabel(state.sourceMode || 'paper')}
+Requested output language: ${responseLanguageLabel(state.responseLanguage)}
+Selected figure: Figure ${selection.auto || selection.label || selection.page || ''}
+Selection reason: ${selection.reason || '(none)'}
+Pixel checks the selector asked you to verify:
+${(selection.mustVerifyFromPixels || []).map((item) => `- ${item}`).join('\n') || '- inspect all visible labels, arrows, shapes, and symbols'}
+
+Current Start Here body:
+\`\`\`markdown
+${card.body || ''}
+\`\`\`
+
+Rules:
+- Keep the existing orientation and Preliminary content unless it is duplicated or obviously wrong.
+- Insert a visible \`## Figure explanation under image\` section before \`## Preliminary\` when possible.
+- The figure section must be a real pixel-based reading of the crop file, not a generic caption.
+- Use this exact bullet shape under \`## Figure explanation under image\`; do not replace it with prose-only or \`###\` subheadings:
+  - \`- **Figure / location:** ...\`
+  - \`- **Concept / method role:** ...\`
+  - \`- **How to read it:** ...\`
+  - \`- **Parts to identify:** ...\`
+  - \`- **In-figure math / symbols:** ...\`
+  - \`- **Flow / sequence:** ...\`
+  - \`- **What to observe:** ...\`
+  - \`- **Equations / claims it supports:** ...\`
+- Name the visible components, labels, arrows, colors/legend entries, dimensions, and any in-figure symbols.
+- Explain the flow through the visual in execution order and connect it to the paper's method.
+- If you cannot inspect the crop image, return the original body unchanged. Do not invent a visual reading.
+- ${responseLanguageInstruction(state)}
+`;
+}
+
+function maybeAutoReadRepresentativeFigure(slug, args = {}) {
+  let state = readStateForSlug(slug);
+  if (!state || !state.figureReadingPending || args['no-figure-reading']) return state;
+  if (!agentAutomationAvailable(args)) return state;
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const start = (cards.cards || []).find((card) => card.type === 'start-here');
+  if (!start?.figure?.src || hasFinishedFigureExplanation(start.body || '')) {
+    state.figureReadingPending = false;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    return state;
+  }
+  try {
+    const response = runAgentCompletion(
+      representativeFigureVisualReadingPrompt(state, start, state.representativeFigureSelection || {}),
+      { ...args, agentTask: 'representative-figure-reading' }
+    );
+    const body = cleanGeneratedMarkdown(response);
+    if (!hasFinishedFigureExplanation(body)) {
+      throw new Error('representative figure visual reader did not return a finished Figure explanation under image section');
+    }
+    state = replaceStartHereBody(slug, body);
+    state.figureReadingPending = false;
+    delete state.figureReadingWarning;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    return state;
+  } catch (error) {
+    state = readStateForSlug(slug) || state;
+    state.figureReadingPending = true;
+    state.figureReadingWarning = error.message;
+    state.tuiNotice = 'Representative figure crop attached; visual reading is still pending.';
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    return state;
+  }
+}
+
 function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
   let state = readStateForSlug(slug);
   const candidates = state?.representativeFigureCandidates || [];
@@ -5915,6 +6312,9 @@ function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
       return state;
     }
     const selected = candidates[selectedIndex - 1];
+    const selectedCrop = selected.crop && [selected.crop.x, selected.crop.y, selected.crop.width, selected.crop.height].every((value) => Number.isFinite(Number(value)))
+      ? `${selected.crop.x},${selected.crop.y},${selected.crop.width},${selected.crop.height}`
+      : '';
     const cards = readJson(cardsPath(slug), { cards: [] });
     const start = (cards.cards || []).find((card) => card.type === 'start-here');
     const body = start?.body || pendingStartHereBody({ sourceMode: state.sourceMode, sections: state.paperSections, responseLanguage: state.responseLanguage });
@@ -5923,7 +6323,8 @@ function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
       session: slug,
       source,
       page: selected.page || 1,
-      auto: selected.auto || selected.label || 'figure1',
+      auto: selectedCrop ? undefined : (selected.auto || selected.label || 'figure1'),
+      crop: selectedCrop || args.crop,
       type: 'start-here',
       title: 'Start Here',
       location: 'Start Here',
@@ -5939,10 +6340,12 @@ function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
       selectedIndex,
       page: selected.page || 1,
       auto: selected.auto || selected.label || 'figure1',
+      crop: selectedCrop || '',
+      source: selected.source || 'text-caption',
       reason: parsed.reason || '',
       mustVerifyFromPixels: Array.isArray(parsed.mustVerifyFromPixels) ? parsed.mustVerifyFromPixels : []
     };
-    if (!splitFigureExplanationSection(body).figure) {
+    if (!hasFinishedFigureExplanation(body)) {
       state.figureReadingPending = true;
       state.tuiNotice = 'Representative figure crop attached; visual reading is still pending.';
     }
@@ -5960,42 +6363,128 @@ function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
   }
 }
 
-function parseLaunchBundleResponse(text, expectedSection) {
-  const parsed = extractJsonPayload(text);
-  const rawBody = firstStringField(parsed, ['startHereMarkdown', 'startHere', 'start_here', 'body', 'markdown']);
-  const rawSection = firstStringField(parsed, ['firstSection', 'first_section', 'section', 'topic']) || expectedSection;
-  const sectionChoices = firstArrayField(parsed, ['sectionChoices', 'section_choices', 'choices', 'actions', 'menu']);
-  if (!rawBody) throw new Error('launch bundle missing Start Here body');
-  if (!sameSectionTitle(rawSection, expectedSection)) throw new Error(`launch bundle firstSection mismatch: expected ${expectedSection}, got ${rawSection}`);
-  if (!sectionChoices.length) throw new Error('launch bundle missing section choices');
-  const body = cleanGeneratedMarkdown(rawBody);
-  if (markdownPlainText(body).length < 200) throw new Error('launch bundle Start Here is too short');
-  return { body, sectionChoices };
-}
-
-function installBundledSectionChoices(state, section, choices = []) {
-  const cleaned = sanitizeSectionActions(choices, section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
-  if (!section) throw new Error('launch bundle cannot install choices without a section');
-  if (!cleaned.length || cleaned.every(isAskAnythingAction)) throw new Error('launch bundle returned no usable section choices');
-  state.sectionActions = state.sectionActions || {};
-  state.sectionActions[sectionKey(section)] = cleaned;
-  state.launchBundledSection = section;
-  state.prefetchNotice = `First section choices are ready: ${section}`;
+function applySelectedRepresentativeFigure(slug, source, preparedCandidates = [], selectedIndex, parsed = {}, args = {}) {
+  let state = readStateForSlug(slug);
+  const index = selectedIndex == null ? null : Number(selectedIndex);
+  if (!state || !Number.isInteger(index) || index < 1 || index > preparedCandidates.length) {
+    if (state && parsed.reason) {
+      state.figureSelectionWarning = `Representative figure not attached: ${parsed.reason}`;
+      state.updatedAt = now();
+      writeJson(statePath(slug), state);
+    }
+    return state;
+  }
+  const selected = preparedCandidates[index - 1];
+  const cards = readJson(cardsPath(slug), { cards: [] });
+  const startIndex = (cards.cards || []).findIndex((card) => card.type === 'start-here');
+  if (startIndex < 0) return state;
+  const copied = prepareFigure(slug, cards.cards[startIndex].id || 'start-here', {
+    'figure-file': selected.imagePath,
+    caption: ''
+  });
+  cards.cards[startIndex] = {
+    ...cards.cards[startIndex],
+    figure: copied
+  };
+  writeJson(cardsPath(slug), cards);
+  state.representativeFigureSelection = {
+    selectedIndex: index,
+    page: selected.page || 1,
+    auto: selected.auto || selected.label || `figure${index}`,
+    crop: selected.crop ? `${selected.crop.x},${selected.crop.y},${selected.crop.width},${selected.crop.height}` : '',
+    source: selected.source || 'text-caption',
+    reason: parsed.reason || '',
+    mustVerifyFromPixels: Array.isArray(parsed.mustVerifyFromPixels) ? parsed.mustVerifyFromPixels.map(String) : []
+  };
+  delete state.figureSelectionWarning;
+  delete state.figureExtractionWarning;
+  delete state.figureCandidatePreparationWarning;
+  delete state.representativeFigurePrompt;
+  rmSync(safeSessionPath(slug, 'representative-figure-prompt.md'), { force: true });
   state.updatedAt = now();
-  writeJson(statePath(state.slug), state);
-  return state;
+  writeJson(statePath(slug), state);
+  renderHtml(slug);
+  return readStateForSlug(slug) || state;
 }
 
 function maybeAutoFillStartHere(slug, args = {}) {
   if (!agentAutomationAvailable(args) || args['no-agent'] || args.manual) return readStateForSlug(slug);
-  const state = prepareStartHerePrompt(readStateForSlug(slug));
-  const bundledSection = launchBundleSection(state);
-  const bundleResponse = runAgentCompletion(generatedLaunchBundlePrompt(state), { ...args, agentTask: 'launch-bundle' });
-  const bundle = parseLaunchBundleResponse(bundleResponse, bundledSection);
-  let updated = replaceStartHereBody(slug, bundle.body);
-  updated = maybeAutoAttachRepresentativeFigure(slug, args) || updated;
-  updated = installBundledSectionChoices(readStateForSlug(slug) || updated, bundledSection, bundle.sectionChoices);
-  updated.tuiNotice = `Start Here is ready in HTML. First section choices are ready for ${bundledSection}.`;
+  let state = prepareStartHerePrompt(readStateForSlug(slug));
+  const firstSection = firstLaunchSection(state);
+  const canCombineFigureSelection = !args['no-figure'] && !args.crop && !args.figure && !args['figure-number'] && state.representativeFigureCandidates?.length;
+  const preparedFigureResult = canCombineFigureSelection
+    ? prepareRepresentativeFigureCandidateImages(slug, state.source, state.representativeFigureCandidates, args)
+    : { candidates: [], failures: [] };
+  const preparedFigureCandidates = preparedFigureResult.candidates || [];
+  if (canCombineFigureSelection && !preparedFigureCandidates.length) {
+    const details = preparedFigureResult.failures?.length ? ` Details: ${preparedFigureResult.failures.join('; ')}` : '';
+    state.figureCandidatePreparationWarning = `Could not prepare representative figure candidate crops from ${state.source || '(missing source)'}.${details}`;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    throw new Error(state.figureCandidatePreparationWarning);
+  }
+  if (canCombineFigureSelection && preparedFigureResult.failures?.length) {
+    state.figureCandidatePreparationWarning = `Some representative figure candidate crops could not be prepared: ${preparedFigureResult.failures.join('; ')}`;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+  }
+  const response = runAgentCompletion(
+    generatedStartHerePrompt(state, { figureCandidates: preparedFigureCandidates, bundleSection: firstSection }),
+    { ...args, agentTask: preparedFigureCandidates.length ? 'start-here' : 'launch-bundle' }
+  );
+  let body = '';
+  let selectedFigurePayload = null;
+  let bundledSection = firstSection;
+  let bundledChoices = [];
+  if (preparedFigureCandidates.length) {
+    selectedFigurePayload = extractJsonPayload(response);
+    body = cleanGeneratedMarkdown(firstStringField(selectedFigurePayload, ['body', 'markdown', 'startHere', 'startHereMarkdown']) || '');
+  } else {
+    try {
+      const parsed = extractJsonPayload(response);
+      body = cleanGeneratedMarkdown(firstStringField(parsed, ['startHereMarkdown', 'body', 'markdown', 'startHere']) || '');
+      const requestedBundledSection = firstStringField(parsed, ['firstSection', 'section']) || firstSection;
+      bundledSection = (state.paperSections || []).find((section) => sameSectionTitle(section, requestedBundledSection)) || firstSection;
+      bundledChoices = firstArrayField(parsed, ['sectionChoices', 'choices', 'nextChoices']);
+    } catch {
+      body = cleanGeneratedMarkdown(response);
+    }
+  }
+  if (markdownPlainText(body).length < 200) throw new Error('Start Here is too short');
+  let updated = replaceStartHereBody(slug, body);
+  if (!preparedFigureCandidates.length && bundledChoices.length) {
+    updated = readStateForSlug(slug) || updated;
+    if (storeBundledSectionMenu(updated, bundledSection, bundledChoices)) {
+      updated.prefetchNotice = `First section choices are ready: ${bundledSection}`;
+      updated.updatedAt = now();
+      writeJson(statePath(slug), updated);
+    }
+  }
+  if (preparedFigureCandidates.length) {
+    updated = applySelectedRepresentativeFigure(slug, state.source, preparedFigureCandidates, selectedFigurePayload?.selectedFigureIndex, selectedFigurePayload, args) || updated;
+    updated = replaceStartHereBody(slug, body);
+  } else if (!canCombineFigureSelection && !args['no-figure'] && !args.crop && !args.figure && !args['figure-number']) {
+    updated = maybeAutoAttachRepresentativeFigure(slug, args) || updated;
+  }
+  updated = maybeAutoReadRepresentativeFigure(slug, args) || updated;
+  updated = readStateForSlug(slug) || updated;
+  const eagerSectionMenu = Boolean(args['prefetch-section-menu'] || args['eager-section-menu']);
+  if (eagerSectionMenu) {
+    try {
+      updated = installGeneratedSectionMenu(updated, firstSection, args);
+      updated = readStateForSlug(slug) || updated;
+      updated.prefetchNotice = `First section choices are ready: ${firstSection}`;
+      updated.tuiNotice = `Start Here is ready in HTML. First section choices are ready for ${firstSection}.`;
+    } catch (error) {
+      updated = readStateForSlug(slug) || updated;
+      updated.sectionMenuWarning = `First section choices were not auto-generated: ${error.message}`;
+      updated.tuiNotice = `Start Here is ready in HTML. First section choices will be generated when selected.`;
+    }
+  } else {
+    delete updated.prefetchNotice;
+    delete updated.sectionMenuWarning;
+    updated.tuiNotice = `Start Here is ready in HTML. Section choices will be generated when selected.`;
+  }
   updated.updatedAt = now();
   writeJson(statePath(slug), updated);
   return updated;
@@ -6210,7 +6699,7 @@ function isSourceLike(value) {
   const text = String(value || '');
   if (!text || text.startsWith('-')) return false;
   if (isUrl(text) || existsSync(resolve(text))) return true;
-  return /\.(pdf|pptx?|key|md|txt|html?|xhtml|png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(text);
+  return /\.(pdf|pptx|md|txt|html?|xhtml|png|jpe?g|webp|gif|svg)(?:[?#].*)?$/i.test(text);
 }
 
 function readStateForSlug(slug) {
@@ -6273,7 +6762,7 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
       ? roomSummaryRows(state, width)
       : [
           boxLine(`${ansi.bold}Drop Source${ansi.reset}`, width, ansi.green),
-          ...boxWrappedText('Paste a PDF, PPT/PPTX, arXiv URL, Google Drive link, or local path.', width, ansi.green),
+          ...boxWrappedText('Paste a PDF, PPTX, arXiv URL, Google Drive link, or local path.', width, ansi.green),
           ...boxWrappedText('PaperMentor opens an HTML reading room, then lets you choose topics with arrows.', width, ansi.green, ansi.dim)
         ]),
     boxRule(width, ansi.green),
@@ -6439,7 +6928,7 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
       width,
       color: ansi.green,
       leftTitle: 'Drop Source',
-      leftLines: ['PDF · PPT/PPTX · URL', 'local path or link'],
+      leftLines: ['PDF · PPTX · URL', 'local path or link'],
       rightTitle: 'Reading Room',
       rightLines: ['HTML report', 'arrow-key topics']
     }),
@@ -7015,10 +7504,33 @@ function updateLaunchNavigation({ slug, source, args, text }) {
 }
 
 
-function collectRepresentativeFigureCandidates(text, blocks = []) {
+function collectPdffigureRepresentativeCandidates(source, blocks = []) {
+  if (!source || isUrl(source) || extname(source).toLowerCase() !== '.pdf') return [];
+  const absoluteSource = resolve(source);
+  if (!existsSync(absoluteSource)) return [];
+  return pdffigures2EntriesForPdf(absoluteSource).map((entry) => {
+    const section = (blocks || []).find((block) => entry.caption && String(block.body || '').includes(entry.caption.slice(0, Math.min(80, entry.caption.length))))?.title || '';
+    return {
+      label: entry.label,
+      auto: entry.auto,
+      page: entry.page,
+      caption: entry.caption,
+      section,
+      nearbyText: entry.caption,
+      source: entry.source,
+      crop: entry.crop,
+      regionBoundary: entry.regionBoundary,
+      captionBoundary: entry.captionBoundary
+    };
+  });
+}
+
+function collectRepresentativeFigureCandidates(text, blocks = [], source = '') {
   const fullText = String(text || '').replace(/\r/g, '');
   const pages = fullText.split('\f');
-  const candidates = [];
+  const exactCandidates = collectPdffigureRepresentativeCandidates(source, blocks);
+  const candidates = [...exactCandidates];
+  const seen = new Set(exactCandidates.map((candidate) => `${candidate.page}:${normalizeFigureLabel(candidate.label)}`));
   const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[:.\-–—]\s*([^\n]{0,220})/i;
   pages.forEach((pageText, pageIndex) => {
     const lines = pageText.split(/\n/);
@@ -7026,6 +7538,9 @@ function collectRepresentativeFigureCandidates(text, blocks = []) {
       const match = line.match(captionRegex);
       if (!match) return;
       const label = match[1];
+      const key = `${pageIndex + 1}:${normalizeFigureLabel(label)}`;
+      if (seen.has(key)) return;
+      seen.add(key);
       const continuation = [];
       for (let cursor = lineIndex + 1; cursor < Math.min(lines.length, lineIndex + 4); cursor += 1) {
         const next = lines[cursor].trim();
@@ -7046,7 +7561,8 @@ function collectRepresentativeFigureCandidates(text, blocks = []) {
         page: pageIndex + 1,
         caption,
         section,
-        nearbyText: nearbyLines.join(' ').replace(/\s+/g, ' ').slice(0, 700)
+        nearbyText: nearbyLines.join(' ').replace(/\s+/g, ' ').slice(0, 700),
+        source: 'text-caption'
       });
     });
   });
@@ -7080,6 +7596,7 @@ function representativeFigureSelectionPrompt({ state, source, candidates = [] })
       `### ${index + 1}. Figure ${candidate.label} — page ${candidate.page}`,
       '',
       `- Auto selector: \`${candidate.auto}\``,
+      `- Source: ${candidate.source || 'text-caption'}${candidate.crop ? `; exact crop: ${candidate.crop.x},${candidate.crop.y},${candidate.crop.width},${candidate.crop.height}` : ''}`,
       `- Section context: ${candidate.section || '(unknown; use nearby text)'}`,
       `- Caption: ${candidate.caption || '(caption text unavailable)'}`,
       `- Nearby text: ${candidate.nearbyText || '(none extracted)'}`,
@@ -7116,7 +7633,7 @@ function writeRepresentativeFigureSelectionPrompt({ slug, source, candidates = [
 
 function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigureCandidates = [] }) {
   const extension = extname(source).toLowerCase();
-  const canExtractVisual = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
+  const canExtractVisual = ['.pdf', '.pptx', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const sourceIsImage = ['.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
   const normalizedMode = normalizeSourceMode(sourceMode);
   const isSlide = normalizedMode === 'slide';
@@ -7188,7 +7705,8 @@ function attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body
 }
 
 function maybeWriteCropPreview({ slug, source, args, canExtractVisual, representativeFigure = null }) {
-  if (!canExtractVisual || args['no-preview']) return;
+  const requested = Boolean(args.preview || args['crop-preview'] || args['write-preview']);
+  if (!requested || !canExtractVisual || args['no-preview']) return;
   try {
     previewCrops({
       ...args,
@@ -7209,24 +7727,29 @@ function launchSession(args) {
   const input = args.source || args.input || args._[1];
   if (!input) throw new Error('launch requires a source URL or local file: launch <file-or-url>');
   const sourceSeed = sourceSeedFromInput(input, args);
-  const source = downloadSourceIfNeeded(input, sourceSeed, args);
-  const { slug } = createLaunchShell({ input, source, args });
-  const { text, orientationText } = extractLaunchTexts(source, args);
-  const { state, sourceMode, sections, blocks } = updateLaunchNavigation({ slug, source, args, text });
-  addReadingGuideBlock({ slug, sourceMode, sections, args });
+  const downloadedSource = downloadSourceIfNeeded(input, sourceSeed, args);
+  const sourceExtension = extname(downloadedSource).toLowerCase();
+  const launchArgs = sourceExtension === '.pptx' && !args.mode && !args['source-mode']
+    ? { ...args, mode: 'slide' }
+    : args;
+  const source = convertPptxSourceToPdf(downloadedSource, launchArgs);
+  const { slug } = createLaunchShell({ input, source, args: launchArgs });
+  const { text, orientationText } = extractLaunchTexts(source, launchArgs);
+  const { state, sourceMode, sections, blocks } = updateLaunchNavigation({ slug, source, args: launchArgs, text });
+  addReadingGuideBlock({ slug, sourceMode, sections, args: launchArgs });
   const extension = extname(source).toLowerCase();
-  const canExtractVisualForPreview = ['.pdf', '.ppt', '.pptx', '.key', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
-  const hasProvidedStartHereBody = Boolean(args.body || args['body-file']);
+  const canExtractVisualForPreview = ['.pdf', '.pptx', '.png', '.jpg', '.jpeg', '.webp', '.gif', '.svg'].includes(extension);
+  const hasProvidedStartHereBody = Boolean(launchArgs.body || launchArgs['body-file']);
   if (normalizeSourceMode(sourceMode) === 'slide' && !hasProvidedStartHereBody) {
     const pendingState = readJson(statePath(slug), state);
     writeSlideStartHerePrompt(pendingState, sections);
     pendingState.updatedAt = now();
     writeJson(statePath(slug), pendingState);
-    maybeWriteCropPreview({ slug, source, args, canExtractVisual: canExtractVisualForPreview });
+    maybeWriteCropPreview({ slug, source, args: launchArgs, canExtractVisual: canExtractVisualForPreview });
     let autoError = '';
     try {
-      if (shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
-      else if (launchGenerationRequested(args)) {
+      if (shouldAutoGenerateInLaunch(launchArgs)) maybeAutoFillStartHere(slug, launchArgs);
+      else if (launchGenerationRequested(launchArgs)) {
         const providerState = markLaunchProviderUnavailable(slug, pendingState);
         autoError = providerUnavailableNotice(providerState);
       }
@@ -7234,34 +7757,34 @@ function launchSession(args) {
       autoError = error.message;
     }
     renderHtml(slug);
-    if (args.open) openSessionHtml(slug);
-    if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
+    if (launchArgs.open) openSessionHtml(slug);
+    if (launchArgs.iterm || launchArgs.terminal || launchArgs['open-tui']) openItermTui(slug);
     let finalState = readJson(statePath(slug), pendingState);
-    if (shouldEnterLaunchTui(args) || shouldShowTuiSnapshot(args)) finalState = prepareLaunchNavigator(slug) || finalState;
-    if (shouldEnterLaunchTui(args)) {
-      enterLaunchTui(slug, args);
+    if (shouldEnterLaunchTui(launchArgs) || shouldShowTuiSnapshot(launchArgs)) finalState = prepareLaunchNavigator(slug) || finalState;
+    if (shouldEnterLaunchTui(launchArgs)) {
+      enterLaunchTui(slug, launchArgs);
       return slug;
     }
-    if (shouldShowTuiSnapshot(args)) printTuiSnapshot(finalState);
+    if (shouldShowTuiSnapshot(launchArgs)) printTuiSnapshot(finalState);
     else printConsole(finalState);
     console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
-${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${startHereLaunchStatusLine(finalState, args, autoError)}`);
+${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${startHereLaunchStatusLine(finalState, launchArgs, autoError)}`);
     return slug;
   }
-  const body = args.body || launchStartBody({ sourceMode, text: orientationText, sections, responseLanguage: responseLanguageFromArgs(args, state?.responseLanguage || 'auto') });
+  const body = launchArgs.body || launchStartBody({ sourceMode, text: orientationText, sections, responseLanguage: responseLanguageFromArgs(launchArgs, state?.responseLanguage || 'auto') });
   const representativeFigureCandidates = normalizeSourceMode(sourceMode) === 'paper'
-    ? collectRepresentativeFigureCandidates(text || orientationText, blocks)
+    ? collectRepresentativeFigureCandidates(text || orientationText, blocks, source)
     : [];
-  if (representativeFigureCandidates.length && !args['no-figure'] && !args.figure && !args['figure-number'] && !args.crop && !args.page && !args.slide) {
+  if (representativeFigureCandidates.length && !launchArgs['no-figure'] && !launchArgs.figure && !launchArgs['figure-number'] && !launchArgs.crop && !launchArgs.page && !launchArgs.slide) {
     writeRepresentativeFigureSelectionPrompt({ slug, source, candidates: representativeFigureCandidates });
   }
-  const launchVisual = attachLaunchStartBlock({ slug, source, args, sourceMode, sections, body, representativeFigureCandidates });
+  const launchVisual = attachLaunchStartBlock({ slug, source, args: launchArgs, sourceMode, sections, body, representativeFigureCandidates });
   const startHereCard = readJson(cardsPath(slug), { cards: [] }).cards.find((existing) => existing.type === 'start-here');
   const startHereIsScaffold = !startHereCard || isStartHerePendingBody(startHereCard.body || '');
-  const startHereScaffolded = !args.body && startHereIsScaffold;
-  const figureScaffoldShipped = launchVisual.attachedVisual && !args.body && !args['no-figure'] && startHereIsScaffold;
+  const startHereScaffolded = !launchArgs.body && startHereIsScaffold;
+  const figureScaffoldShipped = launchVisual.attachedVisual && !launchArgs.body && !launchArgs['no-figure'] && startHereIsScaffold;
   if (startHereScaffolded) {
     const pendingState = readJson(statePath(slug), {});
     pendingState.startHerePending = true;
@@ -7271,31 +7794,31 @@ ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}\n` : ''}${
   }
   let autoError = '';
   try {
-    if (startHereScaffolded && shouldAutoGenerateInLaunch(args)) maybeAutoFillStartHere(slug, args);
-    else if (startHereScaffolded && launchGenerationRequested(args)) {
+    if (startHereScaffolded && shouldAutoGenerateInLaunch(launchArgs)) maybeAutoFillStartHere(slug, launchArgs);
+    else if (startHereScaffolded && launchGenerationRequested(launchArgs)) {
       const providerState = markLaunchProviderUnavailable(slug, readJson(statePath(slug), state));
       autoError = providerUnavailableNotice(providerState);
     }
   } catch (error) {
     autoError = error.message;
   }
-  maybeWriteCropPreview({ slug, source, args, canExtractVisual: launchVisual.canExtractVisual, representativeFigure: null });
+  maybeWriteCropPreview({ slug, source, args: launchArgs, canExtractVisual: launchVisual.canExtractVisual, representativeFigure: null });
   renderHtml(slug);
-  if (args.open) openSessionHtml(slug);
-  if (args.iterm || args.terminal || args['open-tui']) openItermTui(slug);
+  if (launchArgs.open) openSessionHtml(slug);
+  if (launchArgs.iterm || launchArgs.terminal || launchArgs['open-tui']) openItermTui(slug);
   let finalState = readJson(statePath(slug), state);
-  if (shouldEnterLaunchTui(args) || shouldShowTuiSnapshot(args)) finalState = prepareLaunchNavigator(slug) || finalState;
-  if (shouldEnterLaunchTui(args)) {
-    enterLaunchTui(slug, args);
+  if (shouldEnterLaunchTui(launchArgs) || shouldShowTuiSnapshot(launchArgs)) finalState = prepareLaunchNavigator(slug) || finalState;
+  if (shouldEnterLaunchTui(launchArgs)) {
+    enterLaunchTui(slug, launchArgs);
     return slug;
   }
-  if (shouldShowTuiSnapshot(args)) printTuiSnapshot(finalState);
+  if (shouldShowTuiSnapshot(launchArgs)) printTuiSnapshot(finalState);
   else printConsole(finalState);
 console.log(`\nLaunch complete:
 - HTML: .papermentor/sessions/${slug}/index.html
 - TUI:  ${cliCommand()} tui --session ${slug}
 ${finalState.cropPreview ? `- Crop preview: ${finalState.cropPreview}` : ''}`);
-  console.log(startHereLaunchStatusLine(finalState, args, autoError));
+  console.log(startHereLaunchStatusLine(finalState, launchArgs, autoError));
   if (finalState.representativeFigurePrompt) {
     console.log(`- Representative figure selection prompt: ${finalState.representativeFigurePrompt}`);
   }

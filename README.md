@@ -58,7 +58,7 @@ pm
 
 # 3. Drop a source
 # - arXiv PDF
-# - local PDF/PPT/PPTX lecture slides
+# - local PDF/PPTX lecture slides
 # - technical blog/tutorial URL
 ```
 

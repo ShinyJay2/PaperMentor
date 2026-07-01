@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { expandPatterns, loadManifest, matchesAny, packageFiles, repoRoot } from './manifest.mjs';
 
@@ -12,8 +13,24 @@ if (JSON.stringify(pkg.files || []) !== JSON.stringify(expectedFilesArray)) {
   failures.push('package.json files array is out of sync with papermentor.manifest.json; run npm run manifest:write');
 }
 
-const output = execFileSync('npm', ['pack', '--dry-run', '--json'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-const [pack] = JSON.parse(output);
+const npmCache = mkdtempSync(join(tmpdir(), 'papermentor-npm-cache-'));
+let pack;
+try {
+  const output = execFileSync('npm', ['pack', '--dry-run', '--json'], {
+    encoding: 'utf8',
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      npm_config_cache: npmCache,
+      npm_config_update_notifier: 'false',
+      npm_config_audit: 'false',
+      npm_config_fund: 'false'
+    }
+  });
+  [pack] = JSON.parse(output);
+} finally {
+  rmSync(npmCache, { recursive: true, force: true });
+}
 const files = pack.files || [];
 const paths = files.map((file) => file.path);
 const expectedPackageFiles = packageFiles(repoRoot, manifest);

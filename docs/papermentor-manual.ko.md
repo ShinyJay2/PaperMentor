@@ -39,10 +39,9 @@ PaperMentor가 특히 잘해야 하는 일은 다음이다.
 - git
 - macOS/Linux/Windows PowerShell 중 하나
 
-PDF/PPT/image extraction을 제대로 쓰려면 아래 도구가 있으면 좋다.
+PDF/PPTX/image extraction을 제대로 쓰려면 아래 도구가 있으면 좋다.
 
-- Poppler: `pdftotext`, `pdftoppm`
-- LibreOffice: PPT/PPTX 변환용 `soffice`
+- Poppler: `pdftotext`, `pdftoppm`, `pdftohtml`, `pdfinfo`
 - ImageMagick: crop/이미지 처리용 `magick` 또는 `convert`
 
 설치 후 점검:
@@ -163,7 +162,7 @@ assets/fonts/**
 assets/mathjax/**
 ```
 
-설치본에는 개발용 검증 스크립트, README 이미지, social preview, local session artifacts, PDF/PPT 소스 파일이 들어가지 않는다.
+설치본에는 개발용 검증 스크립트, README 이미지, social preview, local session artifacts, PDF/PPTX 소스 파일이 들어가지 않는다.
 
 ---
 
@@ -275,7 +274,7 @@ Paper mode의 주요 action:
 
 ## 8. Slide mode 사용 흐름
 
-Slide mode는 강의 슬라이드 PDF/PPT를 위한 모드다.
+Slide mode는 강의 슬라이드 PDF/PPTX를 위한 모드다.
 
 명시적으로 slide mode로 열기:
 
@@ -410,7 +409,7 @@ npm run pack:check
 - `.omx/`, `.omc/`
 - `.claude/`
 - local screenshot
-- root PDF/PPT/PPTX
+- root PDF/PPTX
 - `image.png`
 - social preview PNG
 
@@ -444,13 +443,9 @@ macOS:
 brew install poppler
 ```
 
-### PPT/PPTX가 안 열림
+### PPTX가 안 열림
 
-LibreOffice가 필요할 수 있다.
-
-```bash
-brew install --cask libreoffice
-```
+PaperMentor는 PPT를 직접 지원하지 않는다. PPTX는 Codex/Claude agent에게 PDF 변환을 요청한 뒤 변환된 PDF를 읽는다. 변환이 실패하면 PPTX를 PDF로 export해서 다시 넣는다.
 
 ### HTTP URL이 막힘
 
