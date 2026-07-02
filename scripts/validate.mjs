@@ -109,9 +109,9 @@ function writeVectorOnlyFigurePdfFixture(path) {
   writeFileSync(path, pdf);
 }
 
-function hasDoclingDetector() {
+function hasPyMuPDFDetector() {
   try {
-    execFileSync('uv', ['run', '--python', '3.10', '--with', 'docling==2.69.1', 'python', '-c', 'import docling'], { stdio: 'ignore', timeout: 120000 });
+    execFileSync('python3', ['-c', 'import fitz'], { stdio: 'ignore', timeout: 30000 });
     return true;
   } catch {
     return false;
@@ -646,11 +646,11 @@ async function validateSessionHelper() {
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'Docling', 'pdfinfo', 'ImageMagick']) {
+    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'PyMuPDF', 'pdfinfo', 'ImageMagick']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
     }
     const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
-    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'Docling') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
+    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'PyMuPDF') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -916,9 +916,9 @@ require('./fake-codex.js');
     const representativeAutoStart = representativeAutoCards.cards?.find((card) => card.type === 'start-here');
     if (!representativeAutoStart?.figure?.src?.endsWith('.png')) failures.push(`representative auto-selection should attach the model-selected method figure crop; warning=${representativeAutoState.figureExtractionWarning || representativeAutoState.figureSelectionWarning || 'none'}`);
     if (representativeAutoState.representativeFigureSelection?.selectedIndex !== 2) failures.push(`representative auto-selection should preserve the model-selected candidate index, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
-    if (representativeAutoState.representativeFigureSelection?.source !== 'docling') failures.push(`representative auto-selection should preserve Docling figure-geometry source, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
-    if (!representativeAutoState.representativeFigureSelection?.crop) failures.push('representative auto-selection should pass Docling geometry crop into extract-figure');
-    if (!representativeAutoState.representativeFigureCandidates?.some((candidate) => candidate.source === 'docling' && candidate.crop)) failures.push('representative figure candidates should include Docling geometry crop metadata');
+    if (representativeAutoState.representativeFigureSelection?.source !== 'pymupdf') failures.push(`representative auto-selection should preserve PyMuPDF figure-geometry source, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
+    if (!representativeAutoState.representativeFigureSelection?.crop) failures.push('representative auto-selection should pass PyMuPDF geometry crop into extract-figure');
+    if (!representativeAutoState.representativeFigureCandidates?.some((candidate) => candidate.source === 'pymupdf' && candidate.crop)) failures.push('representative figure candidates should include PyMuPDF geometry crop metadata');
     if (representativeAutoState.figureReadingPending) failures.push(`representative auto-generation should finish the pixel-based visual reading, got warning=${representativeAutoState.figureReadingWarning || 'none'}`);
     const representativeAutoCounts = readJson(representativeAutoCountFile, {});
     if (representativeAutoCounts['start-here'] !== 1 || representativeAutoCounts['representative-figure'] || representativeAutoCounts['representative-figure-reading']) failures.push(`representative auto-generation should combine figure selection and visual reading into one Start Here provider call, got ${JSON.stringify(representativeAutoCounts)}`);
@@ -1003,9 +1003,9 @@ require('./fake-codex.js');
     const noFigurePreviewState = readJson(join(temp, '.papermentor', 'sessions', 'no-figure-preview', 'state.json'), {});
     if (!noFigurePreview.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('preview-crops should still write full-page preview when auto Figure 1 is absent');
     if (noFigurePreview.previews?.some((preview) => /Auto Figure/.test(preview.label))) failures.push('preview-crops should not invent an auto Figure crop when no Figure 1 caption exists');
-    if (!/Auto figure crop unavailable|Docling did not detect figure geometry|Docling figure detection/i.test(noFigurePreview.warning || noFigurePreviewState.cropPreviewWarning || '')) failures.push('preview-crops should persist a Docling auto-crop warning without aborting the preview');
+    if (!/Auto figure crop unavailable|PyMuPDF did not detect figure geometry|PyMuPDF figure detection/i.test(noFigurePreview.warning || noFigurePreviewState.cropPreviewWarning || '')) failures.push('preview-crops should persist a PyMuPDF auto-crop warning without aborting the preview');
 
-    if (hasDoclingDetector()) {
+    if (hasPyMuPDFDetector()) {
       const vectorOnlyFigurePath = join(temp, 'vector-only-figure-paper.pdf');
       writeVectorOnlyFigurePdfFixture(vectorOnlyFigurePath);
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Vector Geometry Figure', '--source', vectorOnlyFigurePath, '--slug', 'vector-geometry-figure'], { cwd: temp, stdio: 'pipe' });

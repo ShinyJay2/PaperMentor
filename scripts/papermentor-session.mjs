@@ -1314,10 +1314,10 @@ function dependencyStatusRows() {
       install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
     },
     {
-      name: 'Docling',
-      ok: Boolean(process.env.PAPERMENTOR_DOCLING_PYTHON || commandPath('python3.10') || commandPath('uv')),
-      purpose: 'detect real PDF picture layout/geometry for representative figure crops',
-      install: 'Install Python 3.10 plus `pip install docling`, or install `uv` so PaperMentor can run Docling under Python 3.10'
+      name: 'PyMuPDF',
+      ok: Boolean(process.env.PAPERMENTOR_PYMUPDF_PYTHON || commandPath('python3') || commandPath('python') || commandPath('uv')),
+      purpose: 'detect real PDF image/vector geometry for representative figure crops',
+      install: 'Install Python plus `pip install pymupdf`, or install `uv` so PaperMentor can run PyMuPDF on demand'
     },
     {
       name: 'pdfinfo',
@@ -1549,6 +1549,11 @@ function normalizeFigureLabel(value) {
   return String(value || '').trim().replace(/^fig(?:ure)?\.?\s*/i, '').replace(/[.:]+$/g, '') || '1';
 }
 
+function normalizeDetectedFigureLabel(value) {
+  const normalized = String(value || '').trim().replace(/^fig(?:ure)?\.?\s*/i, '').replace(/[.:]+$/g, '');
+  return normalized || '';
+}
+
 function decodeXmlText(value) {
   return String(value || '')
     .replace(/<[^>]*>/g, '')
@@ -1588,20 +1593,17 @@ function rectFromPdfPoints({ page, dpi, leftPt, topPt, rightPt, bottomPt }) {
   };
 }
 
-const doclingFigureGeometryCache = new Map();
+const pymupdfFigureGeometryCache = new Map();
 
-function doclingPythonRunners() {
+function pymupdfPythonRunners() {
   const runners = [];
-  if (process.env.PAPERMENTOR_DOCLING_PYTHON) runners.push({ command: resolve(process.env.PAPERMENTOR_DOCLING_PYTHON), args: [] });
-  const python310 = commandPath('python3.10');
-  if (python310) runners.push({ command: python310, args: [] });
+  if (process.env.PAPERMENTOR_PYMUPDF_PYTHON) runners.push({ command: resolve(process.env.PAPERMENTOR_PYMUPDF_PYTHON), args: [] });
+  const python3 = commandPath('python3');
+  if (python3) runners.push({ command: python3, args: [] });
+  const python = commandPath('python');
+  if (python && python !== python3) runners.push({ command: python, args: [] });
   const uv = commandPath('uv');
-  if (uv) {
-    runners.push({
-      command: uv,
-      args: ['run', '--python', '3.10', '--with', `docling==${process.env.PAPERMENTOR_DOCLING_VERSION || '2.69.1'}`, 'python']
-    });
-  }
+  if (uv) runners.push({ command: uv, args: ['run', '--with', `pymupdf==${process.env.PAPERMENTOR_PYMUPDF_VERSION || '1.26.5'}`, 'python'] });
   return runners;
 }
 
@@ -1609,88 +1611,184 @@ function compactFigureMatchText(value) {
   return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
-function doclingFigureGeometryForPdf(pdfPath, args = {}) {
+function pymupdfFigureGeometryForPdf(pdfPath, args = {}) {
   const absolute = resolve(pdfPath);
   const stat = statSync(absolute);
   const dpi = boundedInteger('dpi', args.dpi || 180, { min: 72, max: 300 });
   const key = `${absolute}:${stat.size}:${stat.mtimeMs}:${dpi}`;
-  if (doclingFigureGeometryCache.has(key)) return doclingFigureGeometryCache.get(key);
-  const runners = doclingPythonRunners();
-  if (!runners.length) throw new Error('Docling figure detection requires Python 3.10 with docling, or `uv` to run docling under Python 3.10');
+  if (pymupdfFigureGeometryCache.has(key)) return pymupdfFigureGeometryCache.get(key);
+  const runners = pymupdfPythonRunners();
+  if (!runners.length) throw new Error('PyMuPDF figure detection requires Python with `pymupdf` installed, or `uv` to run PyMuPDF on demand');
   const script = String.raw`
-import json, sys
-from pathlib import Path
+import json, math, re, sys
 
 payload = json.loads(sys.argv[1])
 pdf_path = payload["pdfPath"]
 
 try:
-    from docling.document_converter import DocumentConverter
+    import fitz
 except Exception as exc:
-    print(json.dumps({"ok": False, "error": "docling import failed: " + str(exc)}))
+    print(json.dumps({"ok": False, "error": "PyMuPDF import failed: " + str(exc)}))
     sys.exit(0)
 
-def number(value, fallback=0.0):
-    try:
-        return float(value)
-    except Exception:
-        return fallback
+def compact(value):
+    return re.sub(r'[^a-z0-9]+', '', str(value or '').lower())
 
-def bbox_to_top_left(bbox, page_size):
-    left = number(getattr(bbox, "l", 0.0))
-    right = number(getattr(bbox, "r", left))
-    top = number(getattr(bbox, "t", 0.0))
-    bottom = number(getattr(bbox, "b", top))
-    origin = str(getattr(getattr(bbox, "coord_origin", ""), "value", getattr(bbox, "coord_origin", ""))).upper()
-    page_width = number(getattr(page_size, "width", 0.0))
-    page_height = number(getattr(page_size, "height", 0.0))
-    if "BOTTOMLEFT" in origin:
-        return {
-            "leftPt": left,
-            "topPt": max(0.0, page_height - top),
-            "rightPt": right,
-            "bottomPt": max(0.0, page_height - bottom),
-            "pageWidthPt": page_width,
-            "pageHeightPt": page_height,
-            "coordOrigin": "BOTTOMLEFT",
-        }
-    return {
-        "leftPt": left,
-        "topPt": top,
-        "rightPt": right,
-        "bottomPt": bottom,
-        "pageWidthPt": page_width,
-        "pageHeightPt": page_height,
-        "coordOrigin": "TOPLEFT",
-    }
+def normalize_label(value):
+    text = str(value or '').strip()
+    text = re.sub(r'^(?:fig(?:ure)?\.?)\s*', '', text, flags=re.I)
+    match = re.search(r'(\d{1,3}[A-Za-z]?)', text)
+    return match.group(1).lower() if match else ''
+
+def valid_rect(rect, page):
+    x0, y0, x1, y1 = rect
+    if not all(math.isfinite(v) for v in rect): return False
+    if x1 <= x0 or y1 <= y0: return False
+    width, height = x1 - x0, y1 - y0
+    if width < 8 or height < 8: return False
+    if width * height < 64: return False
+    if width > page.rect.width * 0.94 and height > page.rect.height * 0.88: return False
+    return True
+
+def union_rect(rects):
+    return (
+        min(r[0] for r in rects),
+        min(r[1] for r in rects),
+        max(r[2] for r in rects),
+        max(r[3] for r in rects),
+    )
+
+def horizontal_overlap(a, b):
+    left, right = max(a[0], b[0]), min(a[2], b[2])
+    if right <= left: return 0.0
+    return (right - left) / max(1.0, min(a[2] - a[0], b[2] - b[0]))
+
+def rect_area(rect):
+    return max(0.0, rect[2] - rect[0]) * max(0.0, rect[3] - rect[1])
+
+def line_items(page):
+    lines = []
+    text = page.get_text('dict')
+    for block in text.get('blocks', []):
+        if block.get('type') != 0:
+            continue
+        for line in block.get('lines', []):
+            value = ''.join(span.get('text', '') for span in line.get('spans', []))
+            value = re.sub(r'\s+', ' ', value).strip()
+            bbox = line.get('bbox')
+            if value and bbox:
+                lines.append({"text": value, "bbox": tuple(float(v) for v in bbox)})
+    return lines
+
+def page_geometry(page):
+    rects = []
+    for info in page.get_image_info(xrefs=True):
+        bbox = info.get('bbox')
+        if bbox:
+            rect = tuple(float(v) for v in bbox)
+            if valid_rect(rect, page):
+                rects.append(rect)
+    for drawing in page.get_drawings():
+        rect_obj = drawing.get('rect')
+        if rect_obj:
+            rect = (float(rect_obj.x0), float(rect_obj.y0), float(rect_obj.x1), float(rect_obj.y1))
+            if valid_rect(rect, page):
+                rects.append(rect)
+    # De-duplicate repeated draw/image fragments.
+    unique = []
+    seen = set()
+    for rect in rects:
+        key = tuple(round(v, 1) for v in rect)
+        if key not in seen:
+            seen.add(key)
+            unique.append(rect)
+    return unique
+
+def geometry_above_caption(graphics, caption_bbox):
+    caption_top = caption_bbox[1]
+    above = [rect for rect in graphics if rect[3] <= caption_top + 8]
+    if not above:
+        above = [rect for rect in graphics if (rect[1] + rect[3]) / 2.0 <= caption_top]
+    if not above:
+        return None
+    ordered = sorted(above, key=lambda r: (caption_top - r[3], -rect_area(r)))
+    cluster = [ordered[0]]
+    current = union_rect(cluster)
+    for rect in sorted(above, key=lambda r: r[3], reverse=True):
+        if rect in cluster:
+            continue
+        vertical_gap = current[1] - rect[3]
+        x_overlap = horizontal_overlap(rect, current)
+        if vertical_gap > 150 and x_overlap < 0.08:
+            continue
+        if vertical_gap <= 150 or x_overlap >= 0.08:
+            cluster.append(rect)
+            current = union_rect(cluster)
+    return union_rect(cluster)
+
+def nearby_caption(lines, rect):
+    below = []
+    for line in lines:
+        bbox = line['bbox']
+        if bbox[1] >= rect[3] - 4 and bbox[1] <= rect[3] + 90:
+            if horizontal_overlap(bbox, rect) >= 0.08 or abs(((bbox[0]+bbox[2])/2)-((rect[0]+rect[2])/2)) < max(80, (rect[2]-rect[0])*0.5):
+                below.append(line)
+    below.sort(key=lambda line: (line['bbox'][1], line['bbox'][0]))
+    return below[0]['text'] if below else ''
 
 try:
-    result = DocumentConverter().convert(str(Path(pdf_path)))
-    doc = result.document
-    pictures = []
-    for index, picture in enumerate(getattr(doc, "pictures", []) or []):
-        caption = ""
-        try:
-            caption = picture.caption_text(doc) or ""
-        except Exception:
-            caption = ""
-        for prov in getattr(picture, "prov", []) or []:
-            bbox = getattr(prov, "bbox", None)
-            page_no = int(getattr(prov, "page_no", 1) or 1)
-            page = getattr(doc, "pages", {}).get(page_no)
-            page_size = getattr(page, "size", None)
-            if not bbox or not page_size:
+    doc = fitz.open(pdf_path)
+    figures = []
+    for page_index in range(len(doc)):
+        page = doc[page_index]
+        page_no = page_index + 1
+        lines = line_items(page)
+        graphics = page_geometry(page)
+        used = []
+        for line in lines:
+            match = re.search(r'\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\b[:.\-–—]?\s*(.*)$', line['text'], re.I)
+            if not match:
                 continue
-            rect = bbox_to_top_left(bbox, page_size)
-            if rect["rightPt"] <= rect["leftPt"] or rect["bottomPt"] <= rect["topPt"]:
+            rect = geometry_above_caption(graphics, line['bbox'])
+            if not rect:
                 continue
-            pictures.append({
-                "index": index + 1,
+            used.append(rect)
+            figures.append({
+                "index": len(figures) + 1,
                 "page": page_no,
-                "caption": caption,
-                **rect,
+                "label": normalize_label(match.group(1)),
+                "caption": line['text'],
+                "leftPt": rect[0],
+                "topPt": rect[1],
+                "rightPt": rect[2],
+                "bottomPt": rect[3],
+                "pageWidthPt": float(page.rect.width),
+                "pageHeightPt": float(page.rect.height),
+                "geometryCount": len(graphics),
+                "source": "pymupdf",
             })
-    print(json.dumps({"ok": True, "pictures": pictures}))
+        # If PyMuPDF sees real graphics but no caption line attached, expose geometry candidates
+        # by visual order. Caption text from pdftotext can still be merged by the JS caller.
+        if not any(fig['page'] == page_no for fig in figures):
+            large = [rect for rect in graphics if rect_area(rect) >= 4000]
+            large.sort(key=lambda r: (r[1], r[0]))
+            for rect in large[:8]:
+                caption = nearby_caption(lines, rect)
+                figures.append({
+                    "index": len(figures) + 1,
+                    "page": page_no,
+                    "label": normalize_label(caption),
+                    "caption": caption,
+                    "leftPt": rect[0],
+                    "topPt": rect[1],
+                    "rightPt": rect[2],
+                    "bottomPt": rect[3],
+                    "pageWidthPt": float(page.rect.width),
+                    "pageHeightPt": float(page.rect.height),
+                    "geometryCount": len(graphics),
+                    "source": "pymupdf",
+                })
+    print(json.dumps({"ok": True, "figures": figures}))
 except Exception as exc:
     print(json.dumps({"ok": False, "error": str(exc)}))
 `;
@@ -1701,23 +1799,23 @@ except Exception as exc:
       const out = execFileSync(runner.command, [...runner.args, '-c', script, payload], {
         encoding: 'utf8',
         stdio: ['ignore', 'pipe', 'pipe'],
-        timeout: Number(process.env.PAPERMENTOR_DOCLING_TIMEOUT_MS || 180000)
+        timeout: Number(process.env.PAPERMENTOR_PYMUPDF_TIMEOUT_MS || 30000)
       });
       const parsed = JSON.parse(out);
       if (parsed?.ok) {
-        const pictures = Array.isArray(parsed.pictures) ? parsed.pictures : [];
-        doclingFigureGeometryCache.set(key, pictures);
-        return pictures;
+        const figures = Array.isArray(parsed.figures) ? parsed.figures : [];
+        pymupdfFigureGeometryCache.set(key, figures);
+        return figures;
       }
-      errors.push(parsed?.error || `${runner.command} returned no Docling result`);
+      errors.push(parsed?.error || `${runner.command} returned no PyMuPDF result`);
     } catch (error) {
       errors.push(`${runner.command}: ${error.message}`);
     }
   }
-  throw new Error(`Docling figure detection failed: ${errors.join('; ')}`);
+  throw new Error(`PyMuPDF figure detection failed: ${errors.join('; ')}`);
 }
 
-function doclingFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
+function pymupdfFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
   const label = normalizeFigureLabel(args.auto || args.figure || args['figure-number'] || '1');
   const caption = args.caption || args['figure-caption'] || args.captionText || '';
   const captionNeedle = compactFigureMatchText(caption).slice(0, 120);
@@ -1725,28 +1823,32 @@ function doclingFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
     compactFigureMatchText(`Figure ${label}`),
     compactFigureMatchText(`Fig. ${label}`)
   ];
-  const pagePictures = doclingFigureGeometryForPdf(pdfPath, args).filter((picture) => Number(picture.page) === Number(pageNumber));
-  if (!pagePictures.length) throw new Error(`Docling did not detect figure geometry on page ${pageNumber}`);
-  const scored = pagePictures.map((picture) => {
-    const text = compactFigureMatchText(picture.caption || '');
-    const area = Math.max(1, (Number(picture.rightPt) - Number(picture.leftPt)) * (Number(picture.bottomPt) - Number(picture.topPt)));
-    let score = Math.log(area);
+  const pageFigures = pymupdfFigureGeometryForPdf(pdfPath, args).filter((figure) => Number(figure.page) === Number(pageNumber));
+  if (!pageFigures.length) throw new Error(`PyMuPDF did not detect figure geometry on page ${pageNumber}`);
+  const scored = pageFigures.map((figure, order) => {
+    const text = compactFigureMatchText(figure.caption || '');
+    const figureLabel = normalizeDetectedFigureLabel(figure.label);
+    const area = Math.max(1, (Number(figure.rightPt) - Number(figure.leftPt)) * (Number(figure.bottomPt) - Number(figure.topPt)));
+    let score = Math.log(area) - order * 0.01;
+    if (label && figureLabel && figureLabel === label) score += 1200;
     if (labelNeedles.some((needle) => needle && text.includes(needle))) score += 1000;
     if (captionNeedle && captionNeedle.length >= 16 && (text.includes(captionNeedle.slice(0, 90)) || captionNeedle.includes(text.slice(0, 90)))) score += 500;
-    return { picture, score };
+    return { figure, score };
   }).sort((a, b) => b.score - a.score);
-  const selected = scored[0]?.picture;
+  const selected = scored[0]?.figure;
   const selectedText = compactFigureMatchText(selected?.caption || '');
+  const selectedLabel = normalizeDetectedFigureLabel(selected?.label);
   const matched = selected && (
-    labelNeedles.some((needle) => needle && selectedText.includes(needle))
+    (label && selectedLabel && selectedLabel === label)
+    || labelNeedles.some((needle) => needle && selectedText.includes(needle))
     || (captionNeedle && captionNeedle.length >= 16 && (selectedText.includes(captionNeedle.slice(0, 90)) || captionNeedle.includes(selectedText.slice(0, 90))))
   );
-  if (!matched) throw new Error(`Docling detected ${pagePictures.length} picture(s) on page ${pageNumber} but none matched Figure ${label}`);
+  if (!matched) throw new Error(`PyMuPDF detected ${pageFigures.length} figure geometry candidate(s) on page ${pageNumber} but none matched Figure ${label}`);
   const page = {
     width: Number(selected.pageWidthPt) || pdfPageSize(pdfPath, pageNumber).width,
     height: Number(selected.pageHeightPt) || pdfPageSize(pdfPath, pageNumber).height
   };
-  const pad = Number(args['docling-figure-pad'] || 6);
+  const pad = Number(args['pymupdf-figure-pad'] || 6);
   return rectFromPdfPoints({
     page,
     dpi: args.dpi || 180,
@@ -1758,7 +1860,7 @@ function doclingFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
 }
 
 function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
-  return doclingFigureCropFromPdf(pdfPath, pageNumber, args);
+  return pymupdfFigureCropFromPdf(pdfPath, pageNumber, args);
 }
 
 function visualExplanationBody(args, state) {
@@ -1791,7 +1893,7 @@ function prepareRepresentativeFigureCandidateImages(slug, source, candidates = [
           rendered = renderPdfPageToImage(renderedPdf, page, join(tempDir, `page-${page}.png`), dpi);
           renderedByPage.set(page, rendered);
         }
-        const crop = candidate.source === 'docling' && candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
+        const crop = candidate.source === 'pymupdf' && candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
           ? candidate.crop
           : autoFigureCropFromPdf(renderedPdf, page, {
             ...args,
@@ -7740,20 +7842,20 @@ function updateLaunchNavigation({ slug, source, args, text }) {
 }
 
 
-function collectDoclingRepresentativeCandidates(source, blocks = []) {
+function collectPymupdfRepresentativeCandidates(source, blocks = []) {
   if (!source || isUrl(source) || extname(source).toLowerCase() !== '.pdf') return [];
   const absoluteSource = resolve(source);
   if (!existsSync(absoluteSource)) return [];
   let pictures = [];
   try {
-    pictures = doclingFigureGeometryForPdf(absoluteSource, {});
+    pictures = pymupdfFigureGeometryForPdf(absoluteSource, {});
   } catch {
     return [];
   }
   return pictures.map((entry, index) => {
     const caption = String(entry.caption || '').replace(/\s+/g, ' ').trim();
     const match = caption.match(/\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)/i);
-    const label = match ? match[1] : String(index + 1);
+    const label = match ? match[1] : normalizeDetectedFigureLabel(entry.label || '');
     const section = (blocks || []).find((block) => caption && String(block.body || '').includes(caption.slice(0, Math.min(80, caption.length))))?.title || '';
     const crop = rectFromPdfPoints({
       page: { width: Number(entry.pageWidthPt) || 612, height: Number(entry.pageHeightPt) || 792 },
@@ -7770,16 +7872,16 @@ function collectDoclingRepresentativeCandidates(source, blocks = []) {
       caption,
       section,
       nearbyText: caption,
-      source: 'docling',
+      source: 'pymupdf',
       crop
     };
-  }).filter((entry) => entry.caption || entry.crop);
+  }).filter((entry) => entry.label && entry.caption && entry.crop);
 }
 
 function collectRepresentativeFigureCandidates(text, blocks = [], source = '') {
   const fullText = String(text || '').replace(/\r/g, '');
   const pages = fullText.split('\f');
-  const exactCandidates = collectDoclingRepresentativeCandidates(source, blocks);
+  const exactCandidates = collectPymupdfRepresentativeCandidates(source, blocks);
   const candidates = [...exactCandidates];
   const seen = new Set(exactCandidates.map((candidate) => `${candidate.page}:${normalizeFigureLabel(candidate.label)}`));
   const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[:.\-–—]\s*([^\n]{0,220})/i;
