@@ -1623,7 +1623,42 @@ function groupCoordinateItemsIntoLines(items = []) {
 }
 
 function pdftohtmlLineMatchesCaption(line, label) {
-  return new RegExp(`^\\s*Fig(?:ure)?\\.?\\s*${escapeRegex(normalizeFigureLabel(label))}\\b`, 'i').test(line?.text || '');
+  const normalizedLabel = normalizeFigureLabel(label);
+  const text = String(line?.text || '').trim();
+  if (new RegExp(`^\\s*Fig(?:ure)?\\.?\\s*${escapeRegex(normalizedLabel)}\\b`, 'i').test(text)) return true;
+  const compact = text.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  const compactLabel = normalizedLabel.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
+  return Boolean(compactLabel && (compact.startsWith(`fig${compactLabel}`) || compact.startsWith(`figure${compactLabel}`)));
+}
+
+function normalizeCaptionSearchText(value) {
+  return String(value || '')
+    .normalize('NFKD')
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+function captionNeedleFromCandidate(caption) {
+  const normalized = normalizeCaptionSearchText(caption)
+    .replace(/^(?:fig|figure)\s*\d{1,3}[a-z]?\s*/i, '')
+    .trim();
+  if (!normalized) return '';
+  const words = normalized.split(/\s+/).filter((word) => word.length >= 3 || /\d/.test(word));
+  return words.slice(0, 7).join(' ');
+}
+
+function pdftohtmlLineMatchesCaptionText(line, caption) {
+  const needle = captionNeedleFromCandidate(caption);
+  if (!needle) return false;
+  const haystack = normalizeCaptionSearchText(line?.text || '');
+  if (!haystack) return false;
+  if (haystack.includes(needle)) return true;
+  const words = needle.split(/\s+/);
+  if (words.length < 3) return false;
+  const matched = words.filter((word) => haystack.includes(word)).length;
+  return matched >= Math.min(words.length, 4);
 }
 
 function rectFromPdftohtmlUnits({ xmlPage, pdfPage, dpi, left, top, right, bottom }) {
@@ -1754,7 +1789,10 @@ function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
   const xml = execFileSync(pdftohtml, ['-xml', '-f', String(pageNumber), '-l', String(pageNumber), '-stdout', pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
   const xmlPage = parsePdftohtmlXml(xml, pageNumber);
   const lines = groupCoordinateItemsIntoLines(xmlPage.texts);
-  const captionIndex = lines.findIndex((line) => pdftohtmlLineMatchesCaption(line, label));
+  const captionIndexByLabel = lines.findIndex((line) => pdftohtmlLineMatchesCaption(line, label));
+  const captionIndex = captionIndexByLabel >= 0
+    ? captionIndexByLabel
+    : lines.findIndex((line) => pdftohtmlLineMatchesCaptionText(line, args.caption || args['figure-caption'] || args.captionText || ''));
   if (captionIndex < 0) throw new Error(`pdftohtml could not locate Figure ${label} caption on page ${pageNumber}`);
   const captionLine = lines[captionIndex];
   let startIndex = Math.max(0, captionIndex - 1);
@@ -1813,7 +1851,12 @@ function prepareRepresentativeFigureCandidateImages(slug, source, candidates = [
         }
         const crop = candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
           ? candidate.crop
-          : autoFigureCropFromPdf(renderedPdf, page, { ...args, auto: candidate.auto || candidate.label || 'figure1', dpi });
+          : autoFigureCropFromPdf(renderedPdf, page, {
+            ...args,
+            auto: candidate.auto || candidate.label || 'figure1',
+            caption: candidate.caption || candidate.nearbyText || '',
+            dpi
+          });
         const out = uniqueOutputPath(assetDir(slug), `representative-candidate-${String(index + 1).padStart(2, '0')}.png`, true);
         cropImage(rendered, out, crop);
         prepared.push({
