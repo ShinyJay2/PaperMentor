@@ -1346,6 +1346,11 @@ FID and ablations evaluate sample quality.`);
     state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
     if (state.readingPath?.find((item) => item.key === 'slides')?.status !== 'done') failures.push('slide slide explanation should complete the slides reading-path step');
     if (state.readingPath?.find((item) => item.key === 'narration')?.status !== 'current') failures.push('slide slide explanation should advance to missing narration');
+    const fencedCodeBodyPath = join(temp, 'slide-fenced-code.md');
+    writeFileSync(fencedCodeBodyPath, '## Sequence view\n\n```text\nobservation sequence + language/task condition + action sequence\n```\n\nThe prose after the fence must render as prose, not as code.');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'robot-slides', '--type', 'note', '--title', 'Fenced code rendering smoke', '--body-file', fencedCodeBodyPath], { cwd: temp, stdio: 'pipe' });
+    const fencedCodeHtml = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'index.html'), 'utf8');
+    if (!fencedCodeHtml.includes('<pre class="code-block"><code class="language-text">observation sequence + language/task condition + action sequence</code></pre>') || fencedCodeHtml.includes('<p>```text</p>')) failures.push('markdown fenced code blocks should render as code blocks, not visible fence paragraphs');
 
     const numberedOnlySlideText = join(temp, 'numbered-only-slides.txt');
     writeFileSync(numberedOnlySlideText, `Slide 1: Convex Optimization

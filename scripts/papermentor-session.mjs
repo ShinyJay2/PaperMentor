@@ -3522,6 +3522,35 @@ body {
 .body h1 { font-size:24px; margin:22px 0 10px; }
 .body h2 { font-size:21px; margin:22px 0 10px; }
 .body h3 { font-size:18px; margin:18px 0 8px; }
+.body :not(pre) > code {
+  padding:1px 5px;
+  border:1px solid #dedbd3;
+  border-radius:5px;
+  background:#f7f5f0;
+  font-family:var(--mono);
+  font-size:.92em;
+  overflow-wrap:anywhere;
+}
+.body pre.code-block {
+  break-inside:avoid;
+  page-break-inside:avoid;
+  margin:16px 0 24px;
+  padding:14px 16px;
+  overflow-x:auto;
+  border:1px solid #d9d6cf;
+  border-radius:8px;
+  background:#f7f5f0;
+  direction:ltr;
+  text-align:left;
+}
+.body pre.code-block code {
+  display:block;
+  min-width:max-content;
+  font-family:var(--mono);
+  font-size:13px;
+  line-height:1.55;
+  white-space:pre;
+}
 .body .flow {
   display:flex;
   flex-wrap:wrap;
@@ -4236,6 +4265,25 @@ function markdownToHtml(markdown) {
     tableRows = [];
   };
   const closeBlocks = () => { closeList(); closeTable(); };
+  const fencedCodeBlock = (line, index) => {
+    const match = line.match(/^\s*(```+|~~~+)\s*([^`]*)\s*$/);
+    if (!match) return null;
+    const marker = match[1];
+    const fenceChar = marker[0];
+    const minLength = marker.length;
+    const language = String(match[2] || '').trim().replace(/[^a-z0-9_+.-]/gi, '').slice(0, 48);
+    const collected = [];
+    let cursor = index + 1;
+    while (cursor < lines.length) {
+      if (new RegExp(`^\\s*${fenceChar}{${minLength},}\\s*$`).test(lines[cursor])) break;
+      collected.push(lines[cursor]);
+      cursor += 1;
+    }
+    closeBlocks();
+    const className = language ? ` class=\"language-${language}\"` : '';
+    html += `<pre class=\"code-block\"><code${className}>${collected.join('\n')}</code></pre>`;
+    return Math.min(cursor, lines.length - 1);
+  };
   const displayMathBlock = (delimiter, endDelimiter, index) => {
     const collected = [lines[index]];
     let cursor = index;
@@ -4257,7 +4305,9 @@ function markdownToHtml(markdown) {
   for (let i = 0; i < lines.length; i += 1) {
     const line = lines[i];
     const trimmed = line.trim();
-    if (trimmed === '\\[') { i = displayMathBlock('\\[', '\\]', i); }
+    const fencedCodeEnd = fencedCodeBlock(line, i);
+    if (fencedCodeEnd !== null) { i = fencedCodeEnd; }
+    else if (trimmed === '\\[') { i = displayMathBlock('\\[', '\\]', i); }
     else if (trimmed === '$$' || (trimmed.startsWith('$$') && !trimmed.endsWith('$$'))) { i = displayMathBlock('$$', '$$', i); }
     else if (isTableRow(line)) {
       closeList();
