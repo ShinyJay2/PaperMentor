@@ -2101,16 +2101,43 @@ function defaultSectionActions(_section) {
 
 function isAskAnythingAction(choice) {
   const text = String(choice || '').trim();
-  return /^ask anything about\b/i.test(text) || /(?:질문|물어보기|물어봐|질의)/.test(text);
+  return /^ask anything about\b/i.test(text)
+    || /^chat about(?:\s+this|\s+the|\s+current)?\b/i.test(text)
+    || /(?:질문|물어보기|물어봐|질의)/.test(text);
 }
 
-function askAnythingAction(section, language = 'auto') {
-  const scope = section || 'current topic';
-  const lang = normalizeResponseLanguage(language);
-  if (lang === 'ko') return `${scope}에 대해 질문하기`;
-  if (lang === 'ja') return `${scope}について質問する`;
-  if (lang === 'ar') return `اسأل عن ${scope}`;
-  return `Ask anything about ${scope}`;
+function askAnythingAction(_section, _language = 'auto') {
+  return 'Ask anything about this';
+}
+
+function normalizeAskCompareText(value) {
+  return String(value || '').trim().toLowerCase().replace(/[“”]/g, '"').replace(/[’‘]/g, "'").replace(/\s+/g, ' ');
+}
+
+function isFreeQuestionMenuAction(choice, section = '') {
+  const text = String(choice || '').trim();
+  const normalized = normalizeAskCompareText(text);
+  if (!normalized) return false;
+  if (normalized === 'ask anything about this' || normalized === 'chat about this' || normalized === 'chat about current topic') return true;
+  const scope = normalizeAskCompareText(section || '');
+  if (!scope) return false;
+  if (normalized === `ask anything about ${scope}` || normalized === `chat about ${scope}`) return true;
+  if (text === `${section}에 대해 질문하기` || text === `${section}について質問する` || text === `اسأل عن ${section}`) return true;
+  return false;
+}
+
+function askAnythingNotice(state = {}) {
+  const lang = normalizeResponseLanguage(state.responseLanguage || 'auto');
+  if (lang === 'ko') return '자유롭게 질문을 입력하세요. PaperMentor가 현재 선택한 범위에 묶어서 답하고 HTML에 추가합니다.';
+  return 'Type any question. PaperMentor will answer against the current selection and append the answer to HTML.';
+}
+
+function questionAction(question) {
+  return `Answer question: ${String(question || '').trim() || 'Ask anything about this'}`;
+}
+
+function questionCardTitle(question) {
+  return `Question — ${trim(String(question || '').trim() || 'Ask anything about this', 72)}`;
 }
 
 function defaultModeItems(mode, section) {
@@ -2892,9 +2919,12 @@ function selectSection(args) {
     : existingActions?.length ? existingActions : sectionMenuPendingChoices(section, state.responseLanguage);
   state.currentSection = section;
   state.currentMode = '';
+  delete state.topicPickerOpen;
   state.detectedItems = [];
   state.currentLocation = section;
   state.currentFocus = providedChoices.length ? `Section menu installed: ${section}` : `Section selected: ${section}`;
+  state.selectedAction = '';
+  state.lastChoiceKind = 'section';
   state.nextChoices = actions;
   if (!providedChoices.length && !existingActions?.length) writeSectionMenuPrompt(state, section);
   state.updatedAt = now();
@@ -2913,6 +2943,7 @@ function setMode(args) {
   const section = args.section || state.currentSection || 'current section';
   state.currentSection = section;
   state.currentMode = mode;
+  delete state.topicPickerOpen;
   clearPendingPrompt(state);
   state.currentLocation = section;
   state.currentFocus = `${mode} menu for ${section}`;
@@ -4974,13 +5005,14 @@ function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false,
     let text = String(choice || '').trim();
     const oldPending = text.match(/^Generate content-adapted choices(?: from (.+?) excerpt)?$/i);
     if (oldPending) text = `Show what I can learn here${oldPending[1] ? `: ${oldPending[1]}` : ''}`;
-    if (!text || /^chat about (?:this )?(?:section|slide)\b/i.test(text)) continue;
+    if (isFreeQuestionMenuAction(text, section)) text = askAnythingAction(section, language);
+    if (!text) continue;
     const key = text.toLowerCase().replace(/\s+/g, ' ');
     if (seen.has(key)) continue;
     seen.add(key);
     cleaned.push(text);
   }
-  if (ensureAsk && section && !cleaned.some(isAskAnythingAction)) cleaned.push(askAnythingAction(section, language));
+  if (ensureAsk && section && !cleaned.some((choice) => isFreeQuestionMenuAction(choice, section))) cleaned.push(askAnythingAction(section, language));
   return cleaned;
 }
 
@@ -5015,7 +5047,7 @@ function writeSectionMenuPrompt(state, section) {
   const key = sectionKey(section);
   const index = Math.max(0, (state.paperSections || []).indexOf(section)) + 1;
   const insight = ensureSectionInsight(state, section) || {};
-  const command = `${cliCommand()} section --session ${shellQuote(slug)} --index ${index || '<section-index>'} --choices ${shellQuote('Action A|Action B|…|Ask anything about ' + section)}`;
+  const command = `${cliCommand()} section --session ${shellQuote(slug)} --index ${index || '<section-index>'} --choices ${shellQuote('Action A|Action B|…|' + askAnythingAction(section, state.responseLanguage))}`;
   const prompt = `# PaperMentor Section Menu Prompt
 
 You are generating the next TUI choices for one selected paper section. The CLI script must not invent generic actions; you must read the actual section excerpt and write a content-adapted menu.
@@ -5055,7 +5087,7 @@ Create 4–8 actions that are specific enough that they could only belong to thi
 
 Always end with exactly one open question action:
 
-- Ask anything about ${section}
+- ${askAnythingAction(section, state.responseLanguage)}
 
 Then run exactly one command to install the menu into the TUI:
 
@@ -5808,7 +5840,7 @@ Quality rules:
 function storeBundledSectionMenu(state, section, choices = []) {
   if (!state || !section) return false;
   const sanitized = sanitizeSectionActions(choices, section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
-  if (!sanitized.length || sanitized.every(isAskAnythingAction)) return false;
+  if (!sanitized.length || sanitized.every((choice) => isFreeQuestionMenuAction(choice, section))) return false;
   const key = sectionKey(section);
   state.sectionActions = state.sectionActions || {};
   state.sectionActions[key] = sanitized;
@@ -5824,7 +5856,7 @@ function installGeneratedSectionMenu(state, section, args = {}) {
   const prompt = generatedSectionMenuPrompt(state, section);
   const response = runAgentCompletion(prompt, { ...args, agentTask: 'section-menu' });
   const choices = sanitizeSectionActions(parseGeneratedChoices(response), section, { ensureAsk: true, language: state.responseLanguage }).slice(0, 8);
-  if (!choices.length || choices.every(isAskAnythingAction)) {
+  if (!choices.length || choices.every((choice) => isFreeQuestionMenuAction(choice, section))) {
     throw new Error('agent did not return usable section choices');
   }
   const key = sectionKey(section);
@@ -5946,9 +5978,10 @@ function appendGeneratedActionBlock(state, action, args = {}) {
   addCard({
     session: state.slug,
     type,
-    title: action,
+    title: args.title || action,
     location: state.currentSection || state.currentLocation,
     body,
+    'user-question': args.userQuestion || args.question || '',
     quiet: true
   });
   const updated = readStateForSlug(state.slug) || state;
@@ -5974,8 +6007,41 @@ function appendGeneratedActionBlock(state, action, args = {}) {
 }
 
 
+function appendGeneratedQuestionBlock(state, question, args = {}) {
+  const cleanQuestion = String(question || '').trim();
+  if (!cleanQuestion) return state;
+  const action = questionAction(cleanQuestion);
+  state.currentMode = 'chat';
+  state.currentFocus = cleanQuestion;
+  state.selectedAction = action;
+  state.lastChoiceKind = 'action';
+  delete state.awaitingQuestion;
+  appendTurn({ session: state.slug, role: 'user', text: cleanQuestion, 'no-promote': true, quiet: true });
+
+  const wantsManual = args.manual || args['no-agent'] || args['no-generate'];
+  if (!wantsManual && agentAutomationAvailable(args)) {
+    const updated = appendGeneratedActionBlock(state, action, {
+      ...args,
+      agentTask: 'html-block',
+      userQuestion: cleanQuestion,
+      title: questionCardTitle(cleanQuestion)
+    });
+    appendTurn({ session: state.slug, role: 'assistant', text: `Added to HTML: ${action}`, 'no-promote': true, quiet: true });
+    return updated;
+  }
+
+  if (!wantsManual && !agentAutomationAvailable(args)) {
+    markProviderUnavailable(state, action);
+  }
+  if (!state.pendingProvider) writePendingActionPrompt(state, action);
+  state.updatedAt = now();
+  writeJson(statePath(state.slug), state);
+  renderHtml(state.slug);
+  return state;
+}
+
 function prefetchGeneratedActionBlock(state, action, args = {}) {
-  if (!action || isAskAnythingAction(action)) return readStateForSlug(state.slug) || state;
+  if (!action || isFreeQuestionMenuAction(action, state.currentSection || state.currentLocation)) return readStateForSlug(state.slug) || state;
   const type = actionType(action, state);
   const insight = ensureSectionInsight(state, state.currentSection || '') || {};
   const cacheKey = generatedBlockCacheKey(state, action, type, insight);
@@ -6000,7 +6066,7 @@ function prefetchGeneratedActionBlock(state, action, args = {}) {
 }
 
 function firstPrefetchableAction(choices = []) {
-  return (choices || []).find((choice) => choice && !isAskAnythingAction(choice) && !/^change topic/i.test(choice)) || '';
+  return (choices || []).find((choice) => choice && !isFreeQuestionMenuAction(choice) && !/^change topic/i.test(choice)) || '';
 }
 
 function shouldBackgroundPrefetch(args = {}) {
@@ -6689,6 +6755,13 @@ function applyTuiChoice(state, selected, options = {}) {
     state.lastChoiceKind = 'section-menu';
     if (generationRequestedWithoutProvider) markProviderUnavailable(state, section);
     else writeSectionMenuPrompt(state, section);
+  } else if (isFreeQuestionMenuAction(choice, state.currentSection || state.currentLocation)) {
+    state.currentMode = 'chat';
+    state.currentFocus = askAnythingAction(state.currentSection || state.currentLocation, state.responseLanguage);
+    state.selectedAction = '';
+    state.lastChoiceKind = 'ask';
+    state.awaitingQuestion = true;
+    state.tuiNotice = askAnythingNotice(state);
   } else {
     state.currentFocus = choice;
     state.selectedAction = choice;
@@ -6739,19 +6812,61 @@ function runTui(args) {
     process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}\x1b[J`);
   };
   let detachKeys = () => {};
+  let acceptingQuestion = false;
   const cleanup = () => {
     detachKeys();
     process.stdout.write(`${ansi.showCursor}${ansi.normalScreen}`);
   };
-  const exitForMissingSession = () => {
-    cleanup();
-    console.log(`No active reading room yet.\n\nStart one with:\n\n  ${cliCommand()} <file-or-url>\n`);
-    process.exit(0);
+  const reattachKeys = () => {
+    detachKeys = attachRawKeypress(handleKey);
+  };
+  const promptForQuestion = () => {
+    if (acceptingQuestion) return;
+    acceptingQuestion = true;
+    detachKeys();
+    if (process.stdin.isTTY) process.stdin.setRawMode(false);
+    process.stdin.resume();
+    state.currentMode = 'chat';
+    state.awaitingQuestion = true;
+    state.tuiNotice = askAnythingNotice(state);
+    process.stdout.write(`${ansi.clear}${renderTuiScreen(state, selected)}\n\n${ansi.green}Question › ${ansi.reset}${ansi.showCursor}`);
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    const finish = (answer = '') => {
+      rl.close();
+      process.stdout.write(ansi.hideCursor);
+      acceptingQuestion = false;
+      const question = String(answer || '').trim();
+      if (!question) {
+        state.tuiNotice = 'Question cancelled.';
+        delete state.awaitingQuestion;
+        reattachKeys();
+        draw();
+        return;
+      }
+      state.tuiNotice = 'Answering your question and adding it to HTML…';
+      draw();
+      try {
+        state = appendGeneratedQuestionBlock(state, question, args);
+        if (state.pendingProvider) state.tuiNotice = providerUnavailableNotice(state);
+        else if (state.pendingBlockPrompt) state.tuiNotice = 'Question captured. Continue in Codex/Claude to add the answer to HTML.';
+        else state.tuiNotice = `Added answer to HTML: ${trim(question, 72)}`;
+      } catch (error) {
+        state = readStateForSlug(slug) || state;
+        state.tuiNotice = `Could not auto-generate answer: ${error.message}. PaperMentor did not change the HTML; the assistant can continue from this room.`;
+        state.updatedAt = now();
+        writeJson(statePath(state.slug), state);
+      }
+      selected = 0;
+      reattachKeys();
+      draw();
+    };
+    rl.once('SIGINT', () => finish(''));
+    rl.question('', finish);
   };
 
   process.stdout.write(`${ansi.altScreen}${ansi.hideCursor}`);
   draw();
-  const handleKey = (key, raw = '') => {
+  function handleKey(key, raw = '') {
     const items = tuiMenuItems(state);
     if (key === 'ctrl-c') {
       cleanup();
@@ -6768,6 +6883,10 @@ function runTui(args) {
       draw();
     } else if (key === 'enter') {
       const selectedChoice = items[selected] || '';
+      if (isFreeQuestionMenuAction(selectedChoice, state.currentSection || state.currentLocation)) {
+        promptForQuestion();
+        return;
+      }
       const canAutoGenerate = agentAutomationAvailable(args);
       const willGenerate = canAutoGenerate && !/^Change topic \/ section list$/i.test(selectedChoice);
       if (willGenerate) {
@@ -6793,7 +6912,7 @@ function runTui(args) {
       }
       draw();
     }
-  };
+  }
   process.on('SIGWINCH', draw);
   detachKeys = attachRawKeypress(handleKey);
 }
@@ -6889,7 +7008,7 @@ function renderPaletteScreen({ slug = latestSessionSlug(), selected = 0 } = {}) 
 function executePaletteItem(item, slug) {
   if (/continue/i.test(item)) return goLatestSession({ session: slug });
   if (/open current html/i.test(item)) return openLatestSession({ session: slug });
-  if (/ask/i.test(item) || /질문/.test(item)) return askCurrentSession({ session: slug, text: askAnythingAction('the current topic', state.responseLanguage) });
+  if (/ask/i.test(item) || /질문/.test(item)) return askCurrentSession({ session: slug });
   if (/quality check/i.test(item)) return runQualityQa({ session: slug });
   if (/recrop|crop/i.test(item)) return previewCrops({ session: slug, overwrite: true });
   if (/regenerate start/i.test(item)) return regenerateStartHere({ session: slug });
@@ -7231,33 +7350,33 @@ function goLatestSession(args = {}) {
 function askCurrentSession(args = {}) {
   const slug = requireSessionSlug(args, 'ask');
   let state = readStateForSlug(slug);
-  const question = args.text || args.question || args._?.slice(1).join(' ') || readTextArg(args) || 'Ask anything about the current topic';
-  const action = `Answer question: ${question}`;
-  state.currentMode = 'chat';
-  state.currentFocus = question;
-  state.selectedAction = action;
-  state.lastChoiceKind = 'action';
-  appendTurn({ session: slug, role: 'user', text: question, 'no-promote': true, quiet: true });
-  const wantsManual = args.manual || args['no-agent'] || args['no-generate'];
-  if (!wantsManual && agentAutomationAvailable(args)) {
-    try {
-      state = appendGeneratedActionBlock(state, action, { ...args, agentTask: 'html-block' });
-      appendTurn({ session: slug, role: 'assistant', text: `Added to HTML: ${action}`, 'no-promote': true, quiet: true });
-      printConsole(state);
-      return state;
-    } catch (error) {
-      state = readStateForSlug(slug) || state;
-      state.tuiNotice = `Could not auto-generate answer: ${error.message}. PaperMentor did not change the HTML; it kept the question in the room state.`;
-    }
-  } else if (!wantsManual && !agentAutomationAvailable(args)) {
-    markProviderUnavailable(state, action);
+  const question = args.text || args.question || args._?.slice(1).join(' ') || readTextArg(args) || '';
+  if (!String(question || '').trim()) {
+    state.currentMode = 'chat';
+    state.currentFocus = askAnythingAction(state.currentSection || state.currentLocation, state.responseLanguage);
+    state.selectedAction = '';
+    state.lastChoiceKind = 'ask';
+    state.awaitingQuestion = true;
+    state.tuiNotice = askAnythingNotice(state);
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    renderHtml(slug);
+    console.log(renderTuiScreen(state, 0));
+    return state;
   }
-  if (!state.pendingProvider) writePendingActionPrompt(state, action);
-  state.updatedAt = now();
-  writeJson(statePath(slug), state);
-  renderHtml(slug);
-  console.log(state.pendingProvider ? renderTuiScreen(state, 0) : renderRunnerConsole(state, action));
-  return state;
+  try {
+    state = appendGeneratedQuestionBlock(state, question, args);
+    printConsole(state);
+    return state;
+  } catch (error) {
+    state = readStateForSlug(slug) || state;
+    state.tuiNotice = `Could not auto-generate answer: ${error.message}. PaperMentor did not change the HTML; it kept the question in the room state.`;
+    state.updatedAt = now();
+    writeJson(statePath(slug), state);
+    renderHtml(slug);
+    console.log(renderTuiScreen(state, 0));
+    return state;
+  }
 }
 
 function prepareStartHerePrompt(state) {
