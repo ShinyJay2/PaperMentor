@@ -4510,8 +4510,12 @@ function terminalBoxWidth(defaultWidth = 96) {
   return Math.max(44, Math.min(defaultWidth, columns - 1));
 }
 
+function terminalScreenRows() {
+  return Number(process.stdout?.rows || process.env.LINES || 0);
+}
+
 function terminalItemLimit(defaultLimit = 14) {
-  const rows = Number(process.stdout?.rows || process.env.LINES || 0);
+  const rows = terminalScreenRows();
   if (!rows) return defaultLimit;
   return Math.max(3, Math.min(defaultLimit, rows - 13));
 }
@@ -4522,6 +4526,61 @@ function visibleWindow(items, selected, limit) {
   let start = Math.max(0, selected - Math.floor(limit / 2));
   start = Math.min(start, Math.max(0, all.length - limit));
   return { start, entries: all.slice(start, start + limit) };
+}
+
+function menuRowsForRange(items, start, end, width) {
+  const all = items || [];
+  let count = start > 0 ? 1 : 0;
+  for (let index = start; index < end; index += 1) {
+    count += menuItemBoxRows(all[index], { width, index, active: false }).length;
+  }
+  if (end < all.length) count += 1;
+  return count;
+}
+
+function menuWindowByRenderedRows(items, selected, width, maxRows) {
+  const all = items || [];
+  if (!all.length) return { start: 0, end: 0 };
+  if (!Number.isFinite(maxRows)) {
+    const window = visibleWindow(all, selected, terminalItemLimit(14));
+    return { start: window.start, end: window.start + window.entries.length };
+  }
+  const budget = Math.max(1, Number(maxRows) || 1);
+  if (menuRowsForRange(all, 0, all.length, width) <= budget) return { start: 0, end: all.length };
+
+  const pinned = Math.max(0, Math.min(selected, all.length - 1));
+  let start = pinned;
+  let end = pinned + 1;
+
+  let expanded = true;
+  while (expanded) {
+    expanded = false;
+    const candidates = [];
+    if (start > 0) candidates.push({ start: start - 1, end });
+    if (end < all.length) candidates.push({ start, end: end + 1 });
+    candidates.sort((a, b) => menuRowsForRange(all, a.start, a.end, width) - menuRowsForRange(all, b.start, b.end, width));
+    for (const candidate of candidates) {
+      if (menuRowsForRange(all, candidate.start, candidate.end, width) <= budget) {
+        start = candidate.start;
+        end = candidate.end;
+        expanded = true;
+        break;
+      }
+    }
+  }
+  return { start, end };
+}
+
+function menuWindowRows(items, selected, width, maxRows) {
+  const all = items || [];
+  const { start, end } = menuWindowByRenderedRows(all, selected, width, maxRows);
+  const rows = [];
+  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} above${ansi.reset}`, width, ansi.cyan));
+  for (let index = start; index < end; index += 1) {
+    rows.push(...menuItemBoxRows(all[index], { width, index, active: index === selected }));
+  }
+  if (end < all.length) rows.push(boxLine(`${ansi.dim}… ${all.length - end} below${ansi.reset}`, width, ansi.cyan));
+  return rows;
 }
 
 function boxLine(content = '', width = 84, color = ansi.cyan) {
@@ -4790,18 +4849,12 @@ function renderTuiScreen(state, selected = 0) {
     if (pendingNotice) rows.push(...boxWrappedText(pendingNotice, width, ansi.green, ansi.dim));
     else if (state.figureReadingPending) rows.push(...boxWrappedText('Representative figure crop is attached; visual reading is still pending.', width, ansi.green, ansi.dim));
   }
+  const footerRows = [boxRule(width, ansi.green), starCtaLine(width), bottom];
   const visibleItems = items.length ? items : ['Show what I can learn here'];
-  const { start, entries } = visibleWindow(visibleItems, selected, terminalItemLimit(14));
-  if (start > 0) rows.push(boxLine(`${ansi.dim}… ${start} above${ansi.reset}`, width, ansi.cyan));
-  entries.forEach((item, offset) => {
-    const index = start + offset;
-    const active = index === selected;
-    rows.push(...menuItemBoxRows(item, { width, index, active }));
-  });
-  if (start + entries.length < visibleItems.length) rows.push(boxLine(`${ansi.dim}… ${visibleItems.length - start - entries.length} below${ansi.reset}`, width, ansi.cyan));
-  rows.push(boxRule(width, ansi.green));
-  rows.push(starCtaLine(width));
-  rows.push(bottom);
+  const screenRows = terminalScreenRows();
+  const menuBudget = screenRows ? Math.max(1, screenRows - rows.length - footerRows.length) : Infinity;
+  rows.push(...menuWindowRows(visibleItems, selected, width, menuBudget));
+  rows.push(...footerRows);
   return rows.join('\n');
 }
 

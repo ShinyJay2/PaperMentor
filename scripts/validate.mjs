@@ -13,6 +13,16 @@ const required = packageFiles(root, manifest);
 
 const failures = [];
 
+function stripAnsi(value) {
+  return String(value || '')
+    .replace(/\x1b\][\s\S]*?(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '');
+}
+
+function visibleLineCount(value) {
+  return stripAnsi(value).replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n$/, '').split('\n').length;
+}
+
 function writeTinyPdfFixture(path) {
   const stream = [
     'BT',
@@ -1323,6 +1333,9 @@ FID and ablations evaluate sample quality.`);
     }
     const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
     if (!slideTui.includes('Slides') || !slideTui.includes('✦ PaperMentor') || !slideTui.includes('Reading room')) failures.push('slide TUI should show the slide reading room');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2', '--choices', 'Slide 2의 긴 한국어 설명 선택지가 좁은 터미널에서도 화면 높이를 넘지 않아야 한다|AlphaGo와 Gemini 같은 Recent AI Advances가 로봇 정책 학습 논의에 어떻게 연결되는지 해석하기|Open X-Embodiment와 RT-X가 데이터 스케일링 문제에 어떤 답을 주는지 미리 보기|robotics as multimodal sequence modeling이라는 핵심 아이디어가 관측 언어 행동을 어떻게 묶는지 설명하기|Ask anything about Slide 2'], { cwd: temp, stdio: 'pipe' });
+    const compactSlideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot', '--cursor', '3'], { cwd: temp, encoding: 'utf8', env: { ...process.env, COLUMNS: '80', LINES: '20' } });
+    if (visibleLineCount(compactSlideTui) > 20) failures.push('compact slide TUI should cap rendered rows to the terminal height even when Korean menu items wrap');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });
     const slidePendingActionPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'robot-slides', 'pending-prompt.md'), 'utf8');
