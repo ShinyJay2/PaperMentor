@@ -25,21 +25,28 @@ function visibleLineCount(value) {
 
 function writeTinyPdfFixture(path) {
   const stream = [
-    'BT',
-    '/F1 18 Tf 72 740 Td (Tiny Retrieval Method) Tj',
-    '/F1 11 Tf 0 -24 Td (Ada Researcher) Tj',
-    '/F1 12 Tf 0 -34 Td (Abstract) Tj',
-    '0 -18 Td (This paper builds a retrieval encoder with a margin objective and a calibration metric.) Tj',
-    '0 -32 Td (1. Introduction) Tj',
-    '0 -18 Td (The method maps queries to vectors and compares them with document vectors.) Tj',
-    '0 -32 Td (2. Method) Tj',
-    '0 -18 Td (The encoder h: tokens -> vectors and Equation 1 defines a margin objective.) Tj',
-    '0 -32 Td (Figure 1. Encoder pipeline.) Tj',
-    '0 -18 Td (3. Evaluation) Tj',
-    '0 -18 Td (Accuracy and calibration error evaluate retrieval quality.) Tj',
-    'ET',
-    '0.2 0.37 0.62 RG 72 452 420 74 re S',
-    'BT /F1 12 Tf 92 492 Td (query) Tj 108 0 Td (encoder) Tj 128 0 Td (ranking score) Tj ET'
+    'BT /F1 18 Tf 72 740 Td (Tiny Retrieval Method) Tj ET',
+    'BT /F1 11 Tf 72 716 Td (Ada Researcher) Tj ET',
+    'BT /F1 12 Tf 72 682 Td (Abstract) Tj ET',
+    'BT /F1 12 Tf 72 664 Td (This paper builds a retrieval encoder with a margin objective and a calibration metric.) Tj ET',
+    'BT /F1 12 Tf 72 632 Td (1. Introduction) Tj ET',
+    'BT /F1 12 Tf 72 614 Td (The method maps queries to vectors and compares them with document vectors.) Tj ET',
+    'BT /F1 12 Tf 72 582 Td (2. Method) Tj ET',
+    'BT /F1 12 Tf 72 564 Td (The encoder h: tokens -> vectors and Equation 1 defines a margin objective.) Tj ET',
+    '0.2 0.37 0.62 RG 2 w',
+    '72 452 96 64 re S',
+    '222 452 96 64 re S',
+    '372 452 120 64 re S',
+    '168 484 m 222 484 l S',
+    '318 484 m 372 484 l S',
+    '216 490 m 222 484 l 216 478 l S',
+    '366 490 m 372 484 l 366 478 l S',
+    'BT /F1 12 Tf 92 492 Td (query) Tj ET',
+    'BT /F1 12 Tf 238 492 Td (encoder) Tj ET',
+    'BT /F1 12 Tf 390 492 Td (ranking score) Tj ET',
+    'BT /F1 12 Tf 72 420 Td (Figure 1. Representative method figure.) Tj ET',
+    'BT /F1 12 Tf 72 372 Td (3. Evaluation) Tj ET',
+    'BT /F1 12 Tf 72 354 Td (Accuracy and calibration error evaluate retrieval quality.) Tj ET'
   ].join('\n');
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -59,6 +66,56 @@ function writeTinyPdfFixture(path) {
   for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
   pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
   writeFileSync(path, pdf);
+}
+
+function writeVectorOnlyFigurePdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (Vector Geometry Figure Paper) Tj',
+    '/F1 11 Tf 0 -24 Td (Ada Researcher) Tj',
+    '/F1 12 Tf 0 -34 Td (Abstract) Tj',
+    '0 -18 Td (This paper has a method figure drawn as PDF vector geometry without figure-internal text.) Tj',
+    '0 -32 Td (1. Method) Tj',
+    '0 -18 Td (The method is represented by boxes and arrows in the figure below.) Tj',
+    'ET',
+    '0.1 0.32 0.62 RG 2 w',
+    '72 390 96 64 re S',
+    '222 390 96 64 re S',
+    '372 390 96 64 re S',
+    '168 422 m 222 422 l S',
+    '318 422 m 372 422 l S',
+    '216 428 m 222 422 l 216 416 l S',
+    '366 428 m 372 422 l 366 416 l S',
+    'BT /F1 12 Tf 72 350 Td (Figure 1. Sparse vector architecture.) Tj ET',
+    'BT /F1 12 Tf 72 302 Td (2. Evaluation) Tj ET'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
+function hasDoclingDetector() {
+  try {
+    execFileSync('uv', ['run', '--python', '3.10', '--with', 'docling==2.69.1', 'python', '-c', 'import docling'], { stdio: 'ignore', timeout: 120000 });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function dosDateTime(date = new Date()) {
@@ -179,17 +236,31 @@ function writeTinyPptxFixture(path) {
 
 function writeRepresentativeChoicePdfFixture(path) {
   const stream = [
-    'BT',
-    '/F1 18 Tf 72 740 Td (Representative Figure Choice) Tj',
-    '/F1 12 Tf 0 -36 Td (Abstract) Tj',
-    '0 -18 Td (This paper proposes a retrieval method with an encoder pipeline.) Tj',
-    '0 -36 Td (Figure 1. Linear Evaluation. Accuracy results on a benchmark.) Tj',
-    '0 -32 Td (1. Method) Tj',
-    '0 -18 Td (The objective trains the encoder to score relevant documents higher.) Tj',
-    '0 -36 Td (Figure 2. Overall method pipeline. The encoder maps queries to vectors and ranks documents.) Tj',
-    'ET',
-    '0.6 0.2 0.2 RG 72 610 260 32 re S',
-    '0.2 0.37 0.62 RG 72 520 420 52 re S'
+    'BT /F1 18 Tf 72 740 Td (Representative Figure Choice) Tj ET',
+    'BT /F1 12 Tf 72 704 Td (Abstract) Tj ET',
+    'BT /F1 12 Tf 72 686 Td (This paper proposes a retrieval method with an encoder pipeline.) Tj ET',
+    '0.6 0.2 0.2 RG 2 w',
+    '72 610 110 44 re S',
+    '214 610 110 44 re S',
+    '356 610 110 44 re S',
+    'BT /F1 10 Tf 92 628 Td (metric) Tj ET',
+    'BT /F1 10 Tf 236 628 Td (bar) Tj ET',
+    'BT /F1 10 Tf 382 628 Td (score) Tj ET',
+    'BT /F1 12 Tf 72 580 Td (Figure 1. Linear Evaluation. Accuracy results on a benchmark.) Tj ET',
+    'BT /F1 12 Tf 72 532 Td (1. Method) Tj ET',
+    'BT /F1 12 Tf 72 514 Td (The objective trains the encoder to score relevant documents higher.) Tj ET',
+    '0.2 0.37 0.62 RG 2 w',
+    '72 390 96 64 re S',
+    '222 390 96 64 re S',
+    '372 390 120 64 re S',
+    '168 422 m 222 422 l S',
+    '318 422 m 372 422 l S',
+    '216 428 m 222 422 l 216 416 l S',
+    '366 428 m 372 422 l 366 416 l S',
+    'BT /F1 10 Tf 92 410 Td (query) Tj ET',
+    'BT /F1 10 Tf 238 410 Td (encoder) Tj ET',
+    'BT /F1 10 Tf 392 410 Td (ranking) Tj ET',
+    'BT /F1 12 Tf 72 350 Td (Figure 2. Overall method pipeline. The encoder maps queries to vectors and ranks documents.) Tj ET'
   ].join('\n');
   const objects = [
     '<< /Type /Catalog /Pages 2 0 R >>',
@@ -575,11 +646,11 @@ async function validateSessionHelper() {
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'pdftohtml', 'pdfinfo', 'ImageMagick']) {
+    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'Docling', 'pdfinfo', 'ImageMagick']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
     }
     const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
-    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'pdftohtml') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
+    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'Docling') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -845,9 +916,9 @@ require('./fake-codex.js');
     const representativeAutoStart = representativeAutoCards.cards?.find((card) => card.type === 'start-here');
     if (!representativeAutoStart?.figure?.src?.endsWith('.png')) failures.push(`representative auto-selection should attach the model-selected method figure crop; warning=${representativeAutoState.figureExtractionWarning || representativeAutoState.figureSelectionWarning || 'none'}`);
     if (representativeAutoState.representativeFigureSelection?.selectedIndex !== 2) failures.push(`representative auto-selection should preserve the model-selected candidate index, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
-    if (representativeAutoState.representativeFigureSelection?.source !== 'pdffigures2') failures.push(`representative auto-selection should preserve exact figure-parser source, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
-    if (!representativeAutoState.representativeFigureSelection?.crop) failures.push('representative auto-selection should pass exact figure-parser crop into extract-figure');
-    if (!representativeAutoState.representativeFigureCandidates?.some((candidate) => candidate.source === 'pdffigures2' && candidate.crop)) failures.push('representative figure candidates should include exact parser crop metadata when pdffigures2 JSON is available');
+    if (representativeAutoState.representativeFigureSelection?.source !== 'docling') failures.push(`representative auto-selection should preserve Docling figure-geometry source, got ${JSON.stringify(representativeAutoState.representativeFigureSelection)}`);
+    if (!representativeAutoState.representativeFigureSelection?.crop) failures.push('representative auto-selection should pass Docling geometry crop into extract-figure');
+    if (!representativeAutoState.representativeFigureCandidates?.some((candidate) => candidate.source === 'docling' && candidate.crop)) failures.push('representative figure candidates should include Docling geometry crop metadata');
     if (representativeAutoState.figureReadingPending) failures.push(`representative auto-generation should finish the pixel-based visual reading, got warning=${representativeAutoState.figureReadingWarning || 'none'}`);
     const representativeAutoCounts = readJson(representativeAutoCountFile, {});
     if (representativeAutoCounts['start-here'] !== 1 || representativeAutoCounts['representative-figure'] || representativeAutoCounts['representative-figure-reading']) failures.push(`representative auto-generation should combine figure selection and visual reading into one Start Here provider call, got ${JSON.stringify(representativeAutoCounts)}`);
@@ -932,7 +1003,18 @@ require('./fake-codex.js');
     const noFigurePreviewState = readJson(join(temp, '.papermentor', 'sessions', 'no-figure-preview', 'state.json'), {});
     if (!noFigurePreview.previews?.some((preview) => preview.label === 'Full page / slide')) failures.push('preview-crops should still write full-page preview when auto Figure 1 is absent');
     if (noFigurePreview.previews?.some((preview) => /Auto Figure/.test(preview.label))) failures.push('preview-crops should not invent an auto Figure crop when no Figure 1 caption exists');
-    if (!/Auto figure crop unavailable|could not locate Figure 1/i.test(noFigurePreview.warning || noFigurePreviewState.cropPreviewWarning || '')) failures.push('preview-crops should persist an auto-crop warning without aborting the preview');
+    if (!/Auto figure crop unavailable|Docling did not detect figure geometry|Docling figure detection/i.test(noFigurePreview.warning || noFigurePreviewState.cropPreviewWarning || '')) failures.push('preview-crops should persist a Docling auto-crop warning without aborting the preview');
+
+    if (hasDoclingDetector()) {
+      const vectorOnlyFigurePath = join(temp, 'vector-only-figure-paper.pdf');
+      writeVectorOnlyFigurePdfFixture(vectorOnlyFigurePath);
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Vector Geometry Figure', '--source', vectorOnlyFigurePath, '--slug', 'vector-geometry-figure'], { cwd: temp, stdio: 'pipe' });
+      execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'preview-crops', '--session', 'vector-geometry-figure', '--source', vectorOnlyFigurePath, '--page', '1', '--overwrite'], { cwd: temp, stdio: 'pipe' });
+      const vectorPreview = readJson(join(temp, '.papermentor', 'sessions', 'vector-geometry-figure', 'crop-previews.json'), { previews: [] });
+      const vectorAuto = vectorPreview.previews?.find((preview) => /Auto Figure/.test(preview.label));
+      if (!vectorAuto) failures.push(`geometry detector should crop vector-only figure objects above the caption; warning=${vectorPreview.warning || 'none'}`);
+      if (!/--crop\s+['"]?\d+,\d+,\d+,\d+/.test(vectorAuto?.command || '')) failures.push(`geometry detector should produce an explicit crop rectangle, got command=${vectorAuto?.command || '(none)'}`);
+    }
     const fakeConvertedPdf = join(temp, 'fake-converted-slide.pdf');
     writeTinyPdfFixture(fakeConvertedPdf);
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', realPptxPath, '--slug', 'real-pptx-fake-pdf-launch', '--no-preview', '--no-figure'], {

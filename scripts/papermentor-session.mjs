@@ -1314,10 +1314,10 @@ function dependencyStatusRows() {
       install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
     },
     {
-      name: 'pdftohtml',
-      ok: Boolean(commandPath('pdftohtml')),
-      purpose: 'extract stable PDF text coordinates for figure crops',
-      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
+      name: 'Docling',
+      ok: Boolean(process.env.PAPERMENTOR_DOCLING_PYTHON || commandPath('python3.10') || commandPath('uv')),
+      purpose: 'detect real PDF picture layout/geometry for representative figure crops',
+      install: 'Install Python 3.10 plus `pip install docling`, or install `uv` so PaperMentor can run Docling under Python 3.10'
     },
     {
       name: 'pdfinfo',
@@ -1560,195 +1560,6 @@ function decodeXmlText(value) {
     .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(Number(code)));
 }
 
-function parsePdftohtmlXml(xml, pageNumber) {
-  const pageRegex = /<page\b([^>]*)>([\s\S]*?)<\/page>/g;
-  for (const pageMatch of String(xml || '').matchAll(pageRegex)) {
-    const attrs = pageMatch[1] || '';
-    const number = Number(attrs.match(/\bnumber="([^"]+)"/)?.[1] || 1);
-    if (number !== Number(pageNumber)) continue;
-    const width = Number(attrs.match(/\bwidth="([^"]+)"/)?.[1] || 918);
-    const height = Number(attrs.match(/\bheight="([^"]+)"/)?.[1] || 1188);
-    const texts = [];
-    const textRegex = /<text\b([^>]*)>([\s\S]*?)<\/text>/g;
-    for (const textMatch of pageMatch[2].matchAll(textRegex)) {
-      const textAttrs = textMatch[1] || '';
-      const top = Number(textAttrs.match(/\btop="([^"]+)"/)?.[1]);
-      const left = Number(textAttrs.match(/\bleft="([^"]+)"/)?.[1]);
-      const textWidth = Number(textAttrs.match(/\bwidth="([^"]+)"/)?.[1] || 0);
-      const textHeight = Number(textAttrs.match(/\bheight="([^"]+)"/)?.[1] || 0);
-      const text = decodeXmlText(textMatch[2]).replace(/\s+/g, ' ').trim();
-      if (!text || ![top, left, textWidth, textHeight].every(Number.isFinite)) continue;
-      texts.push({
-        text,
-        xMin: left,
-        yMin: top,
-        xMax: left + Math.max(1, textWidth),
-        yMax: top + Math.max(1, textHeight)
-      });
-    }
-    return { page: { width, height }, texts };
-  }
-  return { page: { width: 918, height: 1188 }, texts: [] };
-}
-
-function groupCoordinateItemsIntoLines(items = []) {
-  const sorted = [...items].sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin);
-  const lines = [];
-  for (const item of sorted) {
-    const yMid = (item.yMin + item.yMax) / 2;
-    const existing = lines.find((line) => Math.abs(line.yMid - yMid) <= 4.8);
-    if (existing) {
-      existing.items.push(item);
-      existing.yMin = Math.min(existing.yMin, item.yMin);
-      existing.yMax = Math.max(existing.yMax, item.yMax);
-      existing.xMin = Math.min(existing.xMin, item.xMin);
-      existing.xMax = Math.max(existing.xMax, item.xMax);
-      existing.yMid = (existing.yMin + existing.yMax) / 2;
-    } else {
-      lines.push({
-        items: [item],
-        xMin: item.xMin,
-        yMin: item.yMin,
-        xMax: item.xMax,
-        yMax: item.yMax,
-        yMid
-      });
-    }
-  }
-  return lines.map((line) => {
-    line.items.sort((a, b) => a.xMin - b.xMin);
-    line.text = line.items.map((item) => item.text).join(' ').replace(/\s+/g, ' ').trim();
-    return line;
-  }).sort((a, b) => a.yMin - b.yMin || a.xMin - b.xMin);
-}
-
-function pdftohtmlLineMatchesCaption(line, label) {
-  const normalizedLabel = normalizeFigureLabel(label);
-  const text = String(line?.text || '').trim();
-  if (new RegExp(`^\\s*Fig(?:ure)?\\.?\\s*${escapeRegex(normalizedLabel)}\\b`, 'i').test(text)) return true;
-  const compact = text.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
-  const compactLabel = normalizedLabel.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
-  return Boolean(compactLabel && (compact.startsWith(`fig${compactLabel}`) || compact.startsWith(`figure${compactLabel}`)));
-}
-
-function normalizeCaptionSearchText(value) {
-  return String(value || '')
-    .normalize('NFKD')
-    .replace(/[^\p{L}\p{N}]+/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function captionNeedleFromCandidate(caption) {
-  const normalized = normalizeCaptionSearchText(caption)
-    .replace(/^(?:fig|figure)\s*\d{1,3}[a-z]?\s*/i, '')
-    .trim();
-  if (!normalized) return '';
-  const words = normalized.split(/\s+/).filter((word) => word.length >= 3 || /\d/.test(word));
-  return words.slice(0, 7).join(' ');
-}
-
-function pdftohtmlLineMatchesCaptionText(line, caption) {
-  const needle = captionNeedleFromCandidate(caption);
-  if (!needle) return false;
-  const haystack = normalizeCaptionSearchText(line?.text || '');
-  if (!haystack) return false;
-  if (haystack.includes(needle)) return true;
-  const words = needle.split(/\s+/);
-  if (words.length < 3) return false;
-  const matched = words.filter((word) => haystack.includes(word)).length;
-  return matched >= Math.min(words.length, 4);
-}
-
-function rectFromPdftohtmlUnits({ xmlPage, pdfPage, dpi, left, top, right, bottom }) {
-  const scaleX = pdfPage.width / Math.max(1, xmlPage.width);
-  const scaleY = pdfPage.height / Math.max(1, xmlPage.height);
-  return rectFromPdfPoints({
-    page: pdfPage,
-    dpi,
-    leftPt: left * scaleX,
-    topPt: top * scaleY,
-    rightPt: right * scaleX,
-    bottomPt: bottom * scaleY
-  });
-}
-
-function rectFromPdffigureBoundary(boundary, page, dpi, args = {}) {
-  if (!boundary || typeof boundary !== 'object') return null;
-  const x1 = Number(boundary.x1 ?? boundary.left ?? boundary.x ?? boundary.minX ?? boundary.xMin);
-  const y1 = Number(boundary.y1 ?? boundary.top ?? boundary.y ?? boundary.minY ?? boundary.yMin);
-  const rawX2 = boundary.x2 ?? boundary.right ?? boundary.maxX ?? boundary.xMax;
-  const rawY2 = boundary.y2 ?? boundary.bottom ?? boundary.maxY ?? boundary.yMax;
-  const width = Number(boundary.width ?? boundary.w);
-  const height = Number(boundary.height ?? boundary.h);
-  const x2 = Number(rawX2 ?? (Number.isFinite(x1) && Number.isFinite(width) ? x1 + width : NaN));
-  const y2 = Number(rawY2 ?? (Number.isFinite(y1) && Number.isFinite(height) ? y1 + height : NaN));
-  if (![x1, y1, x2, y2].every(Number.isFinite) || x2 <= x1 || y2 <= y1) return null;
-  const pad = Number(args['pdffigures-pad'] || 3);
-  return rectFromPdfPoints({
-    page,
-    dpi,
-    leftPt: Math.max(0, x1 - pad),
-    topPt: Math.max(0, y1 - pad),
-    rightPt: Math.min(page.width, x2 + pad),
-    bottomPt: Math.min(page.height, y2 + pad)
-  });
-}
-
-function readPdffigures2Output(pdfPath) {
-  const fixture = process.env.PAPERMENTOR_PDFFIGURES2_JSON;
-  if (fixture && existsSync(resolve(fixture))) {
-    return readJson(resolve(fixture), null);
-  }
-  const bin = process.env.PAPERMENTOR_PDFFIGURES2_BIN;
-  if (!bin) return null;
-  try {
-    const out = execFileSync(bin, [pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 30000 });
-    return JSON.parse(out);
-  } catch {
-    return null;
-  }
-}
-
-function normalizePdffigures2Entries(raw, pdfPath) {
-  const source = Array.isArray(raw)
-    ? raw
-    : Array.isArray(raw?.figures)
-      ? raw.figures
-      : Array.isArray(raw?.figuresAndTables)
-        ? raw.figuresAndTables
-        : [];
-  return source
-    .map((item) => {
-      const pageIndex = Number(item.page ?? item.pageNumber ?? item.pageIndex ?? 0);
-      const page = Number.isFinite(pageIndex) ? pageIndex + 1 : 1;
-      const pageSize = pdfPageSize(pdfPath, page);
-      const label = normalizeFigureLabel(item.name || item.label || item.figureNumber || item.caption || '1');
-      const regionBoundary = item.regionBoundary || item.figureBoundary || item.boundary || item.bbox || item.box;
-      const captionBoundary = item.captionBoundary || item.captionBox || item.captionBBox;
-      return {
-        source: 'pdffigures2',
-        label,
-        auto: `figure${label}`,
-        page,
-        figType: item.figType || item.type || 'Figure',
-        caption: String(item.caption || item.captionText || '').replace(/\s+/g, ' ').trim(),
-        regionBoundary,
-        captionBoundary,
-        crop: rectFromPdffigureBoundary(regionBoundary, pageSize, 180),
-        pageSize
-      };
-    })
-    .filter((item) => /^figure$/i.test(String(item.figType || 'Figure')) && item.regionBoundary);
-}
-
-function pdffigures2EntriesForPdf(pdfPath) {
-  const raw = readPdffigures2Output(pdfPath);
-  if (!raw) return [];
-  return normalizePdffigures2Entries(raw, pdfPath);
-}
-
 function pdfPageSize(pdfPath, pageNumber) {
   const pdfinfo = commandPath('pdfinfo');
   if (!pdfinfo) throw new Error('PDF page-size detection requires `pdfinfo` (Poppler) on PATH');
@@ -1777,46 +1588,177 @@ function rectFromPdfPoints({ page, dpi, leftPt, topPt, rightPt, bottomPt }) {
   };
 }
 
-function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
+const doclingFigureGeometryCache = new Map();
+
+function doclingPythonRunners() {
+  const runners = [];
+  if (process.env.PAPERMENTOR_DOCLING_PYTHON) runners.push({ command: resolve(process.env.PAPERMENTOR_DOCLING_PYTHON), args: [] });
+  const python310 = commandPath('python3.10');
+  if (python310) runners.push({ command: python310, args: [] });
+  const uv = commandPath('uv');
+  if (uv) {
+    runners.push({
+      command: uv,
+      args: ['run', '--python', '3.10', '--with', `docling==${process.env.PAPERMENTOR_DOCLING_VERSION || '2.69.1'}`, 'python']
+    });
+  }
+  return runners;
+}
+
+function compactFigureMatchText(value) {
+  return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function doclingFigureGeometryForPdf(pdfPath, args = {}) {
+  const absolute = resolve(pdfPath);
+  const stat = statSync(absolute);
+  const dpi = boundedInteger('dpi', args.dpi || 180, { min: 72, max: 300 });
+  const key = `${absolute}:${stat.size}:${stat.mtimeMs}:${dpi}`;
+  if (doclingFigureGeometryCache.has(key)) return doclingFigureGeometryCache.get(key);
+  const runners = doclingPythonRunners();
+  if (!runners.length) throw new Error('Docling figure detection requires Python 3.10 with docling, or `uv` to run docling under Python 3.10');
+  const script = String.raw`
+import json, sys
+from pathlib import Path
+
+payload = json.loads(sys.argv[1])
+pdf_path = payload["pdfPath"]
+
+try:
+    from docling.document_converter import DocumentConverter
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": "docling import failed: " + str(exc)}))
+    sys.exit(0)
+
+def number(value, fallback=0.0):
+    try:
+        return float(value)
+    except Exception:
+        return fallback
+
+def bbox_to_top_left(bbox, page_size):
+    left = number(getattr(bbox, "l", 0.0))
+    right = number(getattr(bbox, "r", left))
+    top = number(getattr(bbox, "t", 0.0))
+    bottom = number(getattr(bbox, "b", top))
+    origin = str(getattr(getattr(bbox, "coord_origin", ""), "value", getattr(bbox, "coord_origin", ""))).upper()
+    page_width = number(getattr(page_size, "width", 0.0))
+    page_height = number(getattr(page_size, "height", 0.0))
+    if "BOTTOMLEFT" in origin:
+        return {
+            "leftPt": left,
+            "topPt": max(0.0, page_height - top),
+            "rightPt": right,
+            "bottomPt": max(0.0, page_height - bottom),
+            "pageWidthPt": page_width,
+            "pageHeightPt": page_height,
+            "coordOrigin": "BOTTOMLEFT",
+        }
+    return {
+        "leftPt": left,
+        "topPt": top,
+        "rightPt": right,
+        "bottomPt": bottom,
+        "pageWidthPt": page_width,
+        "pageHeightPt": page_height,
+        "coordOrigin": "TOPLEFT",
+    }
+
+try:
+    result = DocumentConverter().convert(str(Path(pdf_path)))
+    doc = result.document
+    pictures = []
+    for index, picture in enumerate(getattr(doc, "pictures", []) or []):
+        caption = ""
+        try:
+            caption = picture.caption_text(doc) or ""
+        except Exception:
+            caption = ""
+        for prov in getattr(picture, "prov", []) or []:
+            bbox = getattr(prov, "bbox", None)
+            page_no = int(getattr(prov, "page_no", 1) or 1)
+            page = getattr(doc, "pages", {}).get(page_no)
+            page_size = getattr(page, "size", None)
+            if not bbox or not page_size:
+                continue
+            rect = bbox_to_top_left(bbox, page_size)
+            if rect["rightPt"] <= rect["leftPt"] or rect["bottomPt"] <= rect["topPt"]:
+                continue
+            pictures.append({
+                "index": index + 1,
+                "page": page_no,
+                "caption": caption,
+                **rect,
+            })
+    print(json.dumps({"ok": True, "pictures": pictures}))
+except Exception as exc:
+    print(json.dumps({"ok": False, "error": str(exc)}))
+`;
+  const payload = JSON.stringify({ pdfPath: absolute });
+  const errors = [];
+  for (const runner of runners) {
+    try {
+      const out = execFileSync(runner.command, [...runner.args, '-c', script, payload], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'pipe'],
+        timeout: Number(process.env.PAPERMENTOR_DOCLING_TIMEOUT_MS || 180000)
+      });
+      const parsed = JSON.parse(out);
+      if (parsed?.ok) {
+        const pictures = Array.isArray(parsed.pictures) ? parsed.pictures : [];
+        doclingFigureGeometryCache.set(key, pictures);
+        return pictures;
+      }
+      errors.push(parsed?.error || `${runner.command} returned no Docling result`);
+    } catch (error) {
+      errors.push(`${runner.command}: ${error.message}`);
+    }
+  }
+  throw new Error(`Docling figure detection failed: ${errors.join('; ')}`);
+}
+
+function doclingFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
   const label = normalizeFigureLabel(args.auto || args.figure || args['figure-number'] || '1');
-  const pdffigure = pdffigures2EntriesForPdf(pdfPath).find((item) => item.page === Number(pageNumber) && normalizeFigureLabel(item.label) === label);
-  if (pdffigure?.regionBoundary) {
-    const crop = rectFromPdffigureBoundary(pdffigure.regionBoundary, pdffigure.pageSize || pdfPageSize(pdfPath, pageNumber), args.dpi, args);
-    if (crop) return crop;
-  }
-  const pdftohtml = commandPath('pdftohtml');
-  if (!pdftohtml) throw new Error('auto figure crop requires `pdftohtml` (Poppler) on PATH');
-  const xml = execFileSync(pdftohtml, ['-xml', '-f', String(pageNumber), '-l', String(pageNumber), '-stdout', pdfPath], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] });
-  const xmlPage = parsePdftohtmlXml(xml, pageNumber);
-  const lines = groupCoordinateItemsIntoLines(xmlPage.texts);
-  const captionIndexByLabel = lines.findIndex((line) => pdftohtmlLineMatchesCaption(line, label));
-  const captionIndex = captionIndexByLabel >= 0
-    ? captionIndexByLabel
-    : lines.findIndex((line) => pdftohtmlLineMatchesCaptionText(line, args.caption || args['figure-caption'] || args.captionText || ''));
-  if (captionIndex < 0) throw new Error(`pdftohtml could not locate Figure ${label} caption on page ${pageNumber}`);
-  const captionLine = lines[captionIndex];
-  let startIndex = Math.max(0, captionIndex - 1);
-  for (let i = captionIndex - 1; i > 0; i -= 1) {
-    const gap = lines[i + 1].yMin - lines[i].yMax;
-    if (gap > Number(args['auto-figure-gap'] || 42)) break;
-    startIndex = i;
-  }
-  const figureLines = lines.slice(startIndex, captionIndex);
-  if (!figureLines.length) throw new Error(`pdftohtml found Figure ${label} caption but no figure content above it on page ${pageNumber}`);
-  const figureItems = figureLines.flatMap((line) => line.items);
-  const sidePad = Number(args['auto-side-pad'] || 28);
-  const topPad = Number(args['auto-top-pad'] || 18);
-  const includeCaption = Boolean(args['include-caption'] || args.includeCaption);
-  const xmlRect = {
-    left: Math.max(0, Math.min(...figureItems.map((item) => item.xMin)) - sidePad),
-    top: Math.max(0, Math.min(...figureItems.map((item) => item.yMin)) - topPad),
-    right: Math.min(xmlPage.page.width, Math.max(...figureItems.map((item) => item.xMax)) + sidePad),
-    bottom: includeCaption
-      ? Math.min(xmlPage.page.height, captionLine.yMax + Number(args['auto-caption-bottom-pad'] || 16))
-      : Math.max(0, captionLine.yMin - Number(args['auto-caption-gap'] || 8))
+  const caption = args.caption || args['figure-caption'] || args.captionText || '';
+  const captionNeedle = compactFigureMatchText(caption).slice(0, 120);
+  const labelNeedles = [
+    compactFigureMatchText(`Figure ${label}`),
+    compactFigureMatchText(`Fig. ${label}`)
+  ];
+  const pagePictures = doclingFigureGeometryForPdf(pdfPath, args).filter((picture) => Number(picture.page) === Number(pageNumber));
+  if (!pagePictures.length) throw new Error(`Docling did not detect figure geometry on page ${pageNumber}`);
+  const scored = pagePictures.map((picture) => {
+    const text = compactFigureMatchText(picture.caption || '');
+    const area = Math.max(1, (Number(picture.rightPt) - Number(picture.leftPt)) * (Number(picture.bottomPt) - Number(picture.topPt)));
+    let score = Math.log(area);
+    if (labelNeedles.some((needle) => needle && text.includes(needle))) score += 1000;
+    if (captionNeedle && captionNeedle.length >= 16 && (text.includes(captionNeedle.slice(0, 90)) || captionNeedle.includes(text.slice(0, 90)))) score += 500;
+    return { picture, score };
+  }).sort((a, b) => b.score - a.score);
+  const selected = scored[0]?.picture;
+  const selectedText = compactFigureMatchText(selected?.caption || '');
+  const matched = selected && (
+    labelNeedles.some((needle) => needle && selectedText.includes(needle))
+    || (captionNeedle && captionNeedle.length >= 16 && (selectedText.includes(captionNeedle.slice(0, 90)) || captionNeedle.includes(selectedText.slice(0, 90))))
+  );
+  if (!matched) throw new Error(`Docling detected ${pagePictures.length} picture(s) on page ${pageNumber} but none matched Figure ${label}`);
+  const page = {
+    width: Number(selected.pageWidthPt) || pdfPageSize(pdfPath, pageNumber).width,
+    height: Number(selected.pageHeightPt) || pdfPageSize(pdfPath, pageNumber).height
   };
-  const pdfPage = pdfPageSize(pdfPath, pageNumber);
-  return rectFromPdftohtmlUnits({ xmlPage: xmlPage.page, pdfPage, dpi: args.dpi, ...xmlRect });
+  const pad = Number(args['docling-figure-pad'] || 6);
+  return rectFromPdfPoints({
+    page,
+    dpi: args.dpi || 180,
+    leftPt: Number(selected.leftPt) - pad,
+    topPt: Number(selected.topPt) - pad,
+    rightPt: Number(selected.rightPt) + pad,
+    bottomPt: Number(selected.bottomPt) + pad
+  });
+}
+
+function autoFigureCropFromPdf(pdfPath, pageNumber, args = {}) {
+  return doclingFigureCropFromPdf(pdfPath, pageNumber, args);
 }
 
 function visualExplanationBody(args, state) {
@@ -1849,7 +1791,7 @@ function prepareRepresentativeFigureCandidateImages(slug, source, candidates = [
           rendered = renderPdfPageToImage(renderedPdf, page, join(tempDir, `page-${page}.png`), dpi);
           renderedByPage.set(page, rendered);
         }
-        const crop = candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
+        const crop = candidate.source === 'docling' && candidate.crop && [candidate.crop.x, candidate.crop.y, candidate.crop.width, candidate.crop.height].every((value) => Number.isFinite(Number(value)))
           ? candidate.crop
           : autoFigureCropFromPdf(renderedPdf, page, {
             ...args,
@@ -6605,7 +6547,10 @@ function maybeAutoAttachRepresentativeFigure(slug, args = {}) {
 function applySelectedRepresentativeFigure(slug, source, preparedCandidates = [], selectedIndex, parsed = {}, args = {}) {
   let state = readStateForSlug(slug);
   const index = selectedIndex == null ? null : Number(selectedIndex);
-  if (!state || !Number.isInteger(index) || index < 1 || index > preparedCandidates.length) {
+  const selected = Number.isInteger(index)
+    ? (preparedCandidates.find((candidate) => Number(candidate.candidateIndex) === index) || preparedCandidates[index - 1])
+    : null;
+  if (!state || !selected) {
     if (state && parsed.reason) {
       state.figureSelectionWarning = `Representative figure not attached: ${parsed.reason}`;
       state.updatedAt = now();
@@ -6613,7 +6558,6 @@ function applySelectedRepresentativeFigure(slug, source, preparedCandidates = []
     }
     return state;
   }
-  const selected = preparedCandidates[index - 1];
   const cards = readJson(cardsPath(slug), { cards: [] });
   const startIndex = (cards.cards || []).findIndex((card) => card.type === 'start-here');
   if (startIndex < 0) return state;
@@ -7796,31 +7740,46 @@ function updateLaunchNavigation({ slug, source, args, text }) {
 }
 
 
-function collectPdffigureRepresentativeCandidates(source, blocks = []) {
+function collectDoclingRepresentativeCandidates(source, blocks = []) {
   if (!source || isUrl(source) || extname(source).toLowerCase() !== '.pdf') return [];
   const absoluteSource = resolve(source);
   if (!existsSync(absoluteSource)) return [];
-  return pdffigures2EntriesForPdf(absoluteSource).map((entry) => {
-    const section = (blocks || []).find((block) => entry.caption && String(block.body || '').includes(entry.caption.slice(0, Math.min(80, entry.caption.length))))?.title || '';
+  let pictures = [];
+  try {
+    pictures = doclingFigureGeometryForPdf(absoluteSource, {});
+  } catch {
+    return [];
+  }
+  return pictures.map((entry, index) => {
+    const caption = String(entry.caption || '').replace(/\s+/g, ' ').trim();
+    const match = caption.match(/\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)/i);
+    const label = match ? match[1] : String(index + 1);
+    const section = (blocks || []).find((block) => caption && String(block.body || '').includes(caption.slice(0, Math.min(80, caption.length))))?.title || '';
+    const crop = rectFromPdfPoints({
+      page: { width: Number(entry.pageWidthPt) || 612, height: Number(entry.pageHeightPt) || 792 },
+      dpi: 180,
+      leftPt: Number(entry.leftPt) - 6,
+      topPt: Number(entry.topPt) - 6,
+      rightPt: Number(entry.rightPt) + 6,
+      bottomPt: Number(entry.bottomPt) + 6
+    });
     return {
-      label: entry.label,
-      auto: entry.auto,
+      label,
+      auto: `figure${label}`,
       page: entry.page,
-      caption: entry.caption,
+      caption,
       section,
-      nearbyText: entry.caption,
-      source: entry.source,
-      crop: entry.crop,
-      regionBoundary: entry.regionBoundary,
-      captionBoundary: entry.captionBoundary
+      nearbyText: caption,
+      source: 'docling',
+      crop
     };
-  });
+  }).filter((entry) => entry.caption || entry.crop);
 }
 
 function collectRepresentativeFigureCandidates(text, blocks = [], source = '') {
   const fullText = String(text || '').replace(/\r/g, '');
   const pages = fullText.split('\f');
-  const exactCandidates = collectPdffigureRepresentativeCandidates(source, blocks);
+  const exactCandidates = collectDoclingRepresentativeCandidates(source, blocks);
   const candidates = [...exactCandidates];
   const seen = new Set(exactCandidates.map((candidate) => `${candidate.page}:${normalizeFigureLabel(candidate.label)}`));
   const captionRegex = /\b(?:Figure|Fig\.)\s*(\d{1,3}[A-Za-z]?)\s*[:.\-–—]\s*([^\n]{0,220})/i;
