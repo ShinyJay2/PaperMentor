@@ -6704,11 +6704,10 @@ function maybeAutoFillStartHere(slug, args = {}) {
   if (canCombineFigureSelection && !preparedFigureCandidates.length) {
     const details = preparedFigureResult.failures?.length ? ` Details: ${preparedFigureResult.failures.join('; ')}` : '';
     state.figureCandidatePreparationWarning = `Could not prepare representative figure candidate crops from ${state.source || '(missing source)'}.${details}`;
+    state.figureSelectionWarning = 'Representative figure crop preparation failed; Start Here will be generated without a figure instead of staying pending.';
     state.updatedAt = now();
     writeJson(statePath(slug), state);
-    throw new Error(state.figureCandidatePreparationWarning);
-  }
-  if (canCombineFigureSelection && preparedFigureResult.failures?.length) {
+  } else if (canCombineFigureSelection && preparedFigureResult.failures?.length) {
     state.figureCandidatePreparationWarning = `Some representative figure candidate crops could not be prepared: ${preparedFigureResult.failures.join('; ')}`;
     state.updatedAt = now();
     writeJson(statePath(slug), state);

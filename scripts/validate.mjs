@@ -315,6 +315,39 @@ function writeNoFigurePdfFixture(path) {
   writeFileSync(path, pdf);
 }
 
+function writeCaptionOnlyFigurePdfFixture(path) {
+  const stream = [
+    'BT',
+    '/F1 18 Tf 72 740 Td (Caption Only Figure Paper) Tj',
+    '/F1 12 Tf 0 -36 Td (Abstract) Tj',
+    '0 -18 Td (This paper has a Figure caption but the figure geometry is unavailable.) Tj',
+    '0 -36 Td (1. Method) Tj',
+    '0 -18 Td (The method maps queries into vectors and compares scores.) Tj',
+    '0 -36 Td (Figure 1. Intended method pipeline, but no PDF drawing or image object is present.) Tj',
+    '0 -36 Td (2. Evaluation) Tj',
+    '0 -18 Td (Accuracy checks whether the scoring pipeline works.) Tj',
+    'ET'
+  ].join('\n');
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 4 0 R >> >> /Contents 5 0 R >>',
+    '<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>',
+    `<< /Length ${Buffer.byteLength(stream)} >>\nstream\n${stream}\nendstream`
+  ];
+  let pdf = '%PDF-1.4\n';
+  const offsets = [0];
+  for (let i = 0; i < objects.length; i += 1) {
+    offsets.push(Buffer.byteLength(pdf));
+    pdf += `${i + 1} 0 obj\n${objects[i]}\nendobj\n`;
+  }
+  const xrefOffset = Buffer.byteLength(pdf);
+  pdf += `xref\n0 ${objects.length + 1}\n0000000000 65535 f \n`;
+  for (let i = 1; i <= objects.length; i += 1) pdf += `${String(offsets[i]).padStart(10, '0')} 00000 n \n`;
+  pdf += `trailer\n<< /Size ${objects.length + 1} /Root 1 0 R >>\nstartxref\n${xrefOffset}\n%%EOF\n`;
+  writeFileSync(path, pdf);
+}
+
 
 function writeResultOnlyPdfFixture(path) {
   const stream = [
@@ -928,6 +961,27 @@ require('./fake-codex.js');
     }
     if (!(representativeAutoHtml.indexOf('class="paper-figure"') < representativeAutoHtml.indexOf('Preliminary'))) failures.push('representative auto-generation should render the visual reading between the figure image and Preliminary content');
     if (/Full-page visual fallback/i.test(JSON.stringify(representativeAutoCards))) failures.push('representative auto-selection should not attach full-page fallback text');
+
+    const captionOnlyFigurePath = join(temp, 'caption-only-figure-paper.pdf');
+    writeCaptionOnlyFigurePdfFixture(captionOnlyFigurePath);
+    const captionOnlyCountFile = join(temp, 'caption-only-auto-counts.json');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', captionOnlyFigurePath, '--slug', 'caption-only-auto', '--auto', '--no-preview'], {
+      cwd: temp,
+      stdio: 'pipe',
+      env: { ...process.env, PATH: `${fakeCodexDir}:${process.env.PATH}`, PAPERMENTOR_AGENT: 'codex', PAPERMENTOR_FAKE_CODEX_COUNT_FILE: captionOnlyCountFile }
+    });
+    const captionOnlyDir = join(temp, '.papermentor', 'sessions', 'caption-only-auto');
+    const captionOnlyState = readJson(join(captionOnlyDir, 'state.json'), {});
+    const captionOnlyCards = readJson(join(captionOnlyDir, 'cards.json'), { cards: [] });
+    const captionOnlyHtml = readFileSync(join(captionOnlyDir, 'index.html'), 'utf8');
+    const captionOnlyStart = captionOnlyCards.cards?.find((card) => card.type === 'start-here');
+    if (captionOnlyState.startHerePending || captionOnlyState.pendingBlockType === 'start-here') failures.push(`caption-only figure crop failure must not leave Start Here pending: ${JSON.stringify(captionOnlyState)}`);
+    if (captionOnlyStart?.figure) failures.push('caption-only geometry failure should not attach a fake representative figure');
+    if (!/One-sentence orientation|Preliminary|Encoder scores/.test(captionOnlyStart?.body || '')) failures.push('caption-only geometry failure should still produce a finished Start Here body');
+    if (/Start Here pending|PaperMentor is reading this paper|Could not auto-generate/.test(captionOnlyHtml)) failures.push('caption-only geometry failure should render finished HTML instead of pending/error text');
+    if (!/Could not prepare representative figure candidate crops|Start Here will be generated without a figure/i.test(`${captionOnlyState.figureCandidatePreparationWarning || ''} ${captionOnlyState.figureSelectionWarning || ''}`)) failures.push('caption-only geometry failure should persist a visible non-blocking warning');
+    const captionOnlyCounts = readJson(captionOnlyCountFile, {});
+    if (captionOnlyCounts['start-here'] !== 1) failures.push(`caption-only geometry failure should still call Start Here provider once, got ${JSON.stringify(captionOnlyCounts)}`);
 
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', representativeChoicePdfPath, '--slug', 'representative-choice-env-bin', '--auto', '--no-preview'], {
       cwd: temp,
