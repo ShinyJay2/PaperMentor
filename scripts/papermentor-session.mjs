@@ -118,7 +118,7 @@ function responseLanguageInstruction(state = {}) {
   const lang = normalizeResponseLanguage(state.responseLanguage || 'auto');
   if (lang === 'auto') return 'Use the user/request language as the main prose language for every user-facing output when known; otherwise match the source/excerpt language. Non-English output may keep equations, symbols, model names, and standard English technical terms/phrases in English where natural. If the requested/user language is not English, first construct the same high-quality answer you would write in English, then translate/localize that complete structure without simplifying, shortening, dropping equations, or losing rigor.';
   const label = responseLanguageLabel(lang);
-  if (lang === 'ko') return 'Use Korean as the main prose language because the user requested Korean. Internally draft the same high-quality answer you would write in English, then translate/localize the full structure into Korean without simplifying, shortening, dropping equations, or losing rigor. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in Korean, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only Korean paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, term-by-term purpose explanations, and step-by-step derivations.';
+  if (lang === 'ko') return 'Use Korean as the main prose language because the user requested Korean. Internally draft the same high-quality answer you would write in English, then translate/localize the full structure into Korean without simplifying, shortening, dropping equations, or losing rigor. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in Korean, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Keep technical terms as clean Korean or clean English; never create broken mixed tokens such as "일반ist". Prefer preserving terms like generalist, plug-and-play, policy, embodiment, multimodal sequence modeling, loss, objective, and inference in English when a direct Korean rendering would be awkward. Do not turn equations into prose-only Korean paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, term-by-term purpose explanations, and step-by-step derivations.';
   if (lang === 'en') return 'Use English as the main prose language because the user requested English: reading guide, Start Here, section/action menus, and HTML blocks should read naturally in English, with full Markdown structure and displayed LaTeX for equations.';
   return `Use ${label} as the main prose language because the user requested it. Internally draft the same high-quality answer you would write in English, then translate/localize the full structure into ${label} without simplifying, shortening, dropping equations, or losing rigor. Reading guide, Start Here, section/action menus, and HTML blocks should read naturally in ${label}, while equations, symbols, model names, and standard English technical terms/phrases may stay in English where natural. Do not turn equations into prose-only paragraphs: preserve displayed LaTeX blocks, headings, term-purpose sections, and step-by-step derivations.`;
 }
@@ -2134,6 +2134,11 @@ function askAnythingNotice(state = {}) {
 
 function questionAction(question) {
   return `Answer question: ${String(question || '').trim() || 'Ask anything about this'}`;
+}
+
+function questionFromAction(action) {
+  const match = String(action || '').match(/^Answer question:\s*(.+)$/i);
+  return match ? match[1].trim() : '';
 }
 
 function questionCardTitle(question) {
@@ -5268,6 +5273,25 @@ function stageQualityRules(type) {
   return [...shared, ...(byType[type] || [])].join('\n');
 }
 
+function freeQuestionQualityRules(question) {
+  const cleanQuestion = String(question || '').trim();
+  if (!cleanQuestion) return '';
+  return `
+
+Free-form user question:
+${cleanQuestion}
+
+Additional rules for Ask-anything answers:
+- Treat this as a real tutoring chat answer, not a menu action summary.
+- Preserve the user question in the answer's first move: answer it directly, then explain the missing dependency that made the question hard.
+- If the question asks how a modeling, policy, sequence, loss, control, algorithm, or equation idea works, include a compact formalization even when the selected slide/article only names the concept. Label it as "reconstructed teaching formalization" or "context formalization" so it is not mistaken for an equation printed in the source.
+- For that formalization, show display LaTeX, then break down every conditioning variable, output variable, factor, loss term, time index, or sequence component by functional purpose: what it predicts, conditions on, constrains, penalizes, weights, carries through time, or would break if removed.
+- For robotics sequence/modeling questions, prefer a policy-style or likelihood-style form such as $$p(a_t \\mid o_{\\le t}, x, a_{<t})$$, $$\\pi_\\theta(a_t \\mid h_t)$$, or $$\\mathcal{L}(\\theta)=-\\sum_t \\log p_\\theta(a_t \\mid h_t)$$ when appropriate, and explicitly define the history/state $h_t$ rather than leaving it implicit.
+- Include one tiny concrete timestep example after the equations so the symbols become operational.
+- Reconnect to the exact selected section/slide and say what the user can resume reading next.
+`;
+}
+
 function markdownPlainText(value) {
   return String(value || '')
     .replace(/```[\s\S]*?```/g, ' ')
@@ -5620,7 +5644,7 @@ function buildActionPrompt(state, action) {
   const citations = insight.citations?.length ? insight.citations.join(', ') : 'none detected yet';
   const sourceExcerpt = insight.sourceExcerpt || insight.preview || 'No extracted preview. Use the attached source/paper text available in context.';
   const command = `${cliCommand()} card --session ${shellQuote(state.slug)} --type ${shellQuote(type)} --title ${shellQuote(action)} --body-file <your-markdown-file>`;
-  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview yet.'}\n\n## Equation / notation preview from this selected range\n\n${equationSnippets}\n\n## Source excerpt for this selected range\n\n\`\`\`text\n${sourceExcerpt}\n\`\`\`\n\n## Stage-specific quality bar\n\n${stageQualityRules(type)}\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Use the source excerpt above as the local evidence for the selected section / slide range; do not explain unrelated slides unless the action asks for temporal context.\n- Show every non-trivial equation in LaTeX as a separate display LaTeX block using $$...$$ or \\[...\\] before explaining it; never downgrade math-heavy non-English output into prose-only explanation.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
+  return `# PaperMentor HTML Block Runner Prompt\n\nYou are generating the next PaperMentor HTML block. Do not answer only in the CLI. Create a concrete explanation block and append it with:\n\n\`${command}\`\n\n## Selected action\n\n${action}\n\n## Source context\n\n- Mode: ${sourceModeLabel(state.sourceMode)}\n- Title: ${state.title}\n- Section / slide: ${state.currentSection || state.currentLocation || 'not selected'}\n- Current focus: ${state.currentFocus || ''}\n- Template to follow: ${promptTemplateForType(type)}\n\n## Detected local signals\n\n- Equations: ${equations}\n- Concepts: ${concepts}\n- Citations: ${citations}\n- Preview: ${insight.preview || 'No extracted preview yet.'}\n\n## Equation / notation preview from this selected range\n\n${equationSnippets}\n\n## Source excerpt for this selected range\n\n\`\`\`text\n${sourceExcerpt}\n\`\`\`\n\n## Stage-specific quality bar\n\n${stageQualityRules(type)}\n${freeQuestionQualityRules(questionFromAction(action))}\n\n## Output rules\n\n- Actual explanation belongs in HTML, not in the CLI.\n- Use the source excerpt above as the local evidence for the selected section / slide range; do not explain unrelated slides unless the action asks for temporal context.\n- Show every non-trivial equation in LaTeX as a separate display LaTeX block using $$...$$ or \\[...\\] before explaining it; never downgrade math-heavy non-English output into prose-only explanation.\n- If the selected action asks how a modeling, policy, sequence, loss, control, or algorithm idea works and the selected excerpt has no displayed equation, include a compact reconstructed/context formalization in display LaTeX, explicitly labeled as teaching context rather than source text. Then explain every term by functional purpose.\n- Explain symbols, assumptions, substitutions, cancellations, and dependencies explicitly.\n- If this action is a user question/chat, answer the question, identify the missing dependency, reconnect to the exact section, and resume.\n- If a representative paper/slide figure is needed, use extract-figure with an actual crop; never use Mermaid as a substitute.\n`;
 }
 
 function writePendingActionPrompt(state, action) {
@@ -5905,6 +5929,7 @@ Mode: ${sourceModeLabel(state.sourceMode)}
 Requested output language: ${responseLanguageLabel(state.responseLanguage)}
 Title: ${state.title || '(untitled)'}
 Section/slide: ${state.currentSection || state.currentLocation || 'not selected'}
+${options.userQuestion ? `User question: ${options.userQuestion}\n` : ''}
 
 Local signals:
 - Equations: ${equations}
@@ -5920,6 +5945,7 @@ ${sourceExcerpt}
 
 Quality bar:
 ${stageQualityRules(type)}
+${freeQuestionQualityRules(options.userQuestion || questionFromAction(action))}
 
 Output rules:
 - Write production-quality teaching content, not a summary.
@@ -5928,6 +5954,7 @@ Output rules:
 - Respect the selected range. If you use earlier/later context, label it as context/preview.
 - Do not claim an equation, symbol, diagram, or result is on the selected range unless it appears above.
 - Show and explain non-trivial equations in LaTeX as separate display LaTeX blocks using $$...$$ or \\[...\\] when they appear or when explicitly labeled as context; never downgrade math-heavy non-English output into prose-only explanation.
+- If the selected action asks how a modeling, policy, sequence, loss, control, or algorithm idea works and the selected excerpt has no displayed equation, include a compact reconstructed/context formalization in display LaTeX, explicitly labeled as teaching context rather than source text. Then explain every term by functional purpose.
 - Do not stop at symbol definitions. For each important term/factor, explain its functional purpose. For example, a term like $\|\hat{o}_t-o_t\|_2^2$ should be described as penalizing the gap between reconstructed/predicted observation and actual observation to improve reconstruction fidelity, not merely as an L2 norm.
 `;
 }
