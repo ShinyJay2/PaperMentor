@@ -1767,8 +1767,8 @@ try:
                 "geometryCount": len(graphics),
                 "source": "pymupdf",
             })
-        # If PyMuPDF sees real graphics but no caption line attached, expose geometry candidates
-        # by visual order. Caption text from pdftotext can still be merged by the JS caller.
+        # If PyMuPDF sees real graphics but no caption line attached, expose strict
+        # unlabeled geometry candidates by visual order without inventing a figure number.
         if not any(fig['page'] == page_no for fig in figures):
             large = [rect for rect in graphics if rect_area(rect) >= 4000]
             large.sort(key=lambda r: (r[1], r[0]))
