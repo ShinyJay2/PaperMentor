@@ -1183,9 +1183,19 @@ require('./fake-codex.js');
     const pendingPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'), 'utf8');
     if (!navState.pendingBlockPrompt || !pendingPrompt.includes('PaperMentor HTML Block Runner Prompt') || !pendingPrompt.includes('Template to follow')) failures.push('run command should write a pending HTML block-generation prompt for action choices');
     if (!pendingPrompt.includes("--title 'Explain Eq. (6) $(touch should-not-run) symbol by symbol'") || existsSync(join(temp, 'should-not-run'))) failures.push('runner prompt should shell-quote dynamic action titles without executing them');
+    for (const phrase of ['Requested output language', 'output the exact selected-range equation first', 'Preserve variables, subscripts, superscripts', 'never silently invent or rewrite a source equation']) {
+      if (!pendingPrompt.includes(phrase)) failures.push(`equation runner prompt should prevent weak or inaccurate equation generation: ${phrase}`);
+    }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'generative-modeling-via-drifting', '--source', figurePath, '--title', 'Representative method crop', '--caption', 'Figure 1. Method loop.', '--body', '## Extracted visual explanation\n\n- **Question:** What is the method loop?\n- **Concept:** generator-to-drift target.\n- **What to observe:** the generator is trained against a target.\n- **Conclusion:** this figure anchors the method explanation.'], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.pendingBlockPrompt || existsSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'))) failures.push('adding a card should clear consumed pending runner prompt state');
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Korean Equation Prompt', '--source', 'paper.pdf', '--slug', 'korean-equation-prompt', '--language', 'ko', '--sections', '1. Method', '--body', '## One-sentence orientation\n\n정책 수식을 읽는 방입니다.\n\n## Preliminary\n\n정책과 loss를 구분합니다.'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'korean-equation-prompt', '--mode', 'equations', '--items', 'Explain Eq. (1) policy objective'], { cwd: temp, stdio: 'pipe' });
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'korean-equation-prompt', '--index', '1'], { cwd: temp, stdio: 'pipe' });
+    const koreanPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'korean-equation-prompt', 'pending-prompt.md'), 'utf8');
+    for (const phrase of ['Requested output language: Korean', 'Use Korean as the main prose language', 'write the explanation body in natural Korean', 'output the exact selected-range equation first']) {
+      if (!koreanPrompt.includes(phrase)) failures.push(`Korean equation prompt should preserve Korean output and exact-equation contract: ${phrase}`);
+    }
     const nestedFigureBody = join(temp, 'nested-figure-body.md');
     writeFileSync(nestedFigureBody, 'This block keeps its visual reading under the image.\n\n## Representative figure explanation\n\n### Concept / method role\n\nNested role survives under the figure.\n\n### Flow / sequence\n\nNested flow survives under the figure.');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'card', '--session', 'generative-modeling-via-drifting', '--type', 'note', '--title', 'Nested figure explanation smoke', '--figure-file', figurePath, '--body-file', nestedFigureBody], { cwd: temp, stdio: 'pipe' });

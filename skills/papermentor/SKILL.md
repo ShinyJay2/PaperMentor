@@ -137,7 +137,9 @@ The preliminary ladder is a prompt, not a fixed form: do not impose required par
 
 ## Strict policies
 
+- Use the user/request language as the main prose language for generated reading rooms and HTML blocks. If the request is Korean, generated PaperMentor prose must be natural Korean while preserving equations, symbols, model names, and standard English technical terms where natural.
 - Use LaTeX display math for non-trivial math.
+- For equation actions, output the exact selected-range equation first. Preserve variables, subscripts, superscripts, summation/integral limits, conditioning bars, expectation distributions, horizons, constants, and policy/trajectory notation. If extraction is broken, show the broken source snippet and label any repaired formula as reconstructed/context formalization; never silently invent or rewrite a source equation.
 - Never replace math with ASCII approximations.
 - Do not skip derivation transitions.
 - Do not hide assumptions.
