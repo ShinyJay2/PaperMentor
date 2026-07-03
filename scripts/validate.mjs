@@ -1183,7 +1183,7 @@ require('./fake-codex.js');
     const pendingPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'pending-prompt.md'), 'utf8');
     if (!navState.pendingBlockPrompt || !pendingPrompt.includes('PaperMentor HTML Block Runner Prompt') || !pendingPrompt.includes('Template to follow')) failures.push('run command should write a pending HTML block-generation prompt for action choices');
     if (!pendingPrompt.includes("--title 'Explain Eq. (6) $(touch should-not-run) symbol by symbol'") || existsSync(join(temp, 'should-not-run'))) failures.push('runner prompt should shell-quote dynamic action titles without executing them');
-    for (const phrase of ['Requested output language', 'output the exact selected-range equation first', 'Preserve variables, subscripts, superscripts', 'never silently invent or rewrite a source equation']) {
+    for (const phrase of ['Requested output language', 'output math evidence first', 'Preserve variables, subscripts, superscripts', 'Never silently invent or rewrite a source equation']) {
       if (!pendingPrompt.includes(phrase)) failures.push(`equation runner prompt should prevent weak or inaccurate equation generation: ${phrase}`);
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'extract-figure', '--session', 'generative-modeling-via-drifting', '--source', figurePath, '--title', 'Representative method crop', '--caption', 'Figure 1. Method loop.', '--body', '## Extracted visual explanation\n\n- **Question:** What is the method loop?\n- **Concept:** generator-to-drift target.\n- **What to observe:** the generator is trained against a target.\n- **Conclusion:** this figure anchors the method explanation.'], { cwd: temp, stdio: 'pipe' });
@@ -1193,7 +1193,7 @@ require('./fake-codex.js');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'mode', '--session', 'korean-equation-prompt', '--mode', 'equations', '--items', 'Explain Eq. (1) policy objective'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'korean-equation-prompt', '--index', '1'], { cwd: temp, stdio: 'pipe' });
     const koreanPrompt = readFileSync(join(temp, '.papermentor', 'sessions', 'korean-equation-prompt', 'pending-prompt.md'), 'utf8');
-    for (const phrase of ['Requested output language: Korean', 'Use Korean as the main prose language', 'write the explanation body in natural Korean', 'output the exact selected-range equation first']) {
+    for (const phrase of ['Requested output language: Korean', 'Use Korean as the main prose language', 'write the explanation body in natural Korean', 'output math evidence first']) {
       if (!koreanPrompt.includes(phrase)) failures.push(`Korean equation prompt should preserve Korean output and exact-equation contract: ${phrase}`);
     }
     const nestedFigureBody = join(temp, 'nested-figure-body.md');
@@ -1576,7 +1576,7 @@ The final insight is that calibration is not a post-processing trick; it is enfo
     const qualityPhraseByType = {
       prerequisite: 'For each rung, teach the concept, give a real-number example',
       method: 'Make the method executable in the reader',
-      equation: 'Show the equation before any prose',
+      equation: 'Start with math evidence',
       derivation: 'Trace only one transition at a time',
       dependency: 'Separate definitions, assumptions, lemmas, algorithms, equations, theorem statements, and claims',
       proof: 'Use a line transition microscope rather than a fixed overview table',
