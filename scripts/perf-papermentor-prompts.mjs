@@ -13,7 +13,7 @@ mkdirSync(capture, { recursive: true });
 function run(args, env = {}) {
   return execFileSync('node', [sessionScript, ...args], {
     cwd: temp,
-    env: { ...process.env, PAPERMENTOR_CLI: 'pm', ...env },
+    env: { ...process.env, PAPERMENTOR_CLI: 'papermentor', ...env },
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe']
   });

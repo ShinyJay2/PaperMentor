@@ -4,11 +4,13 @@ Use this script for a README video, GitHub social clip, or marketplace submissio
 
 ## 30-second version
 
-1. Open a terminal beside a browser.
-2. Run:
+1. Open Codex or Claude Code beside a browser.
+2. Invoke the skill:
 
-   ```bash
-   pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+   ```text
+   $papermentor https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+   # or in Claude Code:
+   /papermentor https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
    ```
 
 3. Open the generated `index.html`.
@@ -33,8 +35,9 @@ Show a dense equation or proof. Say:
 
 ### Scene 2 — launch
 
-```bash
-pm ./paper.pdf
+```text
+$papermentor ./paper.pdf
+# or: /papermentor ./paper.pdf
 ```
 
 Show that PaperMentor creates a local reading room:
