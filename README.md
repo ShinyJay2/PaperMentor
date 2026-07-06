@@ -178,6 +178,16 @@ CLI aliases:  ~/.local/bin/papermentor and ~/.local/bin/pm
 Windows CLI:  ~/.papermentor/bin/papermentor.cmd and ~/.papermentor/bin/pm.cmd
 ```
 
+After installation, check the computer and run a real smoke test:
+
+```bash
+pm doctor              # capability tiers: Core, PDF text/render, Visual, Export
+pm doctor --fix        # repair required local tools when a package manager is available
+pm smoke               # create a sample HTML reading room and verify terminal launch support
+```
+
+The installer stays lightweight on purpose. `pm doctor` tells you which capabilities are available; missing optional export tools do not block core reading, while missing required PDF/visual/provider capabilities get an exact `pm doctor --fix <target>` repair path.
+
 Korean user manual:
 
 - PDF: [`docs/PaperMentor_사용설명서_KO.pdf`](docs/PaperMentor_사용설명서_KO.pdf)
@@ -202,6 +212,8 @@ pm open                         # open latest reading room
 pm go                           # continue latest room
 pm ask "Why does this equation become an expectation?"
 pm export                       # export latest room
+pm doctor                       # diagnose local capabilities
+pm smoke                        # verify sample HTML generation
 ```
 
 ### Inside Codex or Claude Code

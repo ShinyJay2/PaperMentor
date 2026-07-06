@@ -99,6 +99,7 @@ try {
   const installed = normalizeTargets(args.targets).map((target) => installTarget(target, args, manifest));
   const cliInstall = installed.find((item) => item.target === 'codex') || installed[0];
   if (cliInstall) installCli(cliInstall.skillDir, args);
+  console.log('Next: run `pm doctor` to check this computer, then `pm smoke` to verify a sample reading room.');
   console.log('Try: pm <paper.pdf-or-url>');
 } catch (error) {
   console.error(`PaperMentor install error: ${error.message}`);

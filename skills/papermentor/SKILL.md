@@ -159,6 +159,13 @@ The preliminary ladder is a prompt, not a fixed form: do not impose required par
 See `commands.md` and `examples.md` for concrete patterns. Installed PaperMentor also includes bundled `prompts/`, `templates/`, and repository `examples/` copied by the installer.
 
 
+### Local onboarding and dependency rule
+
+Keep installation lightweight: install/copy the skill and CLI first, then diagnose this computer with `pm doctor`. Do not hide missing dependencies behind generic environment advice. Report capability tiers explicitly: Core, PDF text, PDF render, Visual, and Export. Use `pm doctor --fix` or a targeted fix such as `pm doctor --fix poppler` / `pm doctor --fix pymupdf` when the user wants automatic repair. Use `pm smoke` after installation or repair to prove that a sample HTML reading room can be created and that terminal UI launch support is available.
+
+Treat ImageMagick/export paths as optional when core/PDF/visual reading can still work. Treat AI provider, terminal launcher, PDF text/render tools, and PyMuPDF/managed-uv visual geometry as required for the full PaperMentor experience. Prefer managed `uv`/PyMuPDF paths over telling users to debug arbitrary Python/pip environments.
+
+
 ### Local rendering assets
 
 Reports must load bundled fonts and local MathJax from `assets/` so HTML sessions remain readable offline and do not depend on CDN font/math CSS.

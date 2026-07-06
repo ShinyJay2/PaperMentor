@@ -1296,61 +1296,351 @@ function execCommandFileSync(command, argv, options = {}) {
   return execFileSync(command, argv, options);
 }
 
-function dependencyStatusRows() {
+function nodeVersionOk() {
+  return Number(String(process.versions.node || '').split('.')[0] || 0) >= 18;
+}
+
+function pythonImportsPyMuPDF(command, prefixArgs = []) {
+  if (!command) return false;
+  try {
+    execCommandFileSync(command, [...prefixArgs, '-c', 'import fitz; print(fitz.__doc__[:20])'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], timeout: 8000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function pymupdfStatus() {
+  if (process.env.PAPERMENTOR_PYMUPDF_PYTHON) {
+    const command = resolve(process.env.PAPERMENTOR_PYMUPDF_PYTHON);
+    return { ok: pythonImportsPyMuPDF(command), managed: false, command };
+  }
+  const python3 = commandPath('python3');
+  if (python3 && pythonImportsPyMuPDF(python3)) return { ok: true, managed: false, command: python3 };
+  const python = commandPath('python');
+  if (python && python !== python3 && pythonImportsPyMuPDF(python)) return { ok: true, managed: false, command: python };
+  const uv = commandPath('uv');
+  if (uv) return { ok: true, managed: true, command: uv };
+  return { ok: false, managed: false, command: python3 || python || '' };
+}
+
+function terminalLauncherStatus() {
+  if (process.stdin.isTTY && process.stdout.isTTY) return { ok: true, detail: 'current shell is interactive' };
+  if (terminalMockPath()) return { ok: true, detail: 'terminal mock configured' };
+  if (process.platform === 'darwin') return { ok: Boolean(commandPath('osascript')), detail: 'macOS Terminal via osascript' };
+  if (process.platform === 'win32') return { ok: Boolean(commandPath('cmd') || process.env.ComSpec), detail: 'Windows cmd start' };
+  const candidates = ['x-terminal-emulator', 'gnome-terminal', 'konsole', 'xfce4-terminal', 'xterm'].filter((name) => commandPath(name));
+  return { ok: Boolean(candidates.length), detail: candidates.length ? candidates.join(', ') : 'no known Linux terminal launcher found' };
+}
+
+function providerStatus() {
+  const provider = requestedAgentProvider({});
+  if (!provider) return { ok: false, name: 'AI generation provider', detail: 'none detected' };
+  const command = provider === 'codex' ? commandPath('codex') : provider === 'claude' ? commandPath('claude') : '';
+  return { ok: Boolean(command), name: `AI generation provider (${provider})`, detail: command || 'configured by environment' };
+}
+
+function onboardingCapabilities() {
   const imageMagick = commandPath('magick') || commandPath('convert');
-  const requestedProvider = requestedAgentProvider({});
-  const providerLabel = requestedProvider ? `AI generation provider (${requestedProvider})` : 'AI generation provider';
+  const pdftotext = commandPath('pdftotext');
+  const pdftoppm = commandPath('pdftoppm');
+  const pdfinfo = commandPath('pdfinfo');
+  const pymupdf = pymupdfStatus();
+  const terminal = terminalLauncherStatus();
+  const provider = providerStatus();
   return [
     {
-      name: providerLabel,
-      ok: Boolean(requestedProvider),
+      tier: 'Core',
+      id: 'node',
+      name: 'Node.js 18+',
+      ok: nodeVersionOk(),
+      required: true,
+      purpose: 'run the PaperMentor CLI',
+      detail: `node ${process.versions.node}`,
+      fix: 'Install Node.js 18+ from https://nodejs.org or with your OS package manager.'
+    },
+    {
+      tier: 'Core',
+      id: 'terminal',
+      name: 'External terminal launcher',
+      ok: terminal.ok,
+      required: true,
+      purpose: 'open the interactive PaperMentor UI outside Codex/Claude chat',
+      detail: terminal.detail,
+      fix: 'Use a desktop terminal environment or install xterm/gnome-terminal/konsole on Linux.'
+    },
+    {
+      tier: 'Core',
+      id: 'provider',
+      name: provider.name,
+      ok: provider.ok,
+      required: true,
       purpose: 'generate Start Here, section choices, and HTML explanation blocks automatically',
-      install: 'Install and authenticate Codex CLI or Claude Code, ensure `codex` or `claude` is on PATH, or run inside Codex/Claude. Without this, PaperMentor can open HTML but cannot auto-fill generated blocks.'
+      detail: provider.detail,
+      fix: 'Install and authenticate Codex CLI or Claude Code, or set PAPERMENTOR_AGENT=codex/claude.'
     },
     {
+      tier: 'PDF text',
+      id: 'poppler-text',
+      name: 'pdftotext',
+      ok: Boolean(pdftotext),
+      required: true,
+      package: 'poppler',
+      purpose: 'extract readable text from PDF papers/slides',
+      detail: pdftotext || 'missing',
+      fix: 'Install Poppler (`pm doctor --fix poppler`).'
+    },
+    {
+      tier: 'PDF render',
+      id: 'poppler-render',
       name: 'pdftoppm',
-      ok: Boolean(commandPath('pdftoppm')),
+      ok: Boolean(pdftoppm),
+      required: true,
+      package: 'poppler',
       purpose: 'render PDF pages for launch, preview-crops, and extract-figure',
-      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
+      detail: pdftoppm || 'missing',
+      fix: 'Install Poppler (`pm doctor --fix poppler`).'
     },
     {
-      name: 'PyMuPDF',
-      ok: Boolean(process.env.PAPERMENTOR_PYMUPDF_PYTHON || commandPath('python3') || commandPath('python') || commandPath('uv')),
-      purpose: 'detect real PDF image/vector geometry for representative figure crops',
-      install: 'Install Python plus `pip install pymupdf`, or install `uv` so PaperMentor can run PyMuPDF on demand'
-    },
-    {
+      tier: 'PDF render',
+      id: 'pdfinfo',
       name: 'pdfinfo',
-      ok: Boolean(commandPath('pdfinfo')),
+      ok: Boolean(pdfinfo),
+      required: true,
+      package: 'poppler',
       purpose: 'read PDF page sizes for coordinate-accurate figure crops',
-      install: 'Ubuntu: sudo apt-get install poppler-utils; macOS: brew install poppler'
+      detail: pdfinfo || 'missing',
+      fix: 'Install Poppler (`pm doctor --fix poppler`).'
     },
     {
+      tier: 'Visual',
+      id: 'pymupdf',
+      name: 'PyMuPDF',
+      ok: pymupdf.ok,
+      required: true,
+      package: 'pymupdf',
+      purpose: 'detect real PDF image/vector geometry for representative figure crops',
+      detail: pymupdf.ok ? `${pymupdf.managed ? 'managed by uv' : 'importable'}${pymupdf.command ? ` (${pymupdf.command})` : ''}` : 'missing',
+      fix: 'Install uv or PyMuPDF (`pm doctor --fix pymupdf`).'
+    },
+    {
+      tier: 'Export',
+      id: 'imagemagick',
       name: 'ImageMagick',
       ok: Boolean(imageMagick),
+      required: false,
+      package: 'imagemagick',
       purpose: 'crop rendered pages/slides when --crop or --auto is used',
-      install: 'Ubuntu: sudo apt-get install imagemagick; macOS: brew install imagemagick'
+      detail: imageMagick || 'missing',
+      fix: 'Optional. Install ImageMagick (`pm doctor --fix imagemagick`) for legacy crop/export paths.'
     }
   ];
 }
 
+function dependencyStatusRows() {
+  return onboardingCapabilities();
+}
+
+function groupedCapabilities(rows) {
+  const groups = new Map();
+  for (const row of rows) {
+    if (!groups.has(row.tier)) groups.set(row.tier, []);
+    groups.get(row.tier).push(row);
+  }
+  return groups;
+}
+
+function capabilityStatus(rows) {
+  const requiredMissing = rows.filter((row) => row.required && !row.ok);
+  const optionalMissing = rows.filter((row) => !row.required && !row.ok);
+  return requiredMissing.length ? 'needs-fix' : optionalMissing.length ? 'usable-with-optional-gaps' : 'ok';
+}
+
+function packageManagerCommands(packageName) {
+  const version = process.env.PAPERMENTOR_PYMUPDF_VERSION || '1.26.5';
+  if (packageName === 'all') return [...packageManagerCommands('poppler'), ...packageManagerCommands('pymupdf')];
+  if (process.platform === 'darwin') {
+    if (packageName === 'poppler') return [['brew', ['install', 'poppler']]];
+    if (packageName === 'imagemagick') return [['brew', ['install', 'imagemagick']]];
+    if (packageName === 'pymupdf') return commandPath('uv') ? [] : [['brew', ['install', 'uv']]];
+  }
+  if (process.platform === 'win32') {
+    if (packageName === 'poppler') return [['winget', ['install', '--id', 'oschwartz10612.Poppler', '-e']]];
+    if (packageName === 'imagemagick') return [['winget', ['install', '--id', 'ImageMagick.ImageMagick', '-e']]];
+    if (packageName === 'pymupdf') return commandPath('uv')
+      ? []
+      : commandPath('py')
+        ? [['py', ['-m', 'pip', 'install', '--user', `pymupdf==${version}`]]]
+        : [['winget', ['install', '--id', 'astral-sh.uv', '-e']]];
+  }
+  if (packageName === 'poppler') return [[commandPath('sudo') || 'sudo', ['apt-get', 'update']], [commandPath('sudo') || 'sudo', ['apt-get', 'install', '-y', 'poppler-utils']]];
+  if (packageName === 'imagemagick') return [[commandPath('sudo') || 'sudo', ['apt-get', 'update']], [commandPath('sudo') || 'sudo', ['apt-get', 'install', '-y', 'imagemagick']]];
+  if (packageName === 'pymupdf') {
+    if (commandPath('uv')) return [];
+    const python = commandPath('python3') || commandPath('python');
+    if (python) return [[python, ['-m', 'pip', 'install', '--user', `pymupdf==${version}`]]];
+    return [[commandPath('sudo') || 'sudo', ['apt-get', 'update']], [commandPath('sudo') || 'sudo', ['apt-get', 'install', '-y', 'python3', 'python3-pip']], ['python3', ['-m', 'pip', 'install', '--user', `pymupdf==${version}`]]];
+  }
+  return [];
+}
+
+function fixPackagesFromArgs(args = {}) {
+  const rawItems = [];
+  if (args.fix && args.fix !== true) rawItems.push(args.fix);
+  rawItems.push(...(args._ || []).slice(1));
+  const raw = rawItems.length ? rawItems.join(',') : 'all';
+  const values = String(raw).split(/[,\s]+/).map((item) => item.trim().toLowerCase()).filter(Boolean);
+  const allowed = new Set(['all', 'poppler', 'pymupdf', 'imagemagick']);
+  for (const value of values) {
+    if (!allowed.has(value)) throw new Error(`unknown doctor fix target: ${value}; use all, poppler, pymupdf, or imagemagick`);
+  }
+  return values.includes('all') ? ['all'] : [...new Set(values)];
+}
+
+function runDoctorFix(args = {}) {
+  const targets = fixPackagesFromArgs(args);
+  const commands = targets.flatMap((target) => packageManagerCommands(target));
+  const unique = [];
+  const seen = new Set();
+  for (const [cmd, argv] of commands) {
+    const key = `${cmd}\0${argv.join('\0')}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push([cmd, argv]);
+    }
+  }
+  const plan = {
+    schema: 'papermentor.doctor.fix.v1',
+    platform: process.platform,
+    targets,
+    commands: unique.map(([command, argv]) => ({ command, args: argv, display: [command, ...argv].map((item) => /\s/.test(item) ? shellQuote(item) : item).join(' ') }))
+  };
+  if (args.json) console.log(JSON.stringify(plan, null, 2));
+  else {
+    console.log('PaperMentor doctor fix plan');
+    if (!unique.length) console.log('Nothing to install: managed dependencies are already available for the selected target(s).');
+    for (const item of plan.commands) console.log(`- ${item.display}`);
+  }
+  if (args['dry-run'] || args.plan || args.json) return plan;
+  if (!unique.length) return plan;
+  for (const [command, argv] of unique) {
+    const resolved = commandPath(command) || command;
+    const result = spawnSync(resolved, argv, { stdio: 'inherit' });
+    if (result.status !== 0) throw new Error(`doctor --fix command failed: ${[command, ...argv].join(' ')}`);
+  }
+  return plan;
+}
+
 function runDoctor(args = {}) {
-  const rows = dependencyStatusRows();
+  if (args.fix) {
+    runDoctorFix(args);
+    return;
+  }
+  const rows = onboardingCapabilities();
+  const status = capabilityStatus(rows);
   const payload = {
-    status: rows.every((row) => row.ok) ? 'ok' : 'missing-dependencies',
+    schema: 'papermentor.doctor.v2',
+    status,
+    requiredMissing: rows.filter((row) => row.required && !row.ok).map((row) => row.id),
+    optionalMissing: rows.filter((row) => !row.required && !row.ok).map((row) => row.id),
     checks: rows
   };
   if (args.json) {
     console.log(JSON.stringify(payload, null, 2));
   } else {
     console.log('PaperMentor dependency doctor');
-    console.log('Note: PDF reading needs pdftoppm/ImageMagick; automatic writing needs an AI generation provider.');
-    for (const row of rows) {
-      console.log(`${row.ok ? '[ok]' : '[missing]'} ${row.name} — ${row.purpose}`);
-      if (!row.ok) console.log(`  install: ${row.install}`);
+    console.log(`Status: ${status}`);
+    console.log('Note: install stays lightweight; use `pm doctor --fix <target>` to repair missing local capabilities.');
+    for (const [tier, tierRows] of groupedCapabilities(rows)) {
+      console.log(`\n${tier}:`);
+      for (const row of tierRows) {
+        const marker = row.ok ? '✓' : row.required ? '✗' : '○';
+        console.log(`  ${marker} ${row.name} — ${row.purpose}`);
+        if (row.detail) console.log(`      ${row.detail}`);
+        if (!row.ok) console.log(`      fix: ${row.fix}`);
+      }
     }
+    if (payload.requiredMissing.length) console.log('\nRun: pm doctor --fix');
+    else if (payload.optionalMissing.length) console.log('\nOptional gaps remain; PaperMentor core/PDF/visual reading is usable.');
   }
-  if (payload.status !== 'ok') process.exitCode = 1;
+  if (args.strict && status !== 'ok') process.exitCode = 1;
+}
+
+function smokeSampleSource() {
+  const dir = join(papermentorDir(), 'smoke');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'sample-paper.md');
+  writeFileSync(file, `PaperMentor Smoke Test Paper
+Ada Mentor
+
+Abstract
+This smoke fixture checks that PaperMentor can create a local HTML reading room without requiring PDF tools.
+
+1. Introduction
+We study a simple supervised learning objective where a model f_θ maps an input x to a prediction.
+
+2. Objective
+The population risk is
+L(θ) = E_{(x,y)~D} [ ℓ(f_θ(x), y) ].
+The empirical risk replaces the unknown distribution D with a finite dataset.
+
+3. Takeaway
+The reading room should preserve the equation, explain each term, and let the user continue in the terminal UI.
+`);
+  return file;
+}
+
+function runSmoke(args = {}) {
+  const slug = args.slug || 'papermentor-smoke';
+  const source = resolve(args.source || args._[1] || smokeSampleSource());
+  const checks = [];
+  const addCheck = (id, ok, detail = '') => checks.push({ id, ok: Boolean(ok), detail });
+  addCheck('node', nodeVersionOk(), `node ${process.versions.node}`);
+  const terminal = terminalLauncherStatus();
+  addCheck('terminal-launcher', terminal.ok, terminal.detail);
+  const originalLog = console.log;
+  try {
+    if (args.json || args.quiet) console.log = () => {};
+    launchSession({
+      ...args,
+      _: ['launch', source],
+      source,
+      slug,
+      'no-figure': true,
+      'no-preview': true,
+      'no-agent': true,
+      quick: true
+    });
+    addCheck('launch-session', true, slug);
+  } catch (error) {
+    addCheck('launch-session', false, error.message);
+  } finally {
+    console.log = originalLog;
+  }
+  const html = indexPath(slug);
+  addCheck('html-render', existsSync(html), html);
+  const state = readJson(statePath(slug), null);
+  addCheck('section-detection', Boolean(state?.paperSections?.length), `${state?.paperSections?.length || 0} section(s)`);
+  const status = checks.every((item) => item.ok) ? 'pass' : 'fail';
+  const payload = {
+    schema: 'papermentor.smoke.v1',
+    status,
+    session: slug,
+    source,
+    html,
+    checks
+  };
+  if (args.json) console.log(JSON.stringify(payload, null, 2));
+  else {
+    console.log('\nPaperMentor smoke test');
+    for (const check of checks) console.log(`${check.ok ? '✓' : '✗'} ${check.id}${check.detail ? ` — ${check.detail}` : ''}`);
+    console.log(`Status: ${status}`);
+    if (existsSync(html)) console.log(`HTML: ${html}`);
+    if (status !== 'pass') console.log('Run: pm doctor');
+  }
+  if (args.open && existsSync(html)) openSessionHtml(slug);
+  if (status !== 'pass') process.exitCode = 1;
+  return payload;
 }
 
 
@@ -8311,6 +8601,8 @@ User commands:
   pm recent                  list recent reading rooms
   pm clean                   clean stale recent entries
   pm doctor                  check local setup / PDF-PPT extraction tools
+  pm doctor --fix            install/repair missing local capabilities
+  pm smoke                   verify a new computer can create a sample HTML room
 
 Also available as: papermentor
 
@@ -8348,7 +8640,8 @@ Usage:
   papermentor clean [--test-sessions|--all --yes|--dry-run]
   papermentor state --session <slug>
   papermentor status --session <slug>
-  papermentor doctor [--json]
+  papermentor doctor [--json|--strict|--fix [all|poppler|pymupdf|imagemagick] [--dry-run]]
+  papermentor smoke [--json] [--open]
 `);
 }
 
@@ -8360,6 +8653,7 @@ const RESERVED_SOURCE_COMMANDS = new Set([
   'check', 'qa-batch', 'batch-qa', 'quality-batch', 'figure-audit', 'figures',
   'crop-audit', 'proof-audit', 'proofs', 'extract-figure', 'card', 'turn', 'promote',
   'pause', 'resume', 'render', 'export', 'bundle', 'state', 'status', 'doctor',
+  'smoke', 'demo',
   'help', '--help', '-h'
 ]);
 
@@ -8490,6 +8784,8 @@ try {
     printConsole(readJson(statePath(slug), {}));
   } else if (command === 'doctor') {
     runDoctor(args);
+  } else if (command === 'smoke' || command === 'demo') {
+    runSmoke(args);
   } else {
     usage();
     process.exit(command ? 1 : 0);

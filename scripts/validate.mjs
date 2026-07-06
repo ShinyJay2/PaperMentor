@@ -604,11 +604,15 @@ async function validateSessionHelper() {
     if (!nonTtyOutput.includes('Opening PaperMentor in an external terminal')) failures.push('non-TTY menu should announce external terminal reroute');
     if (!nonTtyTerminal.includes('"argv":["menu"]') || nonTtyTerminal.includes('renderPaletteScreen') || nonTtyOutput.includes('Main menu')) failures.push('non-TTY menu should not render an inline PaperMentor UI fallback');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
-    for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'PyMuPDF', 'pdfinfo', 'ImageMagick']) {
+    for (const phrase of ['PaperMentor dependency doctor', 'Status:', 'Core:', 'PDF text:', 'PDF render:', 'Visual:', 'Export:', 'AI generation provider', 'pdftotext', 'pdftoppm', 'PyMuPDF', 'pdfinfo', 'ImageMagick']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
     }
     const doctorJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--json'], { cwd: temp, encoding: 'utf8' }));
-    if (doctorJson.status !== 'ok' || doctorJson.checks?.length !== 5 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'PyMuPDF') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report AI generation provider plus PDF/image extraction checks in validation environment');
+    if (doctorJson.schema !== 'papermentor.doctor.v2' || !['ok', 'needs-fix', 'usable-with-optional-gaps'].includes(doctorJson.status) || doctorJson.checks?.length < 7 || !doctorJson.checks?.some((row) => /AI generation provider/.test(row.name)) || !doctorJson.checks?.some((row) => row.name === 'PyMuPDF') || !doctorJson.checks?.some((row) => row.name === 'pdfinfo')) failures.push('doctor --json should report capability-tier provider/PDF/image checks');
+    const doctorFix = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--fix', 'poppler', '--dry-run', '--json'], { cwd: temp, encoding: 'utf8' }));
+    if (doctorFix.schema !== 'papermentor.doctor.fix.v1' || !doctorFix.targets?.includes('poppler') || !doctorFix.commands?.length) failures.push('doctor --fix poppler --dry-run --json should emit an install plan without executing it');
+    const smokeJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'smoke', '--json'], { cwd: temp, encoding: 'utf8', env: { ...process.env, PAPERMENTOR_TERMINAL_MOCK_FILE: join(temp, 'smoke-terminal.jsonl') } }));
+    if (smokeJson.schema !== 'papermentor.smoke.v1' || smokeJson.status !== 'pass' || !existsSync(smokeJson.html) || !smokeJson.checks?.some((row) => row.id === 'section-detection' && row.ok)) failures.push('pm smoke --json should create a sample HTML reading room and verify section detection');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
