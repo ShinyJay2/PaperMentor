@@ -1388,7 +1388,7 @@ function onboardingCapabilities() {
       package: 'poppler',
       purpose: 'extract readable text from PDF papers/slides',
       detail: pdftotext || 'missing',
-      fix: 'Install Poppler (`pm doctor --fix poppler`).'
+      fix: 'Install Poppler (`papermentor doctor --fix poppler`).'
     },
     {
       tier: 'PDF render',
@@ -1399,7 +1399,7 @@ function onboardingCapabilities() {
       package: 'poppler',
       purpose: 'render PDF pages for launch, preview-crops, and extract-figure',
       detail: pdftoppm || 'missing',
-      fix: 'Install Poppler (`pm doctor --fix poppler`).'
+      fix: 'Install Poppler (`papermentor doctor --fix poppler`).'
     },
     {
       tier: 'PDF render',
@@ -1410,7 +1410,7 @@ function onboardingCapabilities() {
       package: 'poppler',
       purpose: 'read PDF page sizes for coordinate-accurate figure crops',
       detail: pdfinfo || 'missing',
-      fix: 'Install Poppler (`pm doctor --fix poppler`).'
+      fix: 'Install Poppler (`papermentor doctor --fix poppler`).'
     },
     {
       tier: 'Visual',
@@ -1421,7 +1421,7 @@ function onboardingCapabilities() {
       package: 'pymupdf',
       purpose: 'detect real PDF image/vector geometry for representative figure crops',
       detail: pymupdf.ok ? `${pymupdf.managed ? 'managed by uv' : 'importable'}${pymupdf.command ? ` (${pymupdf.command})` : ''}` : 'missing',
-      fix: 'Install uv or PyMuPDF (`pm doctor --fix pymupdf`).'
+      fix: 'Install uv or PyMuPDF (`papermentor doctor --fix pymupdf`).'
     },
     {
       tier: 'Export',
@@ -1432,7 +1432,7 @@ function onboardingCapabilities() {
       package: 'imagemagick',
       purpose: 'crop rendered pages/slides when --crop or --auto is used',
       detail: imageMagick || 'missing',
-      fix: 'Optional. Install ImageMagick (`pm doctor --fix imagemagick`) for legacy crop/export paths.'
+      fix: 'Optional. Install ImageMagick (`papermentor doctor --fix imagemagick`) for legacy crop/export paths.'
     }
   ];
 }
@@ -1550,7 +1550,7 @@ function runDoctor(args = {}) {
   } else {
     console.log('PaperMentor dependency doctor');
     console.log(`Status: ${status}`);
-    console.log('Note: install stays lightweight; use `pm doctor --fix <target>` to repair missing local capabilities.');
+    console.log('Note: install stays lightweight; use `papermentor doctor --fix <target>` to repair missing local capabilities.');
     for (const [tier, tierRows] of groupedCapabilities(rows)) {
       console.log(`\n${tier}:`);
       for (const row of tierRows) {
@@ -1560,7 +1560,7 @@ function runDoctor(args = {}) {
         if (!row.ok) console.log(`      fix: ${row.fix}`);
       }
     }
-    if (payload.requiredMissing.length) console.log('\nRun: pm doctor --fix');
+    if (payload.requiredMissing.length) console.log('\nRun: papermentor doctor --fix');
     else if (payload.optionalMissing.length) console.log('\nOptional gaps remain; PaperMentor core/PDF/visual reading is usable.');
   }
   if (args.strict && status !== 'ok') process.exitCode = 1;
@@ -1636,7 +1636,7 @@ function runSmoke(args = {}) {
     for (const check of checks) console.log(`${check.ok ? '✓' : '✗'} ${check.id}${check.detail ? ` — ${check.detail}` : ''}`);
     console.log(`Status: ${status}`);
     if (existsSync(html)) console.log(`HTML: ${html}`);
-    if (status !== 'pass') console.log('Run: pm doctor');
+    if (status !== 'pass') console.log('Run: papermentor doctor');
   }
   if (args.open && existsSync(html)) openSessionHtml(slug);
   if (status !== 'pass') process.exitCode = 1;
@@ -7833,7 +7833,7 @@ function cleanSessions(args = {}) {
   if (!removeDev && !removeAll) {
     if (!dryRun) writeJson(recentPath(), { schema: 'papermentor.recent.v1', sessions: remaining });
     console.log(`${dryRun ? 'Would clean' : 'Cleaned'} recent list: ${remaining.length} valid room(s).`);
-    console.log('Tip: use `pm clean --test-sessions` to remove obvious development/test rooms.');
+    console.log('Tip: use `papermentor clean --test-sessions` to remove obvious development/test rooms.');
     return;
   }
   if (!dryRun) writeJson(recentPath(), { schema: 'papermentor.recent.v1', sessions: remaining });
@@ -8589,22 +8589,24 @@ function usage(options = {}) {
   if (!options.advanced) {
     console.log(`PaperMentor
 
-User commands:
-  pm                         open the main menu
-  pm <file-or-url>           start a guided launch wizard (use --quick to skip options)
-  pm open                    open the latest/current HTML
-  pm go                      continue in the arrow-key reading room
-  pm ask "question"          ask about the current topic
-  pm qa                      score current HTML blocks for teaching quality
-  pm export                  export the latest/current room as PDF
-  pm star                    star the GitHub repo using gh/GITHUB_TOKEN
-  pm recent                  list recent reading rooms
-  pm clean                   clean stale recent entries
-  pm doctor                  check local setup / PDF-PPT extraction tools
-  pm doctor --fix            install/repair missing local capabilities
-  pm smoke                   verify a new computer can create a sample HTML room
+Skill entrypoints:
+  $papermentor                Codex skill entrypoint
+  /papermentor                Claude Code slash entrypoint
 
-Also available as: papermentor
+Local bridge commands used by the skill:
+  papermentor                 open the main menu in a real terminal
+  papermentor <file-or-url>   start a guided launch wizard (use --quick to skip options)
+  papermentor open            open the latest/current HTML
+  papermentor go              continue in the arrow-key reading room
+  papermentor ask "question"  ask about the current topic
+  papermentor qa              score current HTML blocks for teaching quality
+  papermentor export          export the latest/current room as PDF
+  papermentor star            star the GitHub repo using gh/GITHUB_TOKEN
+  papermentor recent          list recent reading rooms
+  papermentor clean           clean stale recent entries
+  papermentor doctor          check local setup / PDF-PPT extraction tools
+  papermentor doctor --fix    install/repair missing local capabilities
+  papermentor smoke           verify a new computer can create a sample HTML room
 
 Advanced/internal commands still exist for agents and scripts:
   papermentor launch <file-or-url> [--open] [--tui|--interactive] [--language <code>] [--slug <slug>]
@@ -8646,7 +8648,7 @@ Usage:
 }
 
 const RESERVED_SOURCE_COMMANDS = new Set([
-  '/papermentor', 'papermentor', 'menu', 'palette', 'open', 'last', 'go', 'continue',
+  '/papermentor', '$papermentor', 'papermentor', 'menu', 'palette', 'open', 'last', 'go', 'continue',
   'recent', 'rooms', 'star', 'github-star', 'clean', 'ask', 'new', 'regenerate-start',
   'start-here', 'launch', 'start', 'sections', 'analyze', 'tui', 'run', 'choose',
   'prefetch', 'section', 'mode', 'diagram', 'preview-crops', 'preview', 'qa', 'quality',
@@ -8668,7 +8670,7 @@ if (args.help || args.h || command === 'help' || command === '--help' || command
   process.exit(0);
 }
 try {
-  if (!command || command === '/papermentor' || command === 'papermentor') {
+  if (!command || command === '/papermentor' || command === '$papermentor' || command === 'papermentor') {
     runWelcome(args);
   } else if (command === 'menu' || command === 'palette') {
     runPalette(args);

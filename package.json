@@ -41,8 +41,7 @@
     "node": ">=18"
   },
   "bin": {
-    "papermentor": "scripts/papermentor-session.mjs",
-    "pm": "scripts/papermentor-session.mjs"
+    "papermentor": "scripts/papermentor-session.mjs"
   },
   "files": [
     "README.md",

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { mkdirSync, writeFileSync, chmodSync } from 'node:fs';
+import { mkdirSync, writeFileSync, chmodSync, rmSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { copyInstallManifest, loadManifest, repoRoot, writeExecutable } from './manifest.mjs';
 
@@ -45,11 +45,10 @@ function installUnixWrappers({ skillDir, binDir }) {
   mkdirSync(binDir, { recursive: true });
   const script = join(skillDir, 'scripts', 'papermentor-session.mjs');
   const papermentor = join(binDir, 'papermentor');
-  const pm = join(binDir, 'pm');
+  const legacyPm = join(binDir, 'pm');
   writeExecutable(papermentor, `#!/usr/bin/env bash\nset -euo pipefail\nexport PAPERMENTOR_CLI="papermentor"\nexec node ${bashQuote(script)} "$@"\n`);
-  writeExecutable(pm, `#!/usr/bin/env bash\nset -euo pipefail\nexport PAPERMENTOR_CLI="pm"\nexec node ${bashQuote(script)} "$@"\n`);
+  rmSync(legacyPm, { force: true });
   console.log(`PaperMentor CLI installed: ${papermentor}`);
-  console.log(`PaperMentor pm shortcut installed: ${pm}`);
   if (!String(process.env.PATH || '').split(':').includes(binDir)) {
     console.log(`Note: add ${binDir} to PATH to run \`papermentor\` from any shell.`);
   }
@@ -59,11 +58,10 @@ function installWindowsWrappers({ skillDir, binDir }) {
   mkdirSync(binDir, { recursive: true });
   const script = join(skillDir, 'scripts', 'papermentor-session.mjs');
   const papermentor = join(binDir, 'papermentor.cmd');
-  const pm = join(binDir, 'pm.cmd');
+  const legacyPm = join(binDir, 'pm.cmd');
   writeFileSync(papermentor, `@echo off\r\nset PAPERMENTOR_CLI=papermentor\r\nnode "${script}" %*\r\n`);
-  writeFileSync(pm, `@echo off\r\nset PAPERMENTOR_CLI=pm\r\nnode "${script}" %*\r\n`);
+  rmSync(legacyPm, { force: true });
   console.log(`PaperMentor CLI installed: ${papermentor}`);
-  console.log(`PaperMentor pm shortcut installed: ${pm}`);
   if (!String(process.env.PATH || '').split(';').includes(binDir)) {
     console.log(`Note: add ${binDir} to PATH to run 'papermentor' from any shell.`);
   }
@@ -99,8 +97,7 @@ try {
   const installed = normalizeTargets(args.targets).map((target) => installTarget(target, args, manifest));
   const cliInstall = installed.find((item) => item.target === 'codex') || installed[0];
   if (cliInstall) installCli(cliInstall.skillDir, args);
-  console.log('Next: run `pm doctor` to check this computer, then `pm smoke` to verify a sample reading room.');
-  console.log('Try: pm <paper.pdf-or-url>');
+  console.log('Next: run `$papermentor` in Codex or `/papermentor` in Claude. Local bridge checks: `papermentor doctor`, then `papermentor smoke`.');
 } catch (error) {
   console.error(`PaperMentor install error: ${error.message}`);
   process.exit(1);

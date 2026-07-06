@@ -47,7 +47,7 @@ PDF/PPTX/image extraction을 제대로 쓰려면 아래 도구가 있으면 좋�
 설치 후 점검:
 
 ```bash
-pm doctor
+papermentor doctor
 ```
 
 ---
@@ -100,7 +100,7 @@ Windows에서 npm global Codex를 설치한 경우 PowerShell의 실제 실행 �
 ```powershell
 $env:PAPERMENTOR_AGENT = "codex"
 $env:PAPERMENTOR_CODEX_BIN = "$env:APPDATA\npm\codex.cmd"
-pm https://arxiv.org/pdf/1505.04597
+$papermentor https://arxiv.org/pdf/1505.04597
 ```
 
 ### 3.5 로컬 clone 또는 pinned commit 설치
@@ -147,7 +147,7 @@ CODEX_HOME=/custom/codex CLAUDE_HOME=/custom/claude ./install.sh all
 4. Node.js로 `scripts/install.mjs` 실행
 5. `papermentor.manifest.json` 읽기
 6. manifest에 적힌 runtime 파일만 Codex/Claude skill directory로 복사
-7. `papermentor`와 `pm` CLI wrapper 생성
+7. `papermentor` local bridge wrapper 생성
 
 설치되는 runtime 파일 범위는 manifest가 관리한다.
 
@@ -171,46 +171,46 @@ assets/mathjax/**
 논문 또는 슬라이드 파일로 reading room 시작:
 
 ```bash
-pm paper.pdf
-pm lecture.pdf
-pm https://arxiv.org/pdf/2602.04770
+$papermentor paper.pdf
+$papermentor lecture.pdf
+$papermentor https://arxiv.org/pdf/2602.04770
 ```
 
 현재/latest reading room HTML 열기:
 
 ```bash
-pm open
+papermentor open
 ```
 
 화살표 기반 TUI로 계속 진행:
 
 ```bash
-pm go
+papermentor go
 ```
 
 질문하기:
 
 ```bash
-pm ask "Eq. (3)에서 왜 expectation으로 바뀌어?"
-pm ask "이 proof line 사이에 어떤 조작이 생략된 거야?"
+papermentor ask "Eq. (3)에서 왜 expectation으로 바뀌어?"
+papermentor ask "이 proof line 사이에 어떤 조작이 생략된 거야?"
 ```
 
 품질 검사:
 
 ```bash
-pm qa
+papermentor qa
 ```
 
 PDF export:
 
 ```bash
-pm export
+papermentor export
 ```
 
 최근 reading room 목록:
 
 ```bash
-pm recent
+papermentor recent
 ```
 
 ---
@@ -279,7 +279,7 @@ Slide mode는 강의 슬라이드 PDF/PPTX를 위한 모드다.
 명시적으로 slide mode로 열기:
 
 ```bash
-pm lecture.pdf --mode slide
+$papermentor lecture.pdf --mode slide
 ```
 
 Slide mode는 논문처럼 section 중심으로 읽지 않는다. 슬라이드는 temporal timeline이므로 다음을 중요하게 본다.
@@ -300,12 +300,12 @@ Slide mode의 Start Here는 paper 대표그림 레이아웃이 아니라 topic t
 URL mode는 웹 글, 블로그, 튜토리얼, 노트, 인터랙티브 에세이를 읽기 위한 모드다.
 
 ```bash
-pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
-pm https://jaehoonstudy.tistory.com/66
-pm https://www.k-a.in/AttnRes.html
+$papermentor https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+$papermentor https://jaehoonstudy.tistory.com/66
+$papermentor https://www.k-a.in/AttnRes.html
 ```
 
-PaperMentor는 URL을 다운로드하고 HTML의 제목/heading/본문을 읽어서 하나의 reading room을 만든다. 처음에는 `Start Here`에 글의 핵심 주장, 읽는 순서, 필요한 배경지식이 들어가고, `pm go`에서는 웹 글의 heading 단위로 선택지가 나온다.
+PaperMentor는 URL을 다운로드하고 HTML의 제목/heading/본문을 읽어서 하나의 reading room을 만든다. 처음에는 `Start Here`에 글의 핵심 주장, 읽는 순서, 필요한 배경지식이 들어가고, `papermentor go`에서는 웹 글의 heading 단위로 선택지가 나온다.
 
 URL mode에서 생성되는 블록은 논문 형식을 억지로 강요하지 않는다. 실제 글에 있는 claim, 예시, 코드, 수식, 그림, caveat, 실전 takeaway를 기준으로 설명한다. 한국어 URL이거나 사용자가 한국어로 물어보면 설명도 한국어로 작성하되, 수식과 표준 technical term은 유지한다.
 
@@ -358,15 +358,15 @@ PaperMentor는 대표 그림을 script score로 고르지 않는다.
 사용자용 간단 명령:
 
 ```bash
-pm                         # 메인 메뉴 열기
-pm <file-or-url>           # reading room 시작
-pm open                    # HTML 열기
-pm go                      # TUI 계속
-pm ask "question"          # 질문하기
-pm qa                      # teaching quality 검사
-pm export                  # PDF export
-pm recent                  # 최근 session 목록
-pm doctor                  # 로컬 도구 확인
+$papermentor                 # Codex에서 PaperMentor 시작
+$papermentor <file-or-url> / /papermentor <file-or-url>           # reading room 시작
+papermentor open                    # HTML 열기
+papermentor go                      # TUI 계속
+papermentor ask "question"          # 질문하기
+papermentor qa                      # teaching quality 검사
+papermentor export                  # PDF export
+papermentor recent                  # 최근 session 목록
+papermentor doctor                  # 로컬 도구 확인
 ```
 
 고급/내부 명령:
@@ -383,7 +383,7 @@ papermentor export --session <slug> --format pdf
 papermentor doctor --json
 ```
 
-일반 사용자는 대부분 `pm` 명령만 쓰면 된다.
+일반 사용자는 대부분 Codex의 `$papermentor` 또는 Claude Code의 `/papermentor`만 쓰면 된다. 로컬 진단/복구가 필요할 때만 `papermentor` bridge 명령을 쓴다.
 
 ---
 
@@ -417,7 +417,7 @@ npm run pack:check
 
 ## 13. Troubleshooting
 
-### `pm` 명령을 찾을 수 없음
+### `$papermentor` / `/papermentor` 또는 `papermentor` bridge를 찾을 수 없음
 
 설치 메시지에 나온 bin directory가 PATH에 없을 수 있다.
 
@@ -452,8 +452,8 @@ PaperMentor는 PPT를 직접 지원하지 않는다. PPTX는 Codex/Claude agent�
 PaperMentor는 기본적으로 HTTPS source만 다운로드한다. 테스트용 local HTTP server는 명시적으로 허용해야 한다.
 
 ```bash
-pm http://127.0.0.1:8000/paper.pdf --allow-insecure-http
-pm http://127.0.0.1:8000/article.html --mode url --allow-insecure-http
+$papermentor http://127.0.0.1:8000/paper.pdf --allow-insecure-http
+$papermentor http://127.0.0.1:8000/article.html --mode url --allow-insecure-http
 ```
 
 ### HTML은 보이는데 수식이 안 렌더링됨
@@ -521,35 +521,35 @@ curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.
 논문 열기:
 
 ```bash
-pm paper.pdf
+$papermentor paper.pdf
 ```
 
 HTML 열기:
 
 ```bash
-pm open
+papermentor open
 ```
 
 질문하기:
 
 ```bash
-pm ask "이 수식에서 왜 이 항이 사라져?"
+papermentor ask "이 수식에서 왜 이 항이 사라져?"
 ```
 
 계속 진행:
 
 ```bash
-pm go
+papermentor go
 ```
 
 품질 검사:
 
 ```bash
-pm qa
+papermentor qa
 ```
 
 PDF export:
 
 ```bash
-pm export
+papermentor export
 ```

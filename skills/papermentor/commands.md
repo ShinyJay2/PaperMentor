@@ -15,16 +15,16 @@ PaperMentor uses one local append-only reading document per paper session:
   notes.md        # portable Markdown notes
 ```
 
-Use the installed `papermentor` CLI when available. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
+Use `$papermentor` in Codex or `/papermentor` in Claude Code as the user-facing skill command. Use the installed `papermentor` CLI only as the local terminal bridge. The CLI should print a Reading Console after session start, after adding a card, and after interruptions.
 
 ```bash
-pm
-pm "paper-or-slides.pdf"
-pm open
-pm go
-pm ask "What is confusing here?"
-pm qa
-pm export
+papermentor
+papermentor "paper-or-slides.pdf"
+papermentor open
+papermentor go
+papermentor ask "What is confusing here?"
+papermentor qa
+papermentor export
 papermentor launch "https://arxiv.org/pdf/2602.04770" --open
 papermentor start --title "Paper title" --source "paper.pdf" --sections "1 Introduction|2 Method" --body-file start.md --figure-file figure-1.png
 papermentor status --session paper-title
@@ -36,15 +36,17 @@ papermentor doctor
 
 User-facing surface:
 
-- `pm` opens the Claude/Codex-style main menu.
-- `pm <file-or-url>` starts a reading room.
-- `pm open` opens the latest/current HTML.
-- `pm go` resumes the arrow-key reading room.
-- `pm ask "..."` asks about the current topic and appends the answer to the reading room when agent automation is available.
-- `pm qa` scores generated HTML blocks for teaching quality and flags shallow/missing structure.
-- `pm export` exports the latest/current room.
+- `$papermentor <file-or-url>` starts a reading room from Codex.
+- `/papermentor <file-or-url>` starts a reading room from Claude Code.
+- Natural-language PaperMentor requests should route through the skill, not through a `papermentor` shortcut.
 
-Advanced `papermentor ...` commands remain available for agents and scripts, but normal users should not need to memorize them.
+Local bridge surface for agents/scripts:
+
+- `papermentor` opens the terminal main menu.
+- `papermentor <file-or-url>` starts a reading room.
+- `papermentor open/go/ask/qa/export/doctor/smoke` operate on local rooms and setup.
+
+Normal users should not need to memorize the bridge commands.
 
 Reading Path:
 

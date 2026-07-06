@@ -38,14 +38,14 @@ PaperMentor should leave you able to say:
 
 ---
 
-## Start in one command
+## Start from Codex or Claude
 
-```bash
-pm <file-or-url>
-pm
+```text
+$papermentor <file-or-url>
+/papermentor <file-or-url>
 ```
 
-The first command opens a guided terminal launch wizard where you choose mode, language, HTML opening, generation, and whether to enter the arrow-key reading console. From Codex/Claude or any non-interactive shell, PaperMentor opens a real external terminal instead of rendering the UI inside chat. Add `--quick` to skip the wizard. The second opens the launcher where you can drop a source or continue the latest room.
+Use the skill command in Codex (`$papermentor`) or Claude Code (`/papermentor`). PaperMentor opens the real terminal UI and browser HTML reading room; it does not use the chat transcript as a fallback menu surface. The local `papermentor` CLI exists only as the terminal bridge used by the skill and for setup diagnostics.
 
 ## 90-second demo
 
@@ -53,8 +53,9 @@ The first command opens a guided terminal launch wizard where you choose mode, l
 # 1. Install for Codex
 curl -fsSL https://raw.githubusercontent.com/ShinyJay2/PaperMentor/main/install.sh | bash
 
-# 2. Open the launcher
-pm
+# 2. Invoke the skill in Codex or Claude
+# $papermentor ./paper.pdf
+# /papermentor ./paper.pdf
 
 # 3. Drop a source
 # - arXiv PDF
@@ -64,10 +65,10 @@ pm
 
 Or launch with the guided wizard:
 
-```bash
-pm https://arxiv.org/pdf/2602.04770
-pm https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
-pm ./lecture-slides.pdf
+```text
+$papermentor https://arxiv.org/pdf/2602.04770
+$papermentor https://lilianweng.github.io/posts/2026-06-24-scaling-laws/
+$papermentor ./lecture-slides.pdf
 ```
 
 PaperMentor creates:
@@ -158,7 +159,12 @@ If Codex is installed through npm on Windows and PowerShell can run `codex` but 
 ```powershell
 $env:PAPERMENTOR_AGENT = "codex"
 $env:PAPERMENTOR_CODEX_BIN = "$env:APPDATA\npm\codex.cmd"
-pm https://arxiv.org/pdf/1505.04597
+```
+
+Then invoke the skill in Codex:
+
+```text
+$papermentor https://arxiv.org/pdf/1505.04597
 ```
 
 Pinned/local install:
@@ -174,19 +180,19 @@ Install locations:
 ```text
 Codex:        ~/.codex/skills/papermentor
 Claude Code:  ~/.claude/skills/papermentor
-CLI aliases:  ~/.local/bin/papermentor and ~/.local/bin/pm
-Windows CLI:  ~/.papermentor/bin/papermentor.cmd and ~/.papermentor/bin/pm.cmd
+Local bridge: ~/.local/bin/papermentor
+Windows bridge: ~/.papermentor/bin/papermentor.cmd
 ```
 
 After installation, check the computer and run a real smoke test:
 
 ```bash
-pm doctor              # capability tiers: Core, PDF text/render, Visual, Export
-pm doctor --fix        # repair required local tools when a package manager is available
-pm smoke               # create a sample HTML reading room and verify terminal launch support
+papermentor doctor              # capability tiers: Core, PDF text/render, Visual, Export
+papermentor doctor --fix        # repair required local tools when a package manager is available
+papermentor smoke               # create a sample HTML reading room and verify terminal launch support
 ```
 
-The installer stays lightweight on purpose. `pm doctor` tells you which capabilities are available; missing optional export tools do not block core reading, while missing required PDF/visual/provider capabilities get an exact `pm doctor --fix <target>` repair path.
+The installer stays lightweight on purpose. `papermentor doctor` tells you which capabilities are available; missing optional export tools do not block core reading, while missing required PDF/visual/provider capabilities get an exact `papermentor doctor --fix <target>` repair path.
 
 Korean user manual:
 
@@ -199,21 +205,24 @@ Korean user manual:
 
 ### Agent automation
 
-Inside Codex or Claude Code, PaperMentor uses the active agent to generate section-specific choices and append polished HTML blocks. The interactive PaperMentor UI still opens in a real terminal; Codex/Claude chat is not used as a fallback menu surface. The local CLI manages the reading room, topic navigation, opening/exporting HTML, and local setup checks.
+Inside Codex or Claude Code, PaperMentor uses the active agent to generate section-specific choices and append polished HTML blocks. The interactive PaperMentor UI still opens in a real terminal; Codex/Claude chat is not used as a fallback menu surface. The local bridge manages the reading room, topic navigation, opening/exporting HTML, and local setup checks.
 
-### Terminal-first
+### Skill-first
+
+```text
+$papermentor ./paper.pdf                  # Codex: auto-detect paper
+$papermentor ./slides.pptx --mode slide   # Codex: force slide mode
+$papermentor https://example.com/post     # Codex: URL mode
+/papermentor ./paper.pdf                  # Claude Code slash command
+```
+
+Local bridge diagnostics, when needed:
 
 ```bash
-pm                              # launcher
-pm ./paper.pdf                  # auto-detect paper
-pm ./slides.pptx --mode slide   # force slide mode
-pm https://example.com/post     # URL mode
-pm open                         # open latest reading room
-pm go                           # continue latest room
-pm ask "Why does this equation become an expectation?"
-pm export                       # export latest room
-pm doctor                       # diagnose local capabilities
-pm smoke                        # verify sample HTML generation
+papermentor doctor                       # diagnose local capabilities
+papermentor smoke                        # verify sample HTML generation
+papermentor open                         # open latest reading room
+papermentor go                           # continue latest room
 ```
 
 ### Inside Codex or Claude Code
@@ -239,7 +248,7 @@ Use PaperMentor on this Lilian Weng URL and explain the Chinchilla section.
 Use the included sample before trying a real paper:
 
 ```bash
-pm demo/sample-paper.md
+$papermentor demo/sample-paper.md
 ```
 
 Or ask inside Codex/Claude:

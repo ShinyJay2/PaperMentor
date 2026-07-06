@@ -13,7 +13,7 @@ PaperMentor is an interactive paper and slide understanding skill. It opens an H
 - [ ] `papermentor.manifest.json` and `package.json.files` are in sync.
 - [ ] Package excludes `.papermentor/`, `.omx/`, local screenshots, PDFs, PPT/PPTX, and private state.
 - [ ] Local assets are bundled: Satoshi, Pretendard, MathJax, demo SVGs.
-- [ ] CLI commands expose simple user verbs: `pm`, `pm <file-or-url>`, `pm open`, `pm go`, `pm ask`, `pm qa`, `pm export`.
+- [ ] Skill commands expose simple user entrypoints: `$papermentor <file-or-url>` in Codex and `/papermentor <file-or-url>` in Claude; local bridge commands use `papermentor open/go/ask/qa/export`.
 - [ ] TUI remains readable at narrow terminal widths and uses only arrow keys + Enter for normal navigation.
 - [ ] Launch generation is bundled: Start Here plus first section choices are generated together; no hidden generic fallback menu.
 - [ ] Prompt budget evaluator passes for launch bundle and prefetched HTML block.

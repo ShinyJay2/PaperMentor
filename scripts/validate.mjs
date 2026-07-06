@@ -358,7 +358,7 @@ function parseFrontmatter(rel) {
 for (const rel of ['SKILL.md', 'skills/papermentor/SKILL.md']) parseFrontmatter(rel);
 
 const readme = readFileSync(join(root, 'README.md'), 'utf8');
-for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'HTML-first reading room', 'Start in one command', 'preview-crops', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
+for (const phrase of ['Do not summarize papers. Debug understanding.', 'Claude Code', 'assets/papermentor-demo.svg', 'HTML-first reading room', 'Start from Codex or Claude', 'preview-crops', 'Try the sample paper', 'Trace a derivation', 'Map a dependency chain', 'Plan a visualization', 'Product boundaries']) {
   if (!readme.includes(phrase)) failures.push(`README missing phrase: ${phrase}`);
 }
 
@@ -373,8 +373,8 @@ for (const phrase of ['api.fontshare.com', 'orioncactus/pretendard/dist/web/stat
 for (const phrase of ['auto crop could not locate Figure', 'boundedInteger', 'uniqueOutputPath', 'clearPendingPrompt', 'shellQuote', 'googleDriveDirectUrl', 'uc?export=download', 'docs.google.com/presentation', 'assertSafeRemoteUrl', 'safeMarkdownHref', 'readFileProbe', 'allow-insecure-http', '--skip-git-repo-check']) {
   if (!sessionScript.includes(phrase)) failures.push(`session helper missing hardened flow phrase: ${phrase}`);
 }
-for (const phrase of ['renderWelcomeScreen', 'learningQuote', 'renderPaletteScreen', 'pm <file-or-url>', 'pm open', 'pm ask "question"', 'pm qa']) {
-  if (!sessionScript.includes(phrase)) failures.push(`session helper missing simplified main-menu phrase: ${phrase}`);
+for (const phrase of ['renderWelcomeScreen', 'learningQuote', 'renderPaletteScreen', '$papermentor', '/papermentor', 'papermentor <file-or-url>', 'papermentor open', 'papermentor ask "question"', 'papermentor qa']) {
+  if (!sessionScript.includes(phrase)) failures.push(`session helper missing skill-first launcher phrase: ${phrase}`);
 }
 if (/mode\s*===\s*['"]paper['"][\s\S]{0,240}I-JEPA|I-JEPA[\s\S]{0,240}return\s*\[\s*['"`]## Preliminary ladder/.test(sessionScript)) {
   failures.push('session helper must not use a paper-specific I-JEPA preliminary ladder branch');
@@ -480,7 +480,7 @@ for (const command of ['launch', 'start', 'analyze', 'tui', 'sections', 'section
 
 const packageJson = readJson(join(root, 'package.json'), {});
 if (packageJson.bin?.papermentor !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a papermentor CLI bin');
-if (packageJson.bin?.pm !== 'scripts/papermentor-session.mjs') failures.push('package.json should expose a pm main-menu CLI bin');
+if (Object.prototype.hasOwnProperty.call(packageJson.bin || {}, 'pm')) failures.push('package.json should not expose a pm alias; users should enter through $papermentor or /papermentor');
 if (!packageJson.scripts?.launch?.includes('papermentor-session.mjs launch')) failures.push('package.json should expose npm run launch');
 const npmIgnore = readFileSync(join(root, '.npmignore'), 'utf8');
 for (const phrase of ['.papermentor/', '*.pdf', '*.ppt', '*.pptx', 'papermentor-skill-*.tgz']) {
@@ -535,12 +535,13 @@ function validateInstalledArtifact() {
   try {
     const codexHome = join(temp, '.codex');
     const binDir = join(temp, 'bin');
+    mkdirSync(binDir, { recursive: true });
+    writeFileSync(join(binDir, process.platform === 'win32' ? 'pm.cmd' : 'pm'), 'legacy pm wrapper');
     execFileSync(join(root, 'install.sh'), ['codex'], { cwd: root, env: { ...process.env, CODEX_HOME: codexHome, PAPERMENTOR_BIN_DIR: binDir }, stdio: 'pipe' });
     assertInstalledArtifact(join(codexHome, 'skills', 'papermentor'), 'codex');
     const installedHelp = execFileSync('papermentor', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedHelp.includes('pm <file-or-url>') || !installedHelp.includes('papermentor launch <file-or-url>') || installedHelp.includes('node scripts/papermentor-session.mjs')) failures.push('installed CLI help should use papermentor/pm commands, not development node script paths');
-    const installedPalette = execFileSync('pm', ['--help'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
-    if (!installedPalette.includes('pm open') || !installedPalette.includes('pm ask')) failures.push('installed pm shortcut should expose simplified main-menu commands');
+    if (!installedHelp.includes('$papermentor') || !installedHelp.includes('/papermentor') || !installedHelp.includes('papermentor <file-or-url>') || !installedHelp.includes('papermentor launch <file-or-url>') || installedHelp.includes('node scripts/papermentor-session.mjs') || installedHelp.includes('pm <file-or-url>')) failures.push('installed CLI help should use skill entrypoints and papermentor bridge commands, not pm or development node script paths');
+    if (existsSync(join(binDir, process.platform === 'win32' ? 'pm.cmd' : 'pm'))) failures.push('installer should remove the legacy pm shortcut');
     const installedDoctor = execFileSync('papermentor', ['doctor', '--json'], { cwd: temp, env: { ...process.env, PATH: `${binDir}:${process.env.PATH}` }, encoding: 'utf8' });
     if (!installedDoctor.includes('"status": "ok"') || installedDoctor.includes('python3-pptx') || installedDoctor.includes('LibreOffice')) failures.push('installed papermentor doctor should run through the installed CLI shim without PPTX renderer dependencies');
 
@@ -590,11 +591,11 @@ async function validateSessionHelper() {
   const temp = mkdtempSync(join(tmpdir(), 'papermentor-session-'));
   try {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
-    if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <file-or-url>')) failures.push('start --help should print simplified help plus advanced pointer');
+    if (!helpOutput.includes('$papermentor') || !helpOutput.includes('papermentor <file-or-url>') || !helpOutput.includes('papermentor launch <file-or-url>') || helpOutput.includes('pm <file-or-url>')) failures.push('start --help should print skill-first help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
     const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
-    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source') || !welcomeOutput.includes('Reading Room') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
-    if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
+    if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source') || !welcomeOutput.includes('Reading Room') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('internal launcher snapshot should render the minimal PaperMentor chat launcher');
+    if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('internal launcher snapshot should keep the launcher minimal without recent/key/start blocks');
     const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
@@ -612,7 +613,7 @@ async function validateSessionHelper() {
     const doctorFix = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor', '--fix', 'poppler', '--dry-run', '--json'], { cwd: temp, encoding: 'utf8' }));
     if (doctorFix.schema !== 'papermentor.doctor.fix.v1' || !doctorFix.targets?.includes('poppler') || !doctorFix.commands?.length) failures.push('doctor --fix poppler --dry-run --json should emit an install plan without executing it');
     const smokeJson = JSON.parse(execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'smoke', '--json'], { cwd: temp, encoding: 'utf8', env: { ...process.env, PAPERMENTOR_TERMINAL_MOCK_FILE: join(temp, 'smoke-terminal.jsonl') } }));
-    if (smokeJson.schema !== 'papermentor.smoke.v1' || smokeJson.status !== 'pass' || !existsSync(smokeJson.html) || !smokeJson.checks?.some((row) => row.id === 'section-detection' && row.ok)) failures.push('pm smoke --json should create a sample HTML reading room and verify section detection');
+    if (smokeJson.schema !== 'papermentor.smoke.v1' || smokeJson.status !== 'pass' || !existsSync(smokeJson.html) || !smokeJson.checks?.some((row) => row.id === 'section-detection' && row.ok)) failures.push('papermentor smoke --json should create a sample HTML reading room and verify section detection');
     try {
       execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Bad Slug', '--slug', '../evil'], { cwd: temp, stdio: 'pipe' });
       failures.push('start should reject path-traversal session slugs');
@@ -1150,10 +1151,10 @@ require('./fake-codex.js');
     }
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--title', 'Generative Modeling via Drifting', '--authors', 'Mingyang Deng, He Li, Tianhong Li, Yilun Du, Kaiming He', '--source', 'paper.pdf', '--sections', '1. Introduction|2. Related Work|3. Drifting Models for Generation', '--body-file', mapPath, '--figure-file', figurePath, '--figure-caption', 'Exact crop of Figure 1 from the paper.'], { cwd: temp, stdio: 'pipe' });
     const recentOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
-    if (!recentOutput.includes('Recent PaperMentor reading rooms') || recentOutput.includes('PaperMentor Launch setup') || recentOutput.includes('Auto-detect mode')) failures.push('pm recent should list rooms and must not be parsed as a source launch wizard');
+    if (!recentOutput.includes('Recent PaperMentor reading rooms') || recentOutput.includes('PaperMentor Launch setup') || recentOutput.includes('Auto-detect mode')) failures.push('papermentor recent should list rooms and must not be parsed as a source launch wizard');
     writeFileSync(join(temp, 'recent'), 'reserved-command-collision');
     const recentCollisionOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'recent'], { cwd: temp, encoding: 'utf8' });
-    if (!recentCollisionOutput.includes('Recent PaperMentor reading rooms') || recentCollisionOutput.includes('PaperMentor Launch setup') || recentCollisionOutput.includes('Auto-detect mode')) failures.push('pm recent should remain a command even when a local file named recent exists');
+    if (!recentCollisionOutput.includes('Recent PaperMentor reading rooms') || recentCollisionOutput.includes('PaperMentor Launch setup') || recentCollisionOutput.includes('Auto-detect mode')) failures.push('papermentor recent should remain a command even when a local file named recent exists');
     let navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
     if (navState.paperSections?.length !== 3 || navState.nextChoices?.[2] !== '3. Drifting Models for Generation') failures.push('start should seed detected paper sections for the CLI navigator');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'generative-modeling-via-drifting', '--index', '3'], { cwd: temp, stdio: 'pipe' });
