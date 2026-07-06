@@ -45,7 +45,7 @@ pm <file-or-url>
 pm
 ```
 
-The first command opens a guided terminal launch wizard where you choose mode, language, HTML opening, generation, and whether to enter the arrow-key reading console. Add `--quick` to skip the wizard. The second opens the launcher where you can drop a source or continue the latest room.
+The first command opens a guided terminal launch wizard where you choose mode, language, HTML opening, generation, and whether to enter the arrow-key reading console. From Codex/Claude or any non-interactive shell, PaperMentor opens a real external terminal instead of rendering the UI inside chat. Add `--quick` to skip the wizard. The second opens the launcher where you can drop a source or continue the latest room.
 
 ## 90-second demo
 
@@ -189,7 +189,7 @@ Korean user manual:
 
 ### Agent automation
 
-Inside Codex or Claude Code, PaperMentor uses the active agent to generate section-specific choices and append polished HTML blocks. The local CLI manages the reading room, topic navigation, opening/exporting HTML, and local setup checks.
+Inside Codex or Claude Code, PaperMentor uses the active agent to generate section-specific choices and append polished HTML blocks. The interactive PaperMentor UI still opens in a real terminal; Codex/Claude chat is not used as a fallback menu surface. The local CLI manages the reading room, topic navigation, opening/exporting HTML, and local setup checks.
 
 ### Terminal-first
 
@@ -206,7 +206,7 @@ pm export                       # export latest room
 
 ### Inside Codex or Claude Code
 
-Ask naturally:
+Ask naturally; PaperMentor will open its terminal UI instead of drawing options inside the chat transcript:
 
 ```text
 Use PaperMentor on this paper and start from the theorem proof.

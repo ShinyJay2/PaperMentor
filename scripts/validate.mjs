@@ -12,6 +12,7 @@ const manifest = loadManifest(root);
 const required = packageFiles(root, manifest);
 
 const failures = [];
+const internalSnapshotEnv = { ...process.env, PAPERMENTOR_INTERNAL_SNAPSHOT: '1' };
 
 function stripAnsi(value) {
   return String(value || '')
@@ -591,12 +592,17 @@ async function validateSessionHelper() {
     const helpOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'start', '--help'], { cwd: temp, encoding: 'utf8' });
     if (!helpOutput.includes('pm <file-or-url>') || !helpOutput.includes('papermentor launch <file-or-url>')) failures.push('start --help should print simplified help plus advanced pointer');
     if (existsSync(join(temp, '.papermentor'))) failures.push('start --help should not create a session directory');
-    const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    const welcomeOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
     if (!welcomeOutput.includes('PaperMentor') || !welcomeOutput.includes('Drop Source') || !welcomeOutput.includes('Reading Room') || !welcomeOutput.includes('drop file/url or type a question')) failures.push('pm --snapshot should render the minimal PaperMentor chat launcher');
     if (welcomeOutput.includes('Recent:') || welcomeOutput.includes('Keys:') || welcomeOutput.includes('Start here')) failures.push('pm --snapshot should keep the launcher minimal without recent/key/start blocks');
-    const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    const paletteOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu', '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
     if (!paletteOutput.includes('✦ PaperMentor') || !paletteOutput.includes('Main menu') || !paletteOutput.includes('New reading room from file / URL')) failures.push('menu --snapshot should render the simplified main menu');
     if (paletteOutput.includes('Keys:') || paletteOutput.includes('Status') || paletteOutput.includes('Quality:')) failures.push('menu --snapshot should not show shortcut keys or status panels');
+    const terminalMockFile = join(temp, 'terminal-reroute.jsonl');
+    const nonTtyOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'menu'], { cwd: temp, encoding: 'utf8', env: { ...process.env, PAPERMENTOR_TERMINAL_MOCK_FILE: terminalMockFile } });
+    const nonTtyTerminal = readFileSync(terminalMockFile, 'utf8');
+    if (!nonTtyOutput.includes('Opening PaperMentor in an external terminal')) failures.push('non-TTY menu should announce external terminal reroute');
+    if (!nonTtyTerminal.includes('"argv":["menu"]') || nonTtyTerminal.includes('renderPaletteScreen') || nonTtyOutput.includes('Main menu')) failures.push('non-TTY menu should not render an inline PaperMentor UI fallback');
     const doctorOutput = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'doctor'], { cwd: temp, encoding: 'utf8' });
     for (const phrase of ['PaperMentor dependency doctor', 'AI generation provider', 'pdftoppm', 'PyMuPDF', 'pdfinfo', 'ImageMagick']) {
       if (!doctorOutput.includes(phrase)) failures.push(`doctor command should report local extraction dependency: ${phrase}`);
@@ -642,7 +648,7 @@ The method uses randomized quantization and unbiased inner-product estimates.`);
     if (/Not written yet|Not built yet|Replace this/.test(legacyScaffoldHtml)) failures.push('legacy Start Here scaffolds should never render raw placeholder text in HTML');
     if (!/Start Here pending|PaperMentor is reading this/.test(legacyScaffoldHtml)) failures.push('legacy Start Here scaffolds should render a safe pending notice instead');
 
-    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchTextPath, '--slug', 'launch-provider-off-smoke', '--auto', '--no-figure', '--no-preview', '--show-tui'], {
+    execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'launch', launchTextPath, '--slug', 'launch-provider-off-smoke', '--auto', '--no-figure', '--no-preview'], {
       cwd: temp,
       stdio: 'pipe',
       env: { ...process.env, PAPERMENTOR_AGENT: 'off' }
@@ -1169,7 +1175,7 @@ require('./fake-codex.js');
     if (navState.currentSection !== '3. Drifting Models for Generation' || navState.lastChoiceKind !== 'ask' || !navState.awaitingQuestion || navState.topicPickerOpen || navState.currentLocation === 'Paper section navigator') failures.push('selecting Ask anything about this should stay on the current section and wait for a free-form question');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'analyze', '--session', 'generative-modeling-via-drifting', '--paper-text-file', paperTextPath], { cwd: temp, stdio: 'pipe' });
     navState = readJson(join(temp, '.papermentor', 'sessions', 'generative-modeling-via-drifting', 'state.json'), {});
-    const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    const tuiSnapshot = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'generative-modeling-via-drifting', '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
     for (const phrase of ['✦ PaperMentor', 'Reading room', 'Room', 'Title:', 'Topic:', 'HTML:']) {
       if (!tuiSnapshot.includes(phrase)) failures.push(`TUI snapshot missing phrase: ${phrase}`);
     }
@@ -1401,12 +1407,12 @@ FID and ablations evaluate sample quality.`);
     for (const phrase of ['Reconstruct the', 'builds on the earlier slides', 'Continue to the next slide', 'Ask anything about']) {
       if (!slideActions.some((action) => action.includes(phrase))) failures.push(`slide actions missing ${phrase}`);
     }
-    const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8' });
+    const slideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot'], { cwd: temp, encoding: 'utf8', env: internalSnapshotEnv });
     if (!slideTui.includes('Slides') || !slideTui.includes('✦ PaperMentor') || !slideTui.includes('Reading room')) failures.push('slide TUI should show the slide reading room');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2', '--choices', 'Slide 2의 긴 한국어 설명 선택지가 좁은 터미널에서도 화면 높이를 넘지 않아야 한다|AlphaGo와 Gemini 같은 Recent AI Advances가 로봇 정책 학습 논의에 어떻게 연결되는지 해석하기|Open X-Embodiment와 RT-X가 데이터 스케일링 문제에 어떤 답을 주는지 미리 보기|robotics as multimodal sequence modeling이라는 핵심 아이디어가 관측 언어 행동을 어떻게 묶는지 설명하기|Ask anything about Slide 2'], { cwd: temp, stdio: 'pipe' });
     state = readJson(join(temp, '.papermentor', 'sessions', 'robot-slides', 'state.json'), {});
     if (state.nextChoices?.at(-1) !== 'Ask anything about this' || state.topicPickerOpen || state.lastChoiceKind !== 'section') failures.push('slide section menus should normalize their free-form chat choice to Ask anything about this and stay inside the selected section');
-    const compactSlideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot', '--cursor', '3'], { cwd: temp, encoding: 'utf8', env: { ...process.env, COLUMNS: '80', LINES: '20' } });
+    const compactSlideTui = execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'tui', '--session', 'robot-slides', '--snapshot', '--cursor', '3'], { cwd: temp, encoding: 'utf8', env: { ...process.env, PAPERMENTOR_INTERNAL_SNAPSHOT: '1', COLUMNS: '80', LINES: '20' } });
     if (visibleLineCount(compactSlideTui) > 20) failures.push('compact slide TUI should cap rendered rows to the terminal height even when Korean menu items wrap');
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'section', '--session', 'robot-slides', '--index', '2'], { cwd: temp, stdio: 'pipe' });
     execFileSync('node', [join(root, 'scripts', 'papermentor-session.mjs'), 'run', '--session', 'robot-slides', '--index', '3'], { cwd: temp, stdio: 'pipe' });

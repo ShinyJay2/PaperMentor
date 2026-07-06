@@ -4955,14 +4955,17 @@ function tuiMenuItems(state) {
 }
 
 function shouldEnterLaunchTui(args = {}) {
-  return Boolean(args.tui || args.interactive || args['live-tui'] || args.codex || process.env.PAPERMENTOR_LAUNCH_TUI);
+  return Boolean(args.tui || args.interactive || args['live-tui'] || process.env.PAPERMENTOR_LAUNCH_TUI);
 }
 
 function shouldShowTuiSnapshot(args = {}) {
-  return Boolean(args['show-tui'] || args.snapshot || args.demo || process.env.PAPERMENTOR_CODEX_TUI);
+  return Boolean(process.env.PAPERMENTOR_INTERNAL_SNAPSHOT === '1' && (args.snapshot || args.demo || args['show-tui']));
 }
 
 function printTuiSnapshot(state, selected = 0) {
+  if (process.env.PAPERMENTOR_INTERNAL_SNAPSHOT !== '1') {
+    throw new Error('inline PaperMentor TUI snapshots are disabled; open the reading room in an interactive terminal');
+  }
   console.log('');
   console.log(renderTuiScreen(state, selected));
 }
@@ -4993,8 +4996,8 @@ function enterLaunchTui(slug, args = {}) {
   console.log(`HTML: ${html}`);
   console.log(`Keys: ↑/↓ move · Enter select · Ctrl-C quit`);
   if (!process.stdin.isTTY || !process.stdout.isTTY) {
-    console.log('\nThis shell is not an interactive TTY, so PaperMentor rendered a snapshot instead of capturing arrow keys. Run the same command in an interactive terminal, or run:');
-    console.log(`  ${cliCommand()} tui --session ${slug}`);
+    rerouteToExternalTerminalIfNeeded(['tui', '--session', slug], 'PaperMentor reading console');
+    return state;
   }
   runTui({ ...args, session: slug });
   return state;
@@ -5088,6 +5091,108 @@ function clearPendingPrompt(state) {
 
 function shellQuote(value) {
   return `'${String(value ?? '').replace(/'/g, `'"'"'`)}'`;
+}
+
+function shellCommandForSelf(argv = []) {
+  const script = fileURLToPath(import.meta.url);
+  const args = argv.map((item) => shellQuote(item)).join(' ');
+  const command = `${shellQuote(process.execPath)} ${shellQuote(script)}${args ? ` ${args}` : ''}`;
+  return [
+    `export PAPERMENTOR_CLI=${shellQuote(cliCommand())}`,
+    'export PAPERMENTOR_EXTERNAL_TERMINAL=1',
+    `cd ${shellQuote(root)}`,
+    command
+  ].join(' && ');
+}
+
+function windowsQuote(value) {
+  return `"${String(value ?? '').replace(/"/g, '""')}"`;
+}
+
+function windowsCommandForSelf(argv = []) {
+  const script = fileURLToPath(import.meta.url);
+  const args = argv.map((item) => windowsQuote(item)).join(' ');
+  return [
+    `set "PAPERMENTOR_CLI=${String(cliCommand()).replace(/"/g, '')}"`,
+    'set "PAPERMENTOR_EXTERNAL_TERMINAL=1"',
+    `cd /d ${windowsQuote(root)}`,
+    `${windowsQuote(process.execPath)} ${windowsQuote(script)}${args ? ` ${args}` : ''}`
+  ].join(' && ');
+}
+
+function terminalMockPath() {
+  return process.env.PAPERMENTOR_TERMINAL_MOCK_FILE || '';
+}
+
+function writeTerminalMock(argv, reason, command) {
+  const file = terminalMockPath();
+  if (!file) return false;
+  appendFileSync(file, `${JSON.stringify({ argv, reason, command })}\n`);
+  return true;
+}
+
+function spawnDetached(command, argv, options = {}) {
+  const result = spawnSync(command, argv, { ...options, detached: true, stdio: 'ignore' });
+  return result.status === 0;
+}
+
+function openMacTerminal(command) {
+  const osascript = commandPath('osascript');
+  if (!osascript) return false;
+  const terminalScript = `tell application "Terminal"
+  activate
+  do script "${appleScriptString(command)}"
+end tell`;
+  const terminalResult = spawnSync(osascript, [], { input: terminalScript, encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'] });
+  if (terminalResult.status === 0) return true;
+  const itermScript = `tell application "iTerm"
+  activate
+  create window with default profile
+  tell current session of current window
+    write text "${appleScriptString(command)}"
+  end tell
+end tell`;
+  const itermResult = spawnSync(osascript, [], { input: itermScript, encoding: 'utf8', stdio: ['pipe', 'ignore', 'ignore'] });
+  return itermResult.status === 0;
+}
+
+function openWindowsTerminal(command) {
+  const cmd = process.env.ComSpec || commandPath('cmd') || 'cmd.exe';
+  return spawnDetached(cmd, ['/d', '/s', '/c', 'start', 'PaperMentor', 'cmd', '/k', command]);
+}
+
+function openLinuxTerminal(command) {
+  const candidates = [
+    ['x-terminal-emulator', ['-e', 'bash', '-lc', command]],
+    ['gnome-terminal', ['--', 'bash', '-lc', command]],
+    ['konsole', ['-e', 'bash', '-lc', command]],
+    ['xfce4-terminal', ['-e', `bash -lc ${shellQuote(command)}`]],
+    ['xterm', ['-e', 'bash', '-lc', command]]
+  ];
+  for (const [name, argv] of candidates) {
+    const terminal = commandPath(name);
+    if (terminal && spawnDetached(terminal, argv)) return true;
+  }
+  return false;
+}
+
+function openExternalTerminalForArgs(argv = [], reason = 'PaperMentor') {
+  const cleanArgv = argv.filter((item) => !['--codex', '--show-tui', '--snapshot', '--demo'].includes(String(item)));
+  const command = process.platform === 'win32' ? windowsCommandForSelf(cleanArgv) : shellCommandForSelf(cleanArgv);
+  if (writeTerminalMock(cleanArgv, reason, command)) return true;
+  if (process.env.PAPERMENTOR_EXTERNAL_TERMINAL === '1') return false;
+  if (process.platform === 'darwin') return openMacTerminal(command);
+  if (process.platform === 'win32') return openWindowsTerminal(command);
+  return openLinuxTerminal(command);
+}
+
+function rerouteToExternalTerminalIfNeeded(argv = process.argv.slice(2), reason = 'PaperMentor') {
+  if (process.stdin.isTTY && process.stdout.isTTY) return false;
+  if (openExternalTerminalForArgs(argv, reason)) {
+    console.log('Opening PaperMentor in an external terminal. Inline Codex/Claude TUI is disabled.');
+    return true;
+  }
+  throw new Error('PaperMentor requires an interactive terminal. Inline Codex/Claude TUI output is disabled, and PaperMentor could not open an external terminal automatically.');
 }
 
 function sanitizeSectionActions(choices = [], section = '', { ensureAsk = false, language = 'auto' } = {}) {
@@ -6919,8 +7024,12 @@ function runTui(args) {
   delete state.prefetchNotice;
   writeJson(statePath(slug), state);
   let selected = Math.min(Number(args.cursor || 0), Math.max(0, tuiMenuItems(state).length - 1));
-  if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
+  if (shouldShowTuiSnapshot(args)) {
     console.log(renderTuiScreen(state, selected));
+    return;
+  }
+  if (args.snapshot || args.demo || args['show-tui'] || !process.stdin.isTTY || !process.stdout.isTTY) {
+    rerouteToExternalTerminalIfNeeded(['tui', '--session', slug], 'PaperMentor reading console');
     return;
   }
 
@@ -7283,9 +7392,12 @@ function renderWelcomeScreen({ input = '', status = '', includePrompt = true, qu
 
 function runWelcome(args = {}) {
   let status = '';
-  const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
-  if (snapshot) {
+  if (process.env.PAPERMENTOR_INTERNAL_SNAPSHOT === '1' && (args.snapshot || args.demo)) {
     console.log(renderWelcomeScreen({ input: args.input || args.source || '', status, quote: learningQuote({ deterministic: true }) }));
+    return;
+  }
+  if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
+    rerouteToExternalTerminalIfNeeded(process.argv.slice(2), 'PaperMentor launcher');
     return;
   }
   const launchQuote = learningQuote();
@@ -7345,12 +7457,15 @@ function runWelcome(args = {}) {
 function runPalette(args = {}) {
   let slug = args.session || args.slug || latestSessionSlug();
   let selected = Math.max(0, Number(args.index || args.cursor || 1) - 1);
-  const snapshot = args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY;
   const render = () => renderPaletteScreen({ slug, selected });
-  if (snapshot) {
+  if (process.env.PAPERMENTOR_INTERNAL_SNAPSHOT === '1' && (args.snapshot || args.demo)) {
     const { screen, items } = render();
     console.log(screen);
     if (args.index) executePaletteItem(items[selected], slug);
+    return;
+  }
+  if (args.snapshot || args.demo || !process.stdin.isTTY || !process.stdout.isTTY) {
+    rerouteToExternalTerminalIfNeeded(process.argv.slice(2), 'PaperMentor main menu');
     return;
   }
   let current = render();
@@ -8200,7 +8315,7 @@ User commands:
 Also available as: papermentor
 
 Advanced/internal commands still exist for agents and scripts:
-  papermentor launch <file-or-url> [--open] [--tui|--interactive|--codex] [--show-tui] [--language <code>] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--tui|--interactive] [--language <code>] [--slug <slug>]
   papermentor help --advanced
 `);
     return;
@@ -8208,7 +8323,7 @@ Advanced/internal commands still exist for agents and scripts:
   console.log(`PaperMentor advanced/internal commands
 
 Usage:
-  papermentor launch <file-or-url> [--open] [--tui|--interactive|--codex] [--show-tui] [--language <code>] [--slug <slug>]
+  papermentor launch <file-or-url> [--open] [--tui|--interactive] [--language <code>] [--slug <slug>]
   papermentor start --title <title> [--authors <names>] [--source <url>] [--mode paper|slide|url] [--slug <slug>] [--sections "1 Intro|2 Method"] [--body-file start.md] [--figure-file crop.png]
   papermentor analyze --session <slug> --paper-text-file source.txt
   papermentor tui --session <slug>
@@ -8268,6 +8383,10 @@ try {
     if (process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) {
       runLaunchWizard(source, args);
     } else {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        rerouteToExternalTerminalIfNeeded(process.argv.slice(2), 'PaperMentor source launch');
+        process.exit(0);
+      }
       launchSession({ ...args, _: ['launch', source], source });
     }
   } else if (command === 'open' || command === 'last') {
@@ -8285,7 +8404,13 @@ try {
   } else if (command === 'new') {
     const source = args.source || args.input || args._[1];
     if (source && process.stdin.isTTY && process.stdout.isTTY && !args.quick && !args.yes) runLaunchWizard(source, args);
-    else if (source) launchSession({ ...args, _: ['launch', source], source });
+    else if (source) {
+      if (!process.stdin.isTTY || !process.stdout.isTTY) {
+        rerouteToExternalTerminalIfNeeded(process.argv.slice(2), 'PaperMentor source launch');
+        process.exit(0);
+      }
+      launchSession({ ...args, _: ['launch', source], source });
+    }
     else runPalette(args);
   } else if (command === 'regenerate-start' || command === 'start-here') {
     regenerateStartHere(args);
