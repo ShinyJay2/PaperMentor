@@ -46,14 +46,15 @@ const readme = read('README.md');
 const skill = read('SKILL.md');
 const checklist = existsSync(join(root, 'docs/marketplace-checklist.md')) ? read('docs/marketplace-checklist.md') : '';
 for (const [rel, text, phrases] of [
-  ['README.md', readme, ['Codex + Claude Code', 'Start in one command', 'Agent automation', 'Product boundaries']],
+  ['README.md', readme, ['Codex + Claude Code', 'Start from Codex or Claude', 'Agent automation', 'Product boundaries']],
   ['SKILL.md', skill, ['HTML-first reading room rule', 'Source modes', 'Strict policies']],
   ['docs/marketplace-checklist.md', checklist, ['Submission checklist', 'User promise', 'Verification commands', 'Known limits']]
 ]) {
   for (const phrase of phrases) if (!text.includes(phrase)) failures.push(`${rel} missing marketplace phrase: ${phrase}`);
 }
 
-const welcome = run('welcome snapshot', 'node', ['scripts/papermentor-session.mjs', '--snapshot'], { env: { COLUMNS: '50', LINES: '18' } });
+const internalSnapshotEnv = { PAPERMENTOR_INTERNAL_SNAPSHOT: '1' };
+const welcome = run('welcome snapshot', 'node', ['scripts/papermentor-session.mjs', '--snapshot'], { env: { ...internalSnapshotEnv, COLUMNS: '50', LINES: '18' } });
 assertSnapshotWidth('welcome snapshot', welcome, 50, ['PaperMentor', 'Drop Source', 'Reading Room']);
 
 const smokeSlug = 'marketplace-tui-smoke';
@@ -73,7 +74,7 @@ run('marketplace smoke launch', 'node', ['scripts/papermentor-session.mjs', 'lau
     })
   }
 });
-const tui = run('tui snapshot', 'node', ['scripts/papermentor-session.mjs', 'tui', '--session', smokeSlug, '--snapshot'], { env: { COLUMNS: '60', LINES: '20' } });
+const tui = run('tui snapshot', 'node', ['scripts/papermentor-session.mjs', 'tui', '--session', smokeSlug, '--snapshot'], { env: { ...internalSnapshotEnv, COLUMNS: '60', LINES: '20' } });
 assertSnapshotWidth('tui snapshot', tui, 60, ['PaperMentor', 'Reading room', 'Open Reading Room', 'Choose']);
 
 for (const [label, cmd, args] of [
